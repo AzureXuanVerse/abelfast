@@ -280,7 +280,7 @@ func registerPackets() {
 	packets.RegisterPacketHandler(14205, []packets.PacketHandler{answer.ReforgeSpWeapon})
 	packets.RegisterPacketHandler(14207, []packets.PacketHandler{answer.ConfirmReforgeSpWeapon})
 	packets.RegisterPacketHandler(14209, []packets.PacketHandler{answer.CompositeSpWeapon})
-	packets.RegisterPacketHandler(12301, []packets.PacketHandler{answer.ReqPlayerAssistShip})
+	packets.RegisterPacketHandler(12301, []packets.PacketHandler{answer.RequestPlayerAssistShip})
 	packets.RegisterPacketHandler(12400, []packets.PacketHandler{answer.LoveLetterUnlock})
 	packets.RegisterPacketHandler(12402, []packets.PacketHandler{answer.LoveLetterClaimRewards})
 	packets.RegisterPacketHandler(12404, []packets.PacketHandler{answer.LoveLetterRealizeGift})

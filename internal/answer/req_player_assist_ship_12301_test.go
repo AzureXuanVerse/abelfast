@@ -7,7 +7,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func TestReqPlayerAssistShip_Type0_BlankShipsAligned(t *testing.T) {
+func TestRequestPlayerAssistShip_Type0_BlankShipsAligned(t *testing.T) {
 	client := setupPlayerUpdateTest(t)
 
 	request := protobuf.CS_12301{Type: proto.Uint32(0), IdList: []uint32{111, 222, 333}}
@@ -17,7 +17,7 @@ func TestReqPlayerAssistShip_Type0_BlankShipsAligned(t *testing.T) {
 	}
 
 	buffer := data
-	if _, _, err := ReqPlayerAssistShip(&buffer, client); err != nil {
+	if _, _, err := RequestPlayerAssistShip(&buffer, client); err != nil {
 		t.Fatalf("req player assist ship failed: %v", err)
 	}
 
@@ -31,7 +31,7 @@ func TestReqPlayerAssistShip_Type0_BlankShipsAligned(t *testing.T) {
 	}
 }
 
-func TestReqPlayerAssistShip_Type1_BlankShipsAligned(t *testing.T) {
+func TestRequestPlayerAssistShip_Type1_BlankShipsAligned(t *testing.T) {
 	client := setupPlayerUpdateTest(t)
 
 	request := protobuf.CS_12301{Type: proto.Uint32(1), IdList: []uint32{111, 222, 333}}
@@ -41,7 +41,7 @@ func TestReqPlayerAssistShip_Type1_BlankShipsAligned(t *testing.T) {
 	}
 
 	buffer := data
-	if _, _, err := ReqPlayerAssistShip(&buffer, client); err != nil {
+	if _, _, err := RequestPlayerAssistShip(&buffer, client); err != nil {
 		t.Fatalf("req player assist ship failed: %v", err)
 	}
 
@@ -55,7 +55,7 @@ func TestReqPlayerAssistShip_Type1_BlankShipsAligned(t *testing.T) {
 	}
 }
 
-func TestReqPlayerAssistShip_UnknownType_DoesNotError(t *testing.T) {
+func TestRequestPlayerAssistShip_UnknownType_DoesNotError(t *testing.T) {
 	client := setupPlayerUpdateTest(t)
 
 	request := protobuf.CS_12301{Type: proto.Uint32(99), IdList: []uint32{111, 222, 333}}
@@ -65,7 +65,7 @@ func TestReqPlayerAssistShip_UnknownType_DoesNotError(t *testing.T) {
 	}
 
 	buffer := data
-	if _, _, err := ReqPlayerAssistShip(&buffer, client); err != nil {
+	if _, _, err := RequestPlayerAssistShip(&buffer, client); err != nil {
 		t.Fatalf("expected unknown type to succeed, got error: %v", err)
 	}
 
@@ -79,7 +79,7 @@ func TestReqPlayerAssistShip_UnknownType_DoesNotError(t *testing.T) {
 	}
 }
 
-func TestReqPlayerAssistShip_EmptyIdList_ReturnsEmptyShipList(t *testing.T) {
+func TestRequestPlayerAssistShip_EmptyIdList_ReturnsEmptyShipList(t *testing.T) {
 	client := setupPlayerUpdateTest(t)
 
 	request := protobuf.CS_12301{Type: proto.Uint32(0), IdList: []uint32{}}
@@ -89,7 +89,7 @@ func TestReqPlayerAssistShip_EmptyIdList_ReturnsEmptyShipList(t *testing.T) {
 	}
 
 	buffer := data
-	if _, _, err := ReqPlayerAssistShip(&buffer, client); err != nil {
+	if _, _, err := RequestPlayerAssistShip(&buffer, client); err != nil {
 		t.Fatalf("req player assist ship failed: %v", err)
 	}
 
