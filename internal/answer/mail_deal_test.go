@@ -86,8 +86,8 @@ func sendMailDeal(t *testing.T, client *connection.Client, payload *protobuf.CS_
 		t.Fatalf("failed to marshal payload: %v", err)
 	}
 	client.Buffer.Reset()
-	if _, _, err := answer.HandleMailDealCmd(&buf, client); err != nil {
-		t.Fatalf("HandleMailDealCmd failed: %v", err)
+	if _, _, err := answer.HandleMailBatchAction(&buf, client); err != nil {
+		t.Fatalf("HandleMailBatchAction failed: %v", err)
 	}
 	response := &protobuf.SC_30007{}
 	packetId := decodePacket(t, client, 30007, response)

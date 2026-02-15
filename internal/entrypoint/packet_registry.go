@@ -197,7 +197,7 @@ func registerPackets() {
 	packets.RegisterPacketHandler(12047, []packets.PacketHandler{answer.ExchangeShip})
 	packets.RegisterPacketHandler(30002, []packets.PacketHandler{answer.SendMailList})
 	packets.RegisterPacketHandler(30004, []packets.PacketHandler{answer.GetCollectionMailList})
-	packets.RegisterPacketHandler(30006, []packets.PacketHandler{answer.HandleMailDealCmd})
+	packets.RegisterPacketHandler(30006, []packets.PacketHandler{answer.HandleMailBatchAction})
 	packets.RegisterPacketHandler(30008, []packets.PacketHandler{answer.DeleteArchivedMail})
 	packets.RegisterPacketHandler(30102, []packets.PacketHandler{answer.GetCompensateList})
 	packets.RegisterPacketHandler(30104, []packets.PacketHandler{answer.GetCompensateReward})

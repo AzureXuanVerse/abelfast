@@ -293,7 +293,7 @@ var cmdHandlers = map[uint32]MailDealCmdHandler{
 	consts.MAIL_DEAL_CMDS_MOVE:        handleMailDealCmdMove,
 }
 
-func HandleMailDealCmd(buffer *[]byte, client *connection.Client) (int, int, error) {
+func HandleMailBatchAction(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var payload protobuf.CS_30006
 	if err := proto.Unmarshal(*buffer, &payload); err != nil {
 		return 0, 30006, err
