@@ -2,11 +2,21 @@ package orm
 
 import (
 	"context"
+	"encoding/json"
+	"strconv"
 	"time"
 
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/db/gen"
 )
+
+const benefitBuffCategory = "ShareCfg/benefit_buff_template.json"
+
+type benefitBuffConfig struct {
+	ID            uint32 `json:"id"`
+	BenefitType   string `json:"benefit_type"`
+	BenefitEffect any    `json:"benefit_effect"`
+}
 
 type CommanderBuff struct {
 	CommanderID uint32    `gorm:"primaryKey;autoIncrement:false"`
@@ -94,4 +104,64 @@ WHERE commander_id = $1
 		return db.ErrNotFound
 	}
 	return nil
+}
+
+func GetCommanderSkillLearnTimeAllowance(commanderID uint32, now time.Time) (uint32, error) {
+	activeBuffs, err := ListCommanderActiveBuffs(commanderID, now)
+	if err != nil {
+		return 0, err
+	}
+	if len(activeBuffs) == 0 {
+		return 0, nil
+	}
+
+	allowance := uint32(0)
+	for _, active := range activeBuffs {
+		entry, err := GetConfigEntry(benefitBuffCategory, strconv.FormatUint(uint64(active.BuffID), 10))
+		if err != nil {
+			if db.IsNotFound(err) {
+				continue
+			}
+			return 0, err
+		}
+
+		var cfg benefitBuffConfig
+		if err := json.Unmarshal(entry.Data, &cfg); err != nil {
+			return 0, err
+		}
+		if cfg.BenefitType != "skill_learn_time" {
+			continue
+		}
+
+		effect, ok := parseBenefitEffectToUint32(cfg.BenefitEffect)
+		if !ok {
+			continue
+		}
+		if effect > allowance {
+			allowance = effect
+		}
+	}
+
+	return allowance, nil
+}
+
+func parseBenefitEffectToUint32(effect any) (uint32, bool) {
+	switch typed := effect.(type) {
+	case float64:
+		if typed < 0 {
+			return 0, false
+		}
+		return uint32(typed), true
+	case string:
+		if typed == "" {
+			return 0, false
+		}
+		parsed, err := strconv.ParseUint(typed, 10, 32)
+		if err != nil {
+			return 0, false
+		}
+		return uint32(parsed), true
+	default:
+		return 0, false
+	}
 }

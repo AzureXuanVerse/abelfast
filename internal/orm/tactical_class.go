@@ -3,6 +3,7 @@ package orm
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -30,7 +31,14 @@ type CommanderShipSkill struct {
 	Exp         uint32
 }
 
+type CommanderTacticsQuickFinish struct {
+	CommanderID uint32
+	UsedCount   uint32
+	ResetDay    uint32
+}
+
 var ErrSkillClassConflict = errors.New("skill class conflict")
+var ErrNoQuickFinishAllowance = errors.New("no quick finish allowance")
 
 func ListCommanderSkillClasses(commanderID uint32) ([]CommanderSkillClass, error) {
 	ctx := context.Background()
@@ -167,4 +175,73 @@ WHERE commander_id = $1 AND ship_id = $2 AND skill_pos = $3
 		return nil, db.MapNotFound(err)
 	}
 	return &entry, nil
+}
+
+func utcDayKey(now time.Time) uint32 {
+	year, month, day := now.UTC().Date()
+	return uint32(year*10000 + int(month)*100 + day)
+}
+
+func GetCommanderDailyQuickFinishUsed(commanderID uint32, now time.Time) (uint32, error) {
+	ctx := context.Background()
+	row := db.DefaultStore.Pool.QueryRow(ctx, `
+SELECT used_count, reset_day
+FROM commander_tactics_quick_finishes
+WHERE commander_id = $1
+`, int64(commanderID))
+
+	state := CommanderTacticsQuickFinish{CommanderID: commanderID}
+	if err := row.Scan(&state.UsedCount, &state.ResetDay); err != nil {
+		if errors.Is(db.MapNotFound(err), db.ErrNotFound) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	if state.ResetDay != utcDayKey(now) {
+		return 0, nil
+	}
+	return state.UsedCount, nil
+}
+
+func ConsumeCommanderQuickFinishTx(ctx context.Context, tx pgx.Tx, commanderID uint32, allowance uint32, now time.Time) (uint32, error) {
+	if _, err := tx.Exec(ctx, `
+INSERT INTO commander_tactics_quick_finishes (commander_id, used_count, reset_day)
+VALUES ($1, 0, 0)
+ON CONFLICT (commander_id) DO NOTHING
+`, int64(commanderID)); err != nil {
+		return 0, err
+	}
+
+	row := tx.QueryRow(ctx, `
+SELECT used_count, reset_day
+FROM commander_tactics_quick_finishes
+WHERE commander_id = $1
+FOR UPDATE
+`, int64(commanderID))
+
+	state := CommanderTacticsQuickFinish{CommanderID: commanderID}
+	if err := row.Scan(&state.UsedCount, &state.ResetDay); err != nil {
+		return 0, db.MapNotFound(err)
+	}
+
+	today := utcDayKey(now)
+	if state.ResetDay != today {
+		state.UsedCount = 0
+		state.ResetDay = today
+	}
+	if state.UsedCount >= allowance {
+		return state.UsedCount, ErrNoQuickFinishAllowance
+	}
+
+	state.UsedCount++
+	_, err := tx.Exec(ctx, `
+UPDATE commander_tactics_quick_finishes
+SET used_count = $2, reset_day = $3
+WHERE commander_id = $1
+`, int64(commanderID), int64(state.UsedCount), int64(state.ResetDay))
+	if err != nil {
+		return 0, err
+	}
+
+	return state.UsedCount, nil
 }

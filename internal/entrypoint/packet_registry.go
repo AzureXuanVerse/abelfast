@@ -224,6 +224,7 @@ func registerPackets() {
 	packets.RegisterPacketHandler(11025, []packets.PacketHandler{answer.SurveyRequest})
 	packets.RegisterPacketHandler(11027, []packets.PacketHandler{answer.SurveyState})
 	packets.RegisterPacketHandler(22101, []packets.PacketHandler{answer.GetShopStreet})
+	packets.RegisterPacketHandler(22014, []packets.PacketHandler{answer.QuickFinishLearnTactics})
 	packets.RegisterPacketHandler(22201, []packets.PacketHandler{answer.StartLearnTactics})
 	packets.RegisterPacketHandler(22203, []packets.PacketHandler{answer.CancelLearnTactics})
 	packets.RegisterPacketHandler(16001, []packets.PacketHandler{answer.ShoppingCommandAnswer})

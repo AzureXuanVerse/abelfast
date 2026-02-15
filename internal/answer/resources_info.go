@@ -2,6 +2,7 @@ package answer
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/orm"
@@ -17,10 +18,6 @@ type oilfieldTemplate struct {
 type classUpgradeTemplate struct {
 	Level uint32 `json:"level"`
 	Time  uint32 `json:"time"`
-}
-
-type navalAcademyShoppingTemplate struct {
-	SpecialGoodsNum uint32 `json:"special_goods_num"`
 }
 
 func ResourcesInfo(buffer *[]byte, client *connection.Client) (int, int, error) {
@@ -87,16 +84,10 @@ func ResourcesInfo(buffer *[]byte, client *connection.Client) (int, int, error) 
 			})
 		}
 	}
-	shoppingEntries, err := orm.ListConfigEntries("ShareCfg/navalacademy_shoppingstreet_template.json")
+	usedQuickFinishes, err := orm.GetCommanderDailyQuickFinishUsed(client.Commander.CommanderID, time.Now().UTC())
 	if err != nil {
 		return 0, 22001, err
 	}
-	if len(shoppingEntries) > 0 {
-		var template navalAcademyShoppingTemplate
-		if err := json.Unmarshal(shoppingEntries[0].Data, &template); err != nil {
-			return 0, 22001, err
-		}
-		response.DailyFinishBuffCnt = proto.Uint32(template.SpecialGoodsNum)
-	}
+	response.DailyFinishBuffCnt = proto.Uint32(usedQuickFinishes)
 	return client.SendMessage(22001, &response)
 }
