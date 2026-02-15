@@ -214,6 +214,15 @@ type Commander struct {
 	DeletedAt               pgtype.Timestamptz
 }
 
+type CommanderActivityTask struct {
+	CommanderID int64
+	ActID       int64
+	TaskID      int64
+	Progress    int64
+	Submitted   bool
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type CommanderAppreciationState struct {
 	CommanderID        int64
 	MusicNo            int64
