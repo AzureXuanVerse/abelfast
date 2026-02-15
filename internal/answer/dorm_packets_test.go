@@ -77,8 +77,8 @@ VALUES ($1, $2, $3, $4, $5, $6)
 		t.Fatalf("failed to marshal payload: %v", err)
 	}
 	client.Buffer.Reset()
-	if _, _, err := answer.ClaimDormIntimacy19011(&buf, client); err != nil {
-		t.Fatalf("ClaimDormIntimacy19011 failed: %v", err)
+	if _, _, err := answer.ClaimDormIntimacy(&buf, client); err != nil {
+		t.Fatalf("ClaimDormIntimacy failed: %v", err)
 	}
 	resp := &protobuf.SC_19012{}
 	decodePacketInto(t, client, 19012, resp)
@@ -128,8 +128,8 @@ SELECT COALESCE((
 		t.Fatalf("failed to marshal payload: %v", err)
 	}
 	client.Buffer.Reset()
-	if _, _, err := answer.ClaimDormIntimacy19011(&buf, client); err != nil {
-		t.Fatalf("ClaimDormIntimacy19011(all) failed: %v", err)
+	if _, _, err := answer.ClaimDormIntimacy(&buf, client); err != nil {
+		t.Fatalf("ClaimDormIntimacy(all) failed: %v", err)
 	}
 	decodePacketInto(t, client, 19012, &protobuf.SC_19012{})
 

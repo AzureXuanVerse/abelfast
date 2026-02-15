@@ -49,8 +49,8 @@ VALUES ($1, $2, $3, $4, $5)
 		t.Fatalf("failed to marshal payload: %v", err)
 	}
 	client.Buffer.Reset()
-	if _, _, err := answer.OpenAddExp19015(&buf, client); err != nil {
-		t.Fatalf("OpenAddExp19015 failed: %v", err)
+	if _, _, err := answer.PollDormExpEvents(&buf, client); err != nil {
+		t.Fatalf("PollDormExpEvents failed: %v", err)
 	}
 
 	// Verify pushed packet is 19010.

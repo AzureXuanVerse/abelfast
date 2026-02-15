@@ -32,7 +32,7 @@ type storedFurniturePut struct {
 	ShipId uint32        `json:"shipId"`
 }
 
-func AddDormShip19002(buffer *[]byte, client *connection.Client) (int, int, error) {
+func AddDormShip(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19002
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19003, err
@@ -88,7 +88,7 @@ WHERE owner_id = $1
 	return client.SendMessage(19003, &response)
 }
 
-func ExitDormShip19004(buffer *[]byte, client *connection.Client) (int, int, error) {
+func ExitDormShip(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19004
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19005, err
@@ -138,7 +138,7 @@ WHERE os.owner_id = $1
 	return client.SendMessage(19005, &response)
 }
 
-func BuyFurniture19006(buffer *[]byte, client *connection.Client) (int, int, error) {
+func BuyDormFurniture(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19006
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19007, err
@@ -201,7 +201,7 @@ func BuyFurniture19006(buffer *[]byte, client *connection.Client) (int, int, err
 	return client.SendMessage(19007, &resp)
 }
 
-func PutFurniture19008(buffer *[]byte, client *connection.Client) (int, int, error) {
+func SaveDormFurnitureLayout(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19008
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19009, err
@@ -253,7 +253,7 @@ func PutFurniture19008(buffer *[]byte, client *connection.Client) (int, int, err
 	return client.SendMessage(19009, &resp)
 }
 
-func ClaimDormIntimacy19011(buffer *[]byte, client *connection.Client) (int, int, error) {
+func ClaimDormIntimacy(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19011
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19012, err
@@ -336,7 +336,7 @@ WHERE owner_id = $1
 	return client.SendMessage(19012, &resp)
 }
 
-func ClaimDormMoney19013(buffer *[]byte, client *connection.Client) (int, int, error) {
+func ClaimDormMoney(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19013
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19014, err
@@ -378,7 +378,7 @@ WHERE owner_id = $1
 	return client.SendMessage(19014, &resp)
 }
 
-func OpenAddExp19015(buffer *[]byte, client *connection.Client) (int, int, error) {
+func PollDormExpEvents(buffer *[]byte, client *connection.Client) (int, int, error) {
 	// Client does not expect a direct response.
 	// We use this as a tick/poll entrypoint to push dorm pop events.
 	_ = buffer
@@ -386,7 +386,7 @@ func OpenAddExp19015(buffer *[]byte, client *connection.Client) (int, int, error
 	return 0, 0, nil
 }
 
-func RenameDorm19016(buffer *[]byte, client *connection.Client) (int, int, error) {
+func RenameDorm(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19016
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19017, err
@@ -405,7 +405,7 @@ WHERE commander_id = $1
 	return client.SendMessage(19017, &resp)
 }
 
-func GetDormThemeList19018(buffer *[]byte, client *connection.Client) (int, int, error) {
+func ListDormThemes(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19018
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19019, err
@@ -457,7 +457,7 @@ func GetDormThemeList19018(buffer *[]byte, client *connection.Client) (int, int,
 	return client.SendMessage(19019, &resp)
 }
 
-func SaveDormTheme19020(buffer *[]byte, client *connection.Client) (int, int, error) {
+func SaveDormTheme(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19020
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19021, err
@@ -495,7 +495,7 @@ func SaveDormTheme19020(buffer *[]byte, client *connection.Client) (int, int, er
 	return client.SendMessage(19021, &resp)
 }
 
-func DeleteDormTheme19022(buffer *[]byte, client *connection.Client) (int, int, error) {
+func DeleteDormTheme(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19022
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19023, err
@@ -512,7 +512,7 @@ func DeleteDormTheme19022(buffer *[]byte, client *connection.Client) (int, int, 
 	return client.SendMessage(19023, &resp)
 }
 
-func GetBackyardVisitor19024(buffer *[]byte, client *connection.Client) (int, int, error) {
+func GetBackyardVisitor(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19024
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19025, err
