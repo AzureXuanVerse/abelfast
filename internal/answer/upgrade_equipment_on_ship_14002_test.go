@@ -12,7 +12,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func setupUpgradeEquipmentOnShip14002Test(t *testing.T, commanderID uint32) *connection.Client {
+func setupUpgradeEquipmentOnShipTest(t *testing.T, commanderID uint32) *connection.Client {
 	t.Helper()
 
 	os.Setenv("MODE", "test")
@@ -35,8 +35,8 @@ func setupUpgradeEquipmentOnShip14002Test(t *testing.T, commanderID uint32) *con
 	return &connection.Client{Commander: &orm.Commander{CommanderID: commanderID}}
 }
 
-func TestUpgradeEquipmentOnShip14002SuccessUpdatesSlotAndChargesCosts(t *testing.T) {
-	client := setupUpgradeEquipmentOnShip14002Test(t, 9014002)
+func TestUpgradeEquipmentOnShipSuccessUpdatesSlotAndChargesCosts(t *testing.T) {
+	client := setupUpgradeEquipmentOnShipTest(t, 9014002)
 	seedUpgradeEquipmentCostDefs(t)
 
 	shipTemplate := orm.Ship{TemplateID: 1001, Name: "Ship", EnglishName: "Ship", RarityID: 2, Star: 1, Type: 1, Nationality: 1, BuildTime: 10}
@@ -60,7 +60,7 @@ func TestUpgradeEquipmentOnShip14002SuccessUpdatesSlotAndChargesCosts(t *testing
 		t.Fatalf("marshal payload: %v", err)
 	}
 	client.Buffer.Reset()
-	if _, _, err := answer.UpgradeEquipmentOnShip14002(&buf, client); err != nil {
+	if _, _, err := answer.UpgradeEquipmentOnShip(&buf, client); err != nil {
 		t.Fatalf("handler failed: %v", err)
 	}
 
@@ -92,7 +92,7 @@ func TestUpgradeEquipmentOnShip14002SuccessUpdatesSlotAndChargesCosts(t *testing
 	}
 }
 
-func TestUpgradeEquipmentOnShip14002ShipIDZero(t *testing.T) {
+func TestUpgradeEquipmentOnShipShipIDZero(t *testing.T) {
 	client := &connection.Client{Commander: &orm.Commander{CommanderID: 9014010, AccountID: 9014010, Name: "shipid-zero"}}
 
 	payload := &protobuf.CS_14002{ShipId: proto.Uint32(0), Pos: proto.Uint32(1), Lv: proto.Uint32(1)}
@@ -100,7 +100,7 @@ func TestUpgradeEquipmentOnShip14002ShipIDZero(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}
-	if _, _, err := answer.UpgradeEquipmentOnShip14002(&buf, client); err != nil {
+	if _, _, err := answer.UpgradeEquipmentOnShip(&buf, client); err != nil {
 		t.Fatalf("handler failed: %v", err)
 	}
 
@@ -111,7 +111,7 @@ func TestUpgradeEquipmentOnShip14002ShipIDZero(t *testing.T) {
 	}
 }
 
-func TestUpgradeEquipmentOnShip14002PosZero(t *testing.T) {
+func TestUpgradeEquipmentOnShipPosZero(t *testing.T) {
 	client := &connection.Client{Commander: &orm.Commander{CommanderID: 9014011, AccountID: 9014011, Name: "pos-zero"}}
 
 	payload := &protobuf.CS_14002{ShipId: proto.Uint32(1), Pos: proto.Uint32(0), Lv: proto.Uint32(1)}
@@ -119,7 +119,7 @@ func TestUpgradeEquipmentOnShip14002PosZero(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}
-	if _, _, err := answer.UpgradeEquipmentOnShip14002(&buf, client); err != nil {
+	if _, _, err := answer.UpgradeEquipmentOnShip(&buf, client); err != nil {
 		t.Fatalf("handler failed: %v", err)
 	}
 
@@ -130,7 +130,7 @@ func TestUpgradeEquipmentOnShip14002PosZero(t *testing.T) {
 	}
 }
 
-func TestUpgradeEquipmentOnShip14002LvZero(t *testing.T) {
+func TestUpgradeEquipmentOnShipLvZero(t *testing.T) {
 	client := &connection.Client{Commander: &orm.Commander{CommanderID: 9014012, AccountID: 9014012, Name: "lv-zero"}}
 
 	payload := &protobuf.CS_14002{ShipId: proto.Uint32(1), Pos: proto.Uint32(1), Lv: proto.Uint32(0)}
@@ -138,7 +138,7 @@ func TestUpgradeEquipmentOnShip14002LvZero(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}
-	if _, _, err := answer.UpgradeEquipmentOnShip14002(&buf, client); err != nil {
+	if _, _, err := answer.UpgradeEquipmentOnShip(&buf, client); err != nil {
 		t.Fatalf("handler failed: %v", err)
 	}
 
@@ -149,8 +149,8 @@ func TestUpgradeEquipmentOnShip14002LvZero(t *testing.T) {
 	}
 }
 
-func TestUpgradeEquipmentOnShip14002NonOwnedShipFails(t *testing.T) {
-	client := setupUpgradeEquipmentOnShip14002Test(t, 9014003)
+func TestUpgradeEquipmentOnShipNonOwnedShipFails(t *testing.T) {
+	client := setupUpgradeEquipmentOnShipTest(t, 9014003)
 
 	payload := &protobuf.CS_14002{ShipId: proto.Uint32(99999), Pos: proto.Uint32(1), Lv: proto.Uint32(1)}
 	buf, err := proto.Marshal(payload)
@@ -158,7 +158,7 @@ func TestUpgradeEquipmentOnShip14002NonOwnedShipFails(t *testing.T) {
 		t.Fatalf("marshal payload: %v", err)
 	}
 	client.Buffer.Reset()
-	if _, _, err := answer.UpgradeEquipmentOnShip14002(&buf, client); err != nil {
+	if _, _, err := answer.UpgradeEquipmentOnShip(&buf, client); err != nil {
 		t.Fatalf("handler failed: %v", err)
 	}
 
@@ -169,8 +169,8 @@ func TestUpgradeEquipmentOnShip14002NonOwnedShipFails(t *testing.T) {
 	}
 }
 
-func TestUpgradeEquipmentOnShip14002EmptySlotFails(t *testing.T) {
-	client := setupUpgradeEquipmentOnShip14002Test(t, 9014004)
+func TestUpgradeEquipmentOnShipEmptySlotFails(t *testing.T) {
+	client := setupUpgradeEquipmentOnShipTest(t, 9014004)
 
 	shipTemplate := orm.Ship{TemplateID: 1001, Name: "Ship", EnglishName: "Ship", RarityID: 2, Star: 1, Type: 1, Nationality: 1, BuildTime: 10}
 	execAnswerExternalTestSQLT(t, "INSERT INTO ships (template_id, name, english_name, rarity_id, star, type, nationality, build_time) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)", int64(shipTemplate.TemplateID), shipTemplate.Name, shipTemplate.EnglishName, int64(shipTemplate.RarityID), int64(shipTemplate.Star), int64(shipTemplate.Type), int64(shipTemplate.Nationality), int64(shipTemplate.BuildTime))
@@ -183,7 +183,7 @@ func TestUpgradeEquipmentOnShip14002EmptySlotFails(t *testing.T) {
 		t.Fatalf("marshal payload: %v", err)
 	}
 	client.Buffer.Reset()
-	if _, _, err := answer.UpgradeEquipmentOnShip14002(&buf, client); err != nil {
+	if _, _, err := answer.UpgradeEquipmentOnShip(&buf, client); err != nil {
 		t.Fatalf("handler failed: %v", err)
 	}
 
@@ -194,8 +194,8 @@ func TestUpgradeEquipmentOnShip14002EmptySlotFails(t *testing.T) {
 	}
 }
 
-func TestUpgradeEquipmentOnShip14002NotEnoughGoldDoesNotMutate(t *testing.T) {
-	client := setupUpgradeEquipmentOnShip14002Test(t, 9014005)
+func TestUpgradeEquipmentOnShipNotEnoughGoldDoesNotMutate(t *testing.T) {
+	client := setupUpgradeEquipmentOnShipTest(t, 9014005)
 	seedUpgradeEquipmentCostDefs(t)
 
 	shipTemplate := orm.Ship{TemplateID: 1001, Name: "Ship", EnglishName: "Ship", RarityID: 2, Star: 1, Type: 1, Nationality: 1, BuildTime: 10}
@@ -218,7 +218,7 @@ func TestUpgradeEquipmentOnShip14002NotEnoughGoldDoesNotMutate(t *testing.T) {
 		t.Fatalf("marshal payload: %v", err)
 	}
 	client.Buffer.Reset()
-	if _, _, err := answer.UpgradeEquipmentOnShip14002(&buf, client); err != nil {
+	if _, _, err := answer.UpgradeEquipmentOnShip(&buf, client); err != nil {
 		t.Fatalf("handler failed: %v", err)
 	}
 
@@ -237,8 +237,8 @@ func TestUpgradeEquipmentOnShip14002NotEnoughGoldDoesNotMutate(t *testing.T) {
 	}
 }
 
-func TestUpgradeEquipmentOnShip14002NotEnoughItemsDoesNotMutate(t *testing.T) {
-	client := setupUpgradeEquipmentOnShip14002Test(t, 9014006)
+func TestUpgradeEquipmentOnShipNotEnoughItemsDoesNotMutate(t *testing.T) {
+	client := setupUpgradeEquipmentOnShipTest(t, 9014006)
 	seedUpgradeEquipmentCostDefs(t)
 
 	shipTemplate := orm.Ship{TemplateID: 1001, Name: "Ship", EnglishName: "Ship", RarityID: 2, Star: 1, Type: 1, Nationality: 1, BuildTime: 10}
@@ -261,7 +261,7 @@ func TestUpgradeEquipmentOnShip14002NotEnoughItemsDoesNotMutate(t *testing.T) {
 		t.Fatalf("marshal payload: %v", err)
 	}
 	client.Buffer.Reset()
-	if _, _, err := answer.UpgradeEquipmentOnShip14002(&buf, client); err != nil {
+	if _, _, err := answer.UpgradeEquipmentOnShip(&buf, client); err != nil {
 		t.Fatalf("handler failed: %v", err)
 	}
 
