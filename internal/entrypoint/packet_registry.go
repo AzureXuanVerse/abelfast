@@ -22,10 +22,10 @@ func registerPackets() {
 	packets.RegisterPacketHandler(8239, []packets.PacketHandler{answer.Forge_SC8239})
 	packets.RegisterPacketHandler(10020, []packets.PacketHandler{answer.Forge_SC10021})
 	packets.RegisterLocalizedPacketHandler(10802, packets.LocalizedHandler{
-		CN: &[]packets.PacketHandler{answer.Forge_SC10803_CN_JP_KR_TW},
-		TW: &[]packets.PacketHandler{answer.Forge_SC10803_CN_JP_KR_TW},
-		JP: &[]packets.PacketHandler{answer.Forge_SC10803_CN_JP_KR_TW},
-		KR: &[]packets.PacketHandler{answer.Forge_SC10803_CN_JP_KR_TW},
+		CN: &[]packets.PacketHandler{answer.BuildServerInterconnectionResponse},
+		TW: &[]packets.PacketHandler{answer.BuildServerInterconnectionResponse},
+		JP: &[]packets.PacketHandler{answer.BuildServerInterconnectionResponse},
+		KR: &[]packets.PacketHandler{answer.BuildServerInterconnectionResponse},
 	})
 	packets.RegisterPacketHandler(10018, []packets.PacketHandler{answer.Forge_SC10019})
 	packets.RegisterPacketHandler(10022, []packets.PacketHandler{answer.JoinServer})
