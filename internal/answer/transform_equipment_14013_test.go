@@ -126,7 +126,7 @@ func sendCS14013(t *testing.T, client *connection.Client, shipID uint32, pos uin
 		t.Fatalf("marshal payload: %v", err)
 	}
 	client.Buffer.Reset()
-	if _, _, err := answer.TransformEquipmentOnShip14013(&buf, client); err != nil {
+	if _, _, err := answer.TransformEquipmentOnShip(&buf, client); err != nil {
 		t.Fatalf("handler failed: %v", err)
 	}
 	response := &protobuf.SC_14014{}
