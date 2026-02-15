@@ -366,6 +366,12 @@ type CommanderSurvey struct {
 	CompletedAt pgtype.Timestamptz
 }
 
+type CommanderTacticsQuickFinish struct {
+	CommanderID int64
+	UsedCount   int64
+	ResetDay    int64
+}
+
 type CommanderTb struct {
 	CommanderID int64
 	State       []byte
