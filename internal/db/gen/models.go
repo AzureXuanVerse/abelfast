@@ -1150,6 +1150,16 @@ type WebAuthnCredential struct {
 	RpID           string
 }
 
+type WeeklyTaskProgress struct {
+	CommanderID   int64
+	WeekStartUnix int64
+	Pt            int64
+	RewardLv      int64
+	Tasks         []byte
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+}
+
 type YostarusMap struct {
 	Arg2      int64
 	AccountID int64
