@@ -366,6 +366,14 @@ type CommanderSurvey struct {
 	CompletedAt pgtype.Timestamptz
 }
 
+type CommanderTask struct {
+	CommanderID int64
+	TaskID      int64
+	Progress    int64
+	AcceptTime  int64
+	SubmitTime  int64
+}
+
 type CommanderTb struct {
 	CommanderID int64
 	State       []byte
