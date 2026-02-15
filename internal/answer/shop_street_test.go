@@ -178,8 +178,8 @@ func TestShoppingCommandDecrementsStreetBuyCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal payload: %v", err)
 	}
-	if _, _, err := answer.ShoppingCommandAnswer(&buf, client); err != nil {
-		t.Fatalf("ShoppingCommandAnswer failed: %v", err)
+	if _, _, err := answer.HandleShopPurchase(&buf, client); err != nil {
+		t.Fatalf("HandleShopPurchase failed: %v", err)
 	}
 	updated, err := orm.GetShoppingStreetGood(commanderID, offer.ID)
 	if err != nil {
@@ -214,8 +214,8 @@ func TestShoppingCommandRejectsStreetPurchaseWhenOutOfStock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal payload: %v", err)
 	}
-	if _, _, err := answer.ShoppingCommandAnswer(&buf, client); err != nil {
-		t.Fatalf("ShoppingCommandAnswer failed: %v", err)
+	if _, _, err := answer.HandleShopPurchase(&buf, client); err != nil {
+		t.Fatalf("HandleShopPurchase failed: %v", err)
 	}
 
 	response := &protobuf.SC_16002{}

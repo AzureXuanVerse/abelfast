@@ -29,7 +29,7 @@ import (
 // 12 = operation siren stuff
 // 20 = ?
 
-func ShoppingCommandAnswer(buffer *[]byte, client *connection.Client) (int, int, error) {
+func HandleShopPurchase(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var boughtOffer protobuf.CS_16001
 	err := proto.Unmarshal(*buffer, &boughtOffer)
 	if err != nil {

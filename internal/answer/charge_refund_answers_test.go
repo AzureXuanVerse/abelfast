@@ -16,8 +16,8 @@ func TestRefundChargeDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal payload: %v", err)
 	}
-	if _, _, err := answer.RefundChargeCommandAnswer(&buf, client); err != nil {
-		t.Fatalf("RefundChargeCommandAnswer failed: %v", err)
+	if _, _, err := answer.RefundHandleChargeStart(&buf, client); err != nil {
+		t.Fatalf("RefundHandleChargeStart failed: %v", err)
 	}
 	response := &protobuf.SC_11514{}
 	decodeTestPacket(t, client, 11514, response)
@@ -36,8 +36,8 @@ func TestChargeConfirmDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal payload: %v", err)
 	}
-	if _, _, err := answer.ChargeConfirmCommandAnswer(&buf, client); err != nil {
-		t.Fatalf("ChargeConfirmCommandAnswer failed: %v", err)
+	if _, _, err := answer.HandleChargeConfirm(&buf, client); err != nil {
+		t.Fatalf("HandleChargeConfirm failed: %v", err)
 	}
 	response := &protobuf.SC_11505{}
 	decodeTestPacket(t, client, 11505, response)
@@ -56,8 +56,8 @@ func TestChargeFailedAck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal payload: %v", err)
 	}
-	if _, _, err := answer.ChargeFailedCommandAnswer(&buf, client); err != nil {
-		t.Fatalf("ChargeFailedCommandAnswer failed: %v", err)
+	if _, _, err := answer.HandleChargeFailure(&buf, client); err != nil {
+		t.Fatalf("HandleChargeFailure failed: %v", err)
 	}
 	response := &protobuf.SC_11511{}
 	decodeTestPacket(t, client, 11511, response)

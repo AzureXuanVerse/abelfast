@@ -6,7 +6,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func ChargeCommandAnswer(buffer *[]byte, client *connection.Client) (int, int, error) {
+func HandleChargeStart(buffer *[]byte, client *connection.Client) (int, int, error) {
 	// Disable Charge
 	response := protobuf.SC_11502{
 		Result:    proto.Uint32(5002),

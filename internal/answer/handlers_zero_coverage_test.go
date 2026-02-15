@@ -144,7 +144,7 @@ func TestSimpleResponseHandlers(t *testing.T) {
 		payload proto.Message
 	}{
 		{name: "SendHeartbeat", handler: SendHeartbeat},
-		{name: "ChargeCommandAnswer", handler: ChargeCommandAnswer},
+		{name: "HandleChargeStart", handler: HandleChargeStart},
 		{name: "FetchSecondaryPasswordCommandResponse", handler: FetchSecondaryPasswordCommandResponse},
 		{name: "WeeklyMissions", handler: WeeklyMissions},
 		{name: "WorldBaseInfo", handler: WorldBaseInfo},

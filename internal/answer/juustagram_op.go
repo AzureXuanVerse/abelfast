@@ -26,14 +26,14 @@ func HandleJuustagramAction(buffer *[]byte, client *connection.Client) (int, int
 	}
 	state.UpdatedAt = now
 	switch payload.GetCmd() {
-	case consts.HandleJuustagramActionActive, consts.HandleJuustagramActionUpdate, consts.HandleJuustagramActionShare:
+	case consts.JuustagramOpActive, consts.JuustagramOpUpdate, consts.JuustagramOpShare:
 		// no state changes
-	case consts.HandleJuustagramActionLike:
+	case consts.JuustagramOpLike:
 		if state.IsGood == 0 {
 			state.IsGood = 1
 			state.GoodCount += 1
 		}
-	case consts.HandleJuustagramActionMarkRead:
+	case consts.JuustagramOpMarkRead:
 		state.IsRead = 1
 	default:
 		return 0, consts.JuustagramPacketOpResponse, errors.New("invalid juustagram op")
