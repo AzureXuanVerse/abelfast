@@ -238,8 +238,14 @@ func TestQuickFinishLearnTacticsSuccess(t *testing.T) {
 	if _, _, err := ResourcesInfo(&resourcesBuffer, client); err != nil {
 		t.Fatalf("resources info failed: %v", err)
 	}
+	offset := 0
+	var quickFinishResponse protobuf.SC_22015
+	offset = decodePacketAt(t, client, offset, 22015, &quickFinishResponse)
+	if quickFinishResponse.GetResult() != lessonQuickFinishResultOK {
+		t.Fatalf("expected result 0, got %d", quickFinishResponse.GetResult())
+	}
 	var resources protobuf.SC_22001
-	decodeResponse(t, client, &resources)
+	_ = decodePacketAt(t, client, offset, 22001, &resources)
 	if resources.GetDailyFinishBuffCnt() != 1 {
 		t.Fatalf("expected daily finish buff count 1, got %d", resources.GetDailyFinishBuffCnt())
 	}
@@ -385,10 +391,11 @@ func TestQuickFinishLearnTacticsIdempotent(t *testing.T) {
 		t.Fatalf("second quick finish failed: %v", err)
 	}
 
+	offset := 0
 	var first protobuf.SC_22015
-	decodeResponse(t, client, &first)
+	offset = decodePacketAt(t, client, offset, 22015, &first)
 	var second protobuf.SC_22015
-	decodeResponse(t, client, &second)
+	_ = decodePacketAt(t, client, offset, 22015, &second)
 
 	if first.GetResult() != lessonQuickFinishResultOK {
 		t.Fatalf("expected first result ok, got %d", first.GetResult())
