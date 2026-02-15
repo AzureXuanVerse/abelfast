@@ -2,6 +2,7 @@ package answer
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/orm"
@@ -19,7 +20,7 @@ type classUpgradeTemplate struct {
 	Time  uint32 `json:"time"`
 }
 
-type navalAcademyShoppingTemplate struct {
+type navalAcademyShoppingStreetTemplate struct {
 	SpecialGoodsNum uint32 `json:"special_goods_num"`
 }
 
@@ -70,6 +71,17 @@ func ResourcesInfo(buffer *[]byte, client *connection.Client) (int, int, error) 
 	if len(academyEntries) > 0 {
 		response.SkillClassNum = proto.Uint32(uint32(len(academyEntries)))
 	}
+	shoppingEntries, err := orm.ListConfigEntries("ShareCfg/navalacademy_shoppingstreet_template.json")
+	if err != nil {
+		return 0, 22001, err
+	}
+	if len(shoppingEntries) > 0 {
+		var template navalAcademyShoppingStreetTemplate
+		if err := json.Unmarshal(shoppingEntries[0].Data, &template); err != nil {
+			return 0, 22001, err
+		}
+		response.DailyFinishBuffCnt = proto.Uint32(template.SpecialGoodsNum)
+	}
 	classes, err := orm.ListCommanderSkillClasses(client.Commander.CommanderID)
 	if err != nil {
 		return 0, 22001, err
@@ -87,16 +99,20 @@ func ResourcesInfo(buffer *[]byte, client *connection.Client) (int, int, error) 
 			})
 		}
 	}
-	shoppingEntries, err := orm.ListConfigEntries("ShareCfg/navalacademy_shoppingstreet_template.json")
+	usedQuickFinishes, err := orm.GetCommanderDailyQuickFinishUsed(client.Commander.CommanderID, time.Now().UTC())
 	if err != nil {
 		return 0, 22001, err
 	}
-	if len(shoppingEntries) > 0 {
-		var template navalAcademyShoppingTemplate
-		if err := json.Unmarshal(shoppingEntries[0].Data, &template); err != nil {
-			return 0, 22001, err
+	allowance, err := orm.GetCommanderSkillLearnTimeAllowance(client.Commander.CommanderID, time.Now().UTC())
+	if err != nil {
+		return 0, 22001, err
+	}
+	if allowance > 0 {
+		if usedQuickFinishes >= allowance {
+			response.DailyFinishBuffCnt = proto.Uint32(0)
+		} else {
+			response.DailyFinishBuffCnt = proto.Uint32(allowance - usedQuickFinishes)
 		}
-		response.DailyFinishBuffCnt = proto.Uint32(template.SpecialGoodsNum)
 	}
 	return client.SendMessage(22001, &response)
 }

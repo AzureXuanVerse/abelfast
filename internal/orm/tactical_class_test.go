@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -91,6 +92,82 @@ func TestCommanderSkillClassConflictOnDuplicateRoom(t *testing.T) {
 	})
 	if !errors.Is(err, ErrSkillClassConflict) {
 		t.Fatalf("expected conflict error, got %v", err)
+	}
+}
+
+func TestConsumeCommanderQuickFinishTx(t *testing.T) {
+	initCommanderItemTestDB(t)
+	clearTable(t, &CommanderTacticsQuickFinish{})
+	clearTable(t, &Commander{})
+
+	seedTacticsCommanderShip(t, 8103, 9104, 7104)
+	now := time.Date(2026, 2, 15, 12, 0, 0, 0, time.UTC)
+
+	ctx := context.Background()
+	err := WithPGXTx(ctx, func(tx pgx.Tx) error {
+		_, err := ConsumeCommanderQuickFinishTx(ctx, tx, 8103, 2, now)
+		return err
+	})
+	if err != nil {
+		t.Fatalf("first consume quick finish: %v", err)
+	}
+
+	err = WithPGXTx(ctx, func(tx pgx.Tx) error {
+		_, err := ConsumeCommanderQuickFinishTx(ctx, tx, 8103, 2, now)
+		return err
+	})
+	if err != nil {
+		t.Fatalf("second consume quick finish: %v", err)
+	}
+
+	err = WithPGXTx(ctx, func(tx pgx.Tx) error {
+		_, err := ConsumeCommanderQuickFinishTx(ctx, tx, 8103, 2, now)
+		return err
+	})
+	if !errors.Is(err, ErrNoQuickFinishAllowance) {
+		t.Fatalf("expected no allowance error, got %v", err)
+	}
+
+	used, err := GetCommanderDailyQuickFinishUsed(8103, now)
+	if err != nil {
+		t.Fatalf("get used quick finishes: %v", err)
+	}
+	if used != 2 {
+		t.Fatalf("expected used count 2, got %d", used)
+	}
+}
+
+func TestGetCommanderDailyQuickFinishUsedResetsOnDayRollover(t *testing.T) {
+	initCommanderItemTestDB(t)
+	clearTable(t, &CommanderTacticsQuickFinish{})
+	clearTable(t, &Commander{})
+
+	seedTacticsCommanderShip(t, 8104, 9105, 7105)
+	now := time.Date(2026, 2, 15, 23, 0, 0, 0, time.UTC)
+
+	ctx := context.Background()
+	err := WithPGXTx(ctx, func(tx pgx.Tx) error {
+		_, err := ConsumeCommanderQuickFinishTx(ctx, tx, 8104, 3, now)
+		return err
+	})
+	if err != nil {
+		t.Fatalf("consume quick finish: %v", err)
+	}
+
+	usedToday, err := GetCommanderDailyQuickFinishUsed(8104, now)
+	if err != nil {
+		t.Fatalf("get used quick finishes today: %v", err)
+	}
+	if usedToday != 1 {
+		t.Fatalf("expected used today 1, got %d", usedToday)
+	}
+
+	usedTomorrow, err := GetCommanderDailyQuickFinishUsed(8104, now.Add(2*time.Hour))
+	if err != nil {
+		t.Fatalf("get used quick finishes tomorrow: %v", err)
+	}
+	if usedTomorrow != 0 {
+		t.Fatalf("expected used tomorrow 0, got %d", usedTomorrow)
 	}
 }
 

@@ -214,6 +214,15 @@ type Commander struct {
 	DeletedAt               pgtype.Timestamptz
 }
 
+type CommanderActivityTask struct {
+	CommanderID int64
+	ActID       int64
+	TaskID      int64
+	Progress    int64
+	Submitted   bool
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type CommanderAppreciationState struct {
 	CommanderID        int64
 	MusicNo            int64
@@ -364,6 +373,20 @@ type CommanderSurvey struct {
 	CommanderID int64
 	SurveyID    int64
 	CompletedAt pgtype.Timestamptz
+}
+
+type CommanderTacticsQuickFinish struct {
+	CommanderID int64
+	UsedCount   int64
+	ResetDay    int64
+}
+
+type CommanderTask struct {
+	CommanderID int64
+	TaskID      int64
+	Progress    int64
+	AcceptTime  int64
+	SubmitTime  int64
 }
 
 type CommanderTb struct {
@@ -1140,6 +1163,16 @@ type WebAuthnCredential struct {
 	LastUsedAt     pgtype.Timestamptz
 	Label          pgtype.Text
 	RpID           string
+}
+
+type WeeklyTaskProgress struct {
+	CommanderID   int64
+	WeekStartUnix int64
+	Pt            int64
+	RewardLv      int64
+	Tasks         []byte
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
 }
 
 type YostarusMap struct {
