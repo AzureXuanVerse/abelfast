@@ -129,7 +129,7 @@ func TestDorm3dInstagramOpsPersist(t *testing.T) {
 
 	readPayload := &protobuf.CS_28026{
 		ShipId: proto.Uint32(100),
-		Type:   proto.Uint32(orm.HandleDorm3dInstagramActionRead),
+		Type:   proto.Uint32(orm.Dorm3dInstagramOpRead),
 		IdList: []uint32{55},
 	}
 	readBuf, err := proto.Marshal(readPayload)
