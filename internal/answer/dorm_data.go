@@ -49,7 +49,7 @@ func DormData(buffer *[]byte, client *connection.Client) (int, int, error) {
 	return client.SendMessage(19001, &response)
 }
 
-func VisitBackyard19101(buffer *[]byte, client *connection.Client) (int, int, error) {
+func VisitBackyard(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19101
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19102, err

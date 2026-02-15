@@ -35,7 +35,7 @@ func newVisitBackyardRequesterWithTarget(t *testing.T) (*connection.Client, uint
 	return &connection.Client{Commander: &requester}, targetID, targetName
 }
 
-func TestVisitBackyard19101Success(t *testing.T) {
+func TestVisitBackyardSuccess(t *testing.T) {
 	client, targetID, targetName := newVisitBackyardRequesterWithTarget(t)
 	shipTemplateID := uint32(time.Now().UnixNano()%1_000_000_000 + 7_000_000)
 	ensureTestShipTemplate(t, shipTemplateID)
@@ -96,8 +96,8 @@ VALUES ($1, $2, $3, $4, $5)
 	}
 
 	client.Buffer.Reset()
-	if _, _, err := answer.VisitBackyard19101(&buffer, client); err != nil {
-		t.Fatalf("VisitBackyard19101 failed: %v", err)
+	if _, _, err := answer.VisitBackyard(&buffer, client); err != nil {
+		t.Fatalf("VisitBackyard failed: %v", err)
 	}
 
 	response := &protobuf.SC_19102{}
@@ -127,7 +127,7 @@ VALUES ($1, $2, $3, $4, $5)
 	}
 }
 
-func TestVisitBackyard19101EmptyDorm(t *testing.T) {
+func TestVisitBackyardEmptyDorm(t *testing.T) {
 	client, targetID, targetName := newVisitBackyardRequesterWithTarget(t)
 
 	request := &protobuf.CS_19101{UserId: proto.Uint32(targetID)}
@@ -137,8 +137,8 @@ func TestVisitBackyard19101EmptyDorm(t *testing.T) {
 	}
 
 	client.Buffer.Reset()
-	if _, _, err := answer.VisitBackyard19101(&buffer, client); err != nil {
-		t.Fatalf("VisitBackyard19101 failed: %v", err)
+	if _, _, err := answer.VisitBackyard(&buffer, client); err != nil {
+		t.Fatalf("VisitBackyard failed: %v", err)
 	}
 
 	response := &protobuf.SC_19102{}
@@ -161,7 +161,7 @@ func TestVisitBackyard19101EmptyDorm(t *testing.T) {
 	}
 }
 
-func TestVisitBackyard19101MissingTargetReturnsUnavailable(t *testing.T) {
+func TestVisitBackyardMissingTargetReturnsUnavailable(t *testing.T) {
 	client := newDormTestClient(t)
 
 	request := &protobuf.CS_19101{UserId: proto.Uint32(999999999)}
@@ -171,7 +171,7 @@ func TestVisitBackyard19101MissingTargetReturnsUnavailable(t *testing.T) {
 	}
 
 	client.Buffer.Reset()
-	if _, _, err := answer.VisitBackyard19101(&buffer, client); err != nil {
+	if _, _, err := answer.VisitBackyard(&buffer, client); err != nil {
 		t.Fatalf("expected fallback response, got error: %v", err)
 	}
 
@@ -182,12 +182,12 @@ func TestVisitBackyard19101MissingTargetReturnsUnavailable(t *testing.T) {
 	}
 }
 
-func TestVisitBackyard19101MalformedPayload(t *testing.T) {
+func TestVisitBackyardMalformedPayload(t *testing.T) {
 	client := newDormTestClient(t)
 	malformed := []byte{0x80}
 
 	client.Buffer.Reset()
-	if _, _, err := answer.VisitBackyard19101(&malformed, client); err == nil {
+	if _, _, err := answer.VisitBackyard(&malformed, client); err == nil {
 		t.Fatalf("expected unmarshal error")
 	}
 	if client.Buffer.Len() != 0 {
