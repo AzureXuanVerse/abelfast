@@ -37,13 +37,13 @@ func RemoveEliteTargetShip(buffer *[]byte, client *connection.Client) (int, int,
 	state, err := orm.GetChapterState(client.Commander.CommanderID)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
-			response := buildSC13112Response([]*protobuf.FLEET_INFO{})
+			response := buildChapterEliteFleetResponse([]*protobuf.FLEET_INFO{})
 			return client.SendMessage(13112, response)
 		}
 		return 0, 13112, err
 	}
 	if len(state.State) == 0 {
-		response := buildSC13112Response([]*protobuf.FLEET_INFO{})
+		response := buildChapterEliteFleetResponse([]*protobuf.FLEET_INFO{})
 		return client.SendMessage(13112, response)
 	}
 
@@ -61,11 +61,11 @@ func RemoveEliteTargetShip(buffer *[]byte, client *connection.Client) (int, int,
 		return 0, 13112, err
 	}
 
-	response := buildSC13112Response(updated)
+	response := buildChapterEliteFleetResponse(updated)
 	return client.SendMessage(13112, response)
 }
 
-func buildSC13112Response(fleets []*protobuf.FLEET_INFO) *protobuf.SC_13112 {
+func buildChapterEliteFleetResponse(fleets []*protobuf.FLEET_INFO) *protobuf.SC_13112 {
 	if fleets == nil {
 		fleets = []*protobuf.FLEET_INFO{}
 	}
