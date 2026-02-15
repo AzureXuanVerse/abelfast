@@ -56,6 +56,33 @@ func TestWeeklyMissionsReadsPersistedState(t *testing.T) {
 	}
 }
 
+func TestWeeklyMissionsSeedsInitialTasksWhenEmpty(t *testing.T) {
+	client := setupPlayerUpdateTest(t)
+	clearTable(t, &orm.WeeklyTaskProgress{})
+	clearTable(t, &orm.ConfigEntry{})
+	seedWeeklyTaskConfig(t)
+	seedWeeklyTaskState(t, client.Commander.CommanderID, 0, 0, []orm.WeeklyTaskEntry{})
+
+	buffer := []byte{}
+	if _, _, err := WeeklyMissions(&buffer, client); err != nil {
+		t.Fatalf("weekly missions failed: %v", err)
+	}
+
+	var response protobuf.SC_20101
+	decodeResponse(t, client, &response)
+	if len(response.GetInfo().GetTask()) == 0 {
+		t.Fatalf("expected seeded weekly tasks in response")
+	}
+
+	state, err := orm.LoadWeeklyTaskProgress(client.Commander.CommanderID, nowUTC())
+	if err != nil {
+		t.Fatalf("load weekly state: %v", err)
+	}
+	if len(state.Tasks) == 0 {
+		t.Fatalf("expected seeded weekly tasks to be persisted")
+	}
+}
+
 func TestSubmitWeeklyTaskSuccess(t *testing.T) {
 	client := setupPlayerUpdateTest(t)
 	clearTable(t, &orm.WeeklyTaskProgress{})
@@ -204,5 +231,37 @@ func TestClaimWeeklyTaskProgressRewardSuccess(t *testing.T) {
 	coins := queryAnswerTestInt64(t, "SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = 1", int64(client.Commander.CommanderID))
 	if coins <= 0 {
 		t.Fatalf("expected resource reward to be applied, got %d", coins)
+	}
+}
+
+func TestClaimWeeklyTaskProgressRewardRejectsMismatchedID(t *testing.T) {
+	client := setupPlayerUpdateTest(t)
+	initCommanderMaps(client)
+	clearTable(t, &orm.WeeklyTaskProgress{})
+	clearTable(t, &orm.ConfigEntry{})
+	seedWeeklyTaskConfig(t)
+	seedWeeklyTaskState(t, client.Commander.CommanderID, 15, 0, []orm.WeeklyTaskEntry{{ID: 10001, Progress: 5}})
+
+	payload := protobuf.CS_20110{Id: proto.Uint32(1)}
+	buffer, err := proto.Marshal(&payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if _, _, err := ClaimWeeklyTaskProgressReward(&buffer, client); err != nil {
+		t.Fatalf("claim progress reward failed: %v", err)
+	}
+
+	var response protobuf.SC_20111
+	decodeResponse(t, client, &response)
+	if response.GetResult() == weeklyTaskSuccessResult {
+		t.Fatalf("expected mismatched id to fail")
+	}
+
+	state, err := orm.LoadWeeklyTaskProgress(client.Commander.CommanderID, nowUTC())
+	if err != nil {
+		t.Fatalf("load weekly state: %v", err)
+	}
+	if state.RewardLv != 0 {
+		t.Fatalf("expected reward level unchanged, got %d", state.RewardLv)
 	}
 }

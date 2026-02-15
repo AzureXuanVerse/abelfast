@@ -45,11 +45,36 @@ type weeklyTaskConfig struct {
 }
 
 func WeeklyMissions(buffer *[]byte, client *connection.Client) (int, int, error) {
+	config, configErr := loadWeeklyTaskConfig()
+	if configErr != nil {
+		logger.LogEvent("WeeklyTask", "Config", fmt.Sprintf("commander=%d config load failed: %v", client.Commander.CommanderID, configErr), logger.LOG_LEVEL_ERROR)
+	}
+
 	state, err := orm.LoadWeeklyTaskProgress(client.Commander.CommanderID, nowUTC())
 	if err != nil {
 		logger.LogEvent("WeeklyTask", "Load", fmt.Sprintf("commander=%d load failed: %v", client.Commander.CommanderID, err), logger.LOG_LEVEL_ERROR)
 		state = &orm.WeeklyTaskProgress{Tasks: []orm.WeeklyTaskEntry{}}
+	} else if configErr == nil && db.DefaultStore != nil {
+		err = db.DefaultStore.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
+			locked, lockErr := orm.LoadWeeklyTaskProgressForUpdateTx(context.Background(), tx, client.Commander.CommanderID, nowUTC())
+			if lockErr != nil {
+				return lockErr
+			}
+			if !ensureWeeklyTasksInitialized(locked, config) {
+				state = locked
+				return nil
+			}
+			if saveErr := orm.SaveWeeklyTaskProgressTx(context.Background(), tx, locked); saveErr != nil {
+				return saveErr
+			}
+			state = locked
+			return nil
+		})
+		if err != nil {
+			logger.LogEvent("WeeklyTask", "Init", fmt.Sprintf("commander=%d init weekly tasks failed: %v", client.Commander.CommanderID, err), logger.LOG_LEVEL_ERROR)
+		}
 	}
+
 	response := protobuf.SC_20101{
 		Info: &protobuf.WEEKLY_INFO{
 			Task:     toWeeklyTaskProto(state.Tasks),
@@ -78,9 +103,13 @@ func SubmitWeeklyTask(buffer *[]byte, client *connection.Client) (int, int, erro
 		if err != nil {
 			return err
 		}
+		initialized := ensureWeeklyTasksInitialized(state, config)
 		nextTask, ok := submitSingleWeeklyTask(state, payload.GetId(), config)
 		if !ok {
 			result = weeklyTaskFailedResult
+			if initialized {
+				return orm.SaveWeeklyTaskProgressTx(context.Background(), tx, state)
+			}
 			return nil
 		}
 		if err := orm.SaveWeeklyTaskProgressTx(context.Background(), tx, state); err != nil {
@@ -118,10 +147,14 @@ func SubmitWeeklyTaskBatch(buffer *[]byte, client *connection.Client) (int, int,
 		if err != nil {
 			return err
 		}
+		initialized := ensureWeeklyTasksInitialized(state, config)
 		nextTasks, ok := submitBatchWeeklyTasks(state, payload.GetId(), config)
 		if !ok {
 			result = weeklyTaskFailedResult
 			pt = state.Pt
+			if initialized {
+				return orm.SaveWeeklyTaskProgressTx(context.Background(), tx, state)
+			}
 			return nil
 		}
 		if err := orm.SaveWeeklyTaskProgressTx(context.Background(), tx, state); err != nil {
@@ -158,9 +191,13 @@ func ClaimWeeklyTaskProgressReward(buffer *[]byte, client *connection.Client) (i
 		if err != nil {
 			return err
 		}
-		drops, ok := claimWeeklyTaskProgressReward(state, config)
+		initialized := ensureWeeklyTasksInitialized(state, config)
+		drops, ok := claimWeeklyTaskProgressReward(state, payload.GetId(), config)
 		if !ok {
 			result = weeklyTaskFailedResult
+			if initialized {
+				return orm.SaveWeeklyTaskProgressTx(context.Background(), tx, state)
+			}
 			return nil
 		}
 		if err := applyLoveLetterDropsTx(context.Background(), tx, client, drops); err != nil {
@@ -261,7 +298,10 @@ func submitBatchWeeklyTasks(state *orm.WeeklyTaskProgress, taskIDs []uint32, con
 	return next, true
 }
 
-func claimWeeklyTaskProgressReward(state *orm.WeeklyTaskProgress, config *weeklyTaskConfig) (map[string]*protobuf.DROPINFO, bool) {
+func claimWeeklyTaskProgressReward(state *orm.WeeklyTaskProgress, requestedID uint32, config *weeklyTaskConfig) (map[string]*protobuf.DROPINFO, bool) {
+	if requestedID != state.RewardLv {
+		return nil, false
+	}
 	rewardLv := int(state.RewardLv)
 	if rewardLv < 0 || rewardLv >= len(config.targets) || rewardLv >= len(config.dropClient) {
 		return nil, false
@@ -394,6 +434,29 @@ func mapToTasks(taskMap map[uint32]orm.WeeklyTaskEntry) []orm.WeeklyTaskEntry {
 		tasks = append(tasks, taskMap[id])
 	}
 	return tasks
+}
+
+func ensureWeeklyTasksInitialized(state *orm.WeeklyTaskProgress, config *weeklyTaskConfig) bool {
+	if state == nil || config == nil || len(state.Tasks) > 0 {
+		return false
+	}
+	state.Tasks = initialWeeklyTasks(config)
+	return true
+}
+
+func initialWeeklyTasks(config *weeklyTaskConfig) []orm.WeeklyTaskEntry {
+	if config == nil {
+		return []orm.WeeklyTaskEntry{}
+	}
+	taskMap := make(map[uint32]orm.WeeklyTaskEntry, len(config.templatesBySub))
+	for _, templates := range config.templatesBySub {
+		if len(templates) == 0 {
+			continue
+		}
+		template := templates[0]
+		taskMap[template.ID] = orm.WeeklyTaskEntry{ID: template.ID, Progress: 0}
+	}
+	return mapToTasks(taskMap)
 }
 
 func nowUTC() time.Time {
