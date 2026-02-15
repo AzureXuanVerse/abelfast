@@ -193,6 +193,14 @@ func submitTaskWithOptionalTicket(client *connection.Client, taskID uint32, temp
 		ctx := context.Background()
 		now := uint32(time.Now().Unix())
 
+		task, err := orm.GetCommanderTaskTx(ctx, tx, client.Commander.CommanderID, taskID)
+		if err != nil {
+			return err
+		}
+		if task.SubmitTime != 0 {
+			return db.ErrNotFound
+		}
+
 		if ticketCost > 0 {
 			if !client.Commander.HasEnoughItem(quickTaskPassTicketID, ticketCost) {
 				return db.ErrNotFound
@@ -203,14 +211,7 @@ func submitTaskWithOptionalTicket(client *connection.Client, taskID uint32, temp
 			if err := orm.UpsertCommanderTaskProgressTx(ctx, tx, client.Commander.CommanderID, taskID, orm.TaskProgressUpdate, template.TargetNum, template.TargetNum, now); err != nil {
 				return err
 			}
-		}
-
-		task, err := orm.GetCommanderTaskTx(ctx, tx, client.Commander.CommanderID, taskID)
-		if err != nil {
-			return err
-		}
-		if task.SubmitTime != 0 {
-			return db.ErrNotFound
+			task.Progress = template.TargetNum
 		}
 		if template.TargetNum > 0 && task.Progress < template.TargetNum {
 			return db.ErrNotFound

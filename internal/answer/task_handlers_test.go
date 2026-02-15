@@ -183,3 +183,30 @@ func TestSubmitQuickTaskConsumesTicket(t *testing.T) {
 		t.Fatalf("expected submit_time to be persisted")
 	}
 }
+
+func TestSubmitQuickTaskDoesNotConsumeTicketWhenAlreadySubmitted(t *testing.T) {
+	client := setupPlayerUpdateTest(t)
+	seedTaskTemplate(t, 9402, 2, 3, `[[2,40002,1]]`)
+	execAnswerTestSQLT(t, "INSERT INTO commander_tasks (commander_id, task_id, progress, accept_time, submit_time) VALUES ($1, $2, $3, $4, $5)", int64(client.Commander.CommanderID), int64(9402), int64(2), int64(1), int64(1))
+	if err := client.Commander.SetItem(quickTaskPassTicketID, 3); err != nil {
+		t.Fatalf("seed quick tickets: %v", err)
+	}
+
+	request := &protobuf.CS_20013{Id: proto.Uint32(9402), ItemCost: proto.Uint32(3)}
+	buf, err := proto.Marshal(request)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	if _, _, err := SubmitQuickTask(&buf, client); err != nil {
+		t.Fatalf("SubmitQuickTask: %v", err)
+	}
+
+	var response protobuf.SC_20014
+	decodePacketAt(t, client, 0, 20014, &response)
+	if response.GetResult() == 0 {
+		t.Fatalf("expected non-zero result for already submitted task")
+	}
+	if got := client.Commander.GetItemCount(quickTaskPassTicketID); got != 3 {
+		t.Fatalf("expected quick task tickets unchanged, got %d", got)
+	}
+}
