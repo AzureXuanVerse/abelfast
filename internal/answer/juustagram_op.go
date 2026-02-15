@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func JuustagramOp(buffer *[]byte, client *connection.Client) (int, int, error) {
+func HandleJuustagramAction(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var payload protobuf.CS_11701
 	if err := proto.Unmarshal(*buffer, &payload); err != nil {
 		return 0, consts.JuustagramPacketOpResponse, err
@@ -26,14 +26,14 @@ func JuustagramOp(buffer *[]byte, client *connection.Client) (int, int, error) {
 	}
 	state.UpdatedAt = now
 	switch payload.GetCmd() {
-	case consts.JuustagramOpActive, consts.JuustagramOpUpdate, consts.JuustagramOpShare:
+	case consts.HandleJuustagramActionActive, consts.HandleJuustagramActionUpdate, consts.HandleJuustagramActionShare:
 		// no state changes
-	case consts.JuustagramOpLike:
+	case consts.HandleJuustagramActionLike:
 		if state.IsGood == 0 {
 			state.IsGood = 1
 			state.GoodCount += 1
 		}
-	case consts.JuustagramOpMarkRead:
+	case consts.HandleJuustagramActionMarkRead:
 		state.IsRead = 1
 	default:
 		return 0, consts.JuustagramPacketOpResponse, errors.New("invalid juustagram op")

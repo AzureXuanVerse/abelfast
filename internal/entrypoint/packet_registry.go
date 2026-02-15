@@ -204,7 +204,7 @@ func registerPackets() {
 	packets.RegisterPacketHandler(22300, []packets.PacketHandler{answer.CommanderManualInfo})
 	packets.RegisterPacketHandler(22302, []packets.PacketHandler{answer.CommanderManualGetTask})
 	packets.RegisterPacketHandler(22304, []packets.PacketHandler{answer.CommanderManualGetPtAward})
-	packets.RegisterPacketHandler(11701, []packets.PacketHandler{answer.JuustagramOp})
+	packets.RegisterPacketHandler(11701, []packets.PacketHandler{answer.HandleJuustagramAction})
 	packets.RegisterPacketHandler(11703, []packets.PacketHandler{answer.JuustagramComment})
 	packets.RegisterPacketHandler(11705, []packets.PacketHandler{answer.JuustagramMessageRange})
 	packets.RegisterPacketHandler(11710, []packets.PacketHandler{answer.JuustagramData})

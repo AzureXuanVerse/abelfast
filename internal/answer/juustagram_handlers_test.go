@@ -225,13 +225,13 @@ func TestJuustagramOpMissingLanguageUsesEmptyText(t *testing.T) {
 	client := &connection.Client{Commander: &commander}
 	payload := protobuf.CS_11701{
 		Id:  proto.Uint32(10),
-		Cmd: proto.Uint32(consts.JuustagramOpActive),
+		Cmd: proto.Uint32(consts.HandleJuustagramActionActive),
 	}
 	buffer, err := proto.Marshal(&payload)
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}
-	_, packetID, err := JuustagramOp(&buffer, client)
+	_, packetID, err := HandleJuustagramAction(&buffer, client)
 	if err != nil {
 		t.Fatalf("juustagram op failed: %v", err)
 	}
@@ -294,13 +294,13 @@ func TestJuustagramOpEmptyKeyUsesEmptyText(t *testing.T) {
 	client := &connection.Client{Commander: &commander}
 	payload := protobuf.CS_11701{
 		Id:  proto.Uint32(11),
-		Cmd: proto.Uint32(consts.JuustagramOpActive),
+		Cmd: proto.Uint32(consts.HandleJuustagramActionActive),
 	}
 	buffer, err := proto.Marshal(&payload)
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}
-	_, packetID, err := JuustagramOp(&buffer, client)
+	_, packetID, err := HandleJuustagramAction(&buffer, client)
 	if err != nil {
 		t.Fatalf("juustagram op failed: %v", err)
 	}
