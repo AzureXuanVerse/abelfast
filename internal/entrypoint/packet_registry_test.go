@@ -20,4 +20,5 @@ func TestRegisterPacketsIncludesLoveLetterGetAll(t *testing.T) {
 	if _, ok := packets.PacketDecisionFn[12406]; !ok {
 		t.Fatalf("expected handler for CS_12406 to be registered")
 	}
+
 }
