@@ -22,7 +22,7 @@ func TestBuildLegacyThemeList19108ResponseBoundsPayloadSize(t *testing.T) {
 		})
 	}
 
-	resp := buildLegacyThemeList19108Response(versions)
+	resp := buildLegacyThemeListResponse(versions)
 	if len(resp.GetThemeList()) >= len(versions) {
 		t.Fatalf("expected bounded theme list to truncate input")
 	}
@@ -37,7 +37,7 @@ func TestBuildLegacyThemeList19108ResponseKeepsSmallPayload(t *testing.T) {
 		{ThemeID: "theme-2", UploadTime: 2, OwnerID: 11, Pos: 2, Name: "two", FurniturePutList: []byte(`[]`)},
 	}
 
-	resp := buildLegacyThemeList19108Response(versions)
+	resp := buildLegacyThemeListResponse(versions)
 	if got := len(resp.GetThemeList()); got != len(versions) {
 		t.Fatalf("expected %d themes, got %d", len(versions), got)
 	}

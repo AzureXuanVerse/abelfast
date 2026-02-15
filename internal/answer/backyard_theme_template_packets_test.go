@@ -62,8 +62,8 @@ func TestLikeThemeIdempotent(t *testing.T) {
 	}
 
 	client.Buffer.Reset()
-	if _, _, err := answer.LikeTheme19121(&buf, client); err != nil {
-		t.Fatalf("LikeTheme19121 failed: %v", err)
+	if _, _, err := answer.LikeTheme(&buf, client); err != nil {
+		t.Fatalf("LikeTheme failed: %v", err)
 	}
 	resp1 := &protobuf.SC_19122{}
 	decodeResponse(t, client, 19122, resp1)
@@ -72,8 +72,8 @@ func TestLikeThemeIdempotent(t *testing.T) {
 	}
 
 	client.Buffer.Reset()
-	if _, _, err := answer.LikeTheme19121(&buf, client); err != nil {
-		t.Fatalf("LikeTheme19121 (repeat) failed: %v", err)
+	if _, _, err := answer.LikeTheme(&buf, client); err != nil {
+		t.Fatalf("LikeTheme (repeat) failed: %v", err)
 	}
 	resp2 := &protobuf.SC_19122{}
 	decodeResponse(t, client, 19122, resp2)
@@ -106,8 +106,8 @@ func TestCollectThemeIdempotent(t *testing.T) {
 	}
 
 	client.Buffer.Reset()
-	if _, _, err := answer.CollectTheme19119(&buf, client); err != nil {
-		t.Fatalf("CollectTheme19119 failed: %v", err)
+	if _, _, err := answer.CollectTheme(&buf, client); err != nil {
+		t.Fatalf("CollectTheme failed: %v", err)
 	}
 	resp1 := &protobuf.SC_19120{}
 	decodeResponse(t, client, 19120, resp1)
@@ -116,8 +116,8 @@ func TestCollectThemeIdempotent(t *testing.T) {
 	}
 
 	client.Buffer.Reset()
-	if _, _, err := answer.CollectTheme19119(&buf, client); err != nil {
-		t.Fatalf("CollectTheme19119 (repeat) failed: %v", err)
+	if _, _, err := answer.CollectTheme(&buf, client); err != nil {
+		t.Fatalf("CollectTheme (repeat) failed: %v", err)
 	}
 	resp2 := &protobuf.SC_19120{}
 	decodeResponse(t, client, 19120, resp2)
@@ -163,8 +163,8 @@ func TestCollectThemeCapAllowsExistingEntry(t *testing.T) {
 	}
 
 	client.Buffer.Reset()
-	if _, _, err := answer.CollectTheme19119(&buf, client); err != nil {
-		t.Fatalf("CollectTheme19119 failed: %v", err)
+	if _, _, err := answer.CollectTheme(&buf, client); err != nil {
+		t.Fatalf("CollectTheme failed: %v", err)
 	}
 	resp := &protobuf.SC_19120{}
 	decodeResponse(t, client, 19120, resp)
@@ -206,8 +206,8 @@ func TestPublishThemeCapAllowsRepublish(t *testing.T) {
 		t.Fatalf("failed to marshal payload: %v", err)
 	}
 	client.Buffer.Reset()
-	if _, _, err := answer.PublishCustomThemeTemplate19111(&buf, client); err != nil {
-		t.Fatalf("PublishCustomThemeTemplate19111 failed: %v", err)
+	if _, _, err := answer.PublishCustomThemeTemplate(&buf, client); err != nil {
+		t.Fatalf("PublishCustomThemeTemplate failed: %v", err)
 	}
 	resp := &protobuf.SC_19112{}
 	decodeResponse(t, client, 19112, resp)
@@ -245,8 +245,8 @@ func TestCancelCollectThemeDecrements(t *testing.T) {
 		t.Fatalf("failed to marshal collect payload: %v", err)
 	}
 	client.Buffer.Reset()
-	if _, _, err := answer.CollectTheme19119(&collectBuf, client); err != nil {
-		t.Fatalf("CollectTheme19119 failed: %v", err)
+	if _, _, err := answer.CollectTheme(&collectBuf, client); err != nil {
+		t.Fatalf("CollectTheme failed: %v", err)
 	}
 	decodeResponse(t, client, 19120, &protobuf.SC_19120{})
 
@@ -256,8 +256,8 @@ func TestCancelCollectThemeDecrements(t *testing.T) {
 		t.Fatalf("failed to marshal cancel payload: %v", err)
 	}
 	client.Buffer.Reset()
-	if _, _, err := answer.CancelCollectTheme19127(&cancelBuf, client); err != nil {
-		t.Fatalf("CancelCollectTheme19127 failed: %v", err)
+	if _, _, err := answer.CancelThemeCollection(&cancelBuf, client); err != nil {
+		t.Fatalf("CancelThemeCollection failed: %v", err)
 	}
 	decodeResponse(t, client, 19128, &protobuf.SC_19128{})
 
@@ -271,7 +271,7 @@ func TestCancelCollectThemeDecrements(t *testing.T) {
 	}
 }
 
-func TestGetThemeListLegacy19107Success(t *testing.T) {
+func TestListLegacyThemeTemplatesSuccess(t *testing.T) {
 	client := newThemeTestClient(t)
 	commanderID := client.Commander.CommanderID
 	themeID := orm.BackyardThemeID(commanderID, 1)
@@ -286,8 +286,8 @@ func TestGetThemeListLegacy19107Success(t *testing.T) {
 	}
 
 	client.Buffer.Reset()
-	if _, _, err := answer.GetThemeListLegacy19107(&buf, client); err != nil {
-		t.Fatalf("GetThemeListLegacy19107 failed: %v", err)
+	if _, _, err := answer.ListLegacyThemeTemplates(&buf, client); err != nil {
+		t.Fatalf("ListLegacyThemeTemplates failed: %v", err)
 	}
 	resp := &protobuf.SC_19108{}
 	decodeResponse(t, client, 19108, resp)
@@ -330,7 +330,7 @@ func TestGetThemeListLegacy19107Success(t *testing.T) {
 	}
 }
 
-func TestGetThemeListLegacy19107UnsupportedType(t *testing.T) {
+func TestListLegacyThemeTemplatesUnsupportedType(t *testing.T) {
 	client := newThemeTestClient(t)
 	payload := &protobuf.CS_19107{Typ: proto.Int32(999)}
 	buf, err := proto.Marshal(payload)
@@ -339,8 +339,8 @@ func TestGetThemeListLegacy19107UnsupportedType(t *testing.T) {
 	}
 
 	client.Buffer.Reset()
-	if _, _, err := answer.GetThemeListLegacy19107(&buf, client); err != nil {
-		t.Fatalf("GetThemeListLegacy19107 failed: %v", err)
+	if _, _, err := answer.ListLegacyThemeTemplates(&buf, client); err != nil {
+		t.Fatalf("ListLegacyThemeTemplates failed: %v", err)
 	}
 	resp := &protobuf.SC_19108{}
 	decodeResponse(t, client, 19108, resp)
@@ -352,10 +352,10 @@ func TestGetThemeListLegacy19107UnsupportedType(t *testing.T) {
 	}
 }
 
-func TestGetThemeListLegacy19107UnmarshalError(t *testing.T) {
+func TestListLegacyThemeTemplatesUnmarshalError(t *testing.T) {
 	client := newThemeTestClient(t)
 	buf := []byte{0xff, 0x00, 0x42}
-	_, outID, err := answer.GetThemeListLegacy19107(&buf, client)
+	_, outID, err := answer.ListLegacyThemeTemplates(&buf, client)
 	if err == nil {
 		t.Fatalf("expected error")
 	}
@@ -364,7 +364,7 @@ func TestGetThemeListLegacy19107UnmarshalError(t *testing.T) {
 	}
 }
 
-func TestGetThemeShopList19117Regression(t *testing.T) {
+func TestListPublishedThemeIDsRegression(t *testing.T) {
 	client := newThemeTestClient(t)
 	commanderID := client.Commander.CommanderID
 	uploadTime := uint32(time.Now().Unix())
@@ -379,8 +379,8 @@ func TestGetThemeShopList19117Regression(t *testing.T) {
 	}
 
 	client.Buffer.Reset()
-	if _, _, err := answer.GetThemeShopList19117(&buf, client); err != nil {
-		t.Fatalf("GetThemeShopList19117 failed: %v", err)
+	if _, _, err := answer.ListPublishedThemeIDs(&buf, client); err != nil {
+		t.Fatalf("ListPublishedThemeIDs failed: %v", err)
 	}
 	resp := &protobuf.SC_19118{}
 	decodeResponse(t, client, 19118, resp)

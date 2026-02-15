@@ -25,7 +25,7 @@ const (
 	maxLegacyThemeListPayloadBytes = maxPacketSizeBytes - packetHeaderSizeBytes
 )
 
-func GetOSSArgs19103(buffer *[]byte, client *connection.Client) (int, int, error) {
+func GetThemeUploadCredentials(buffer *[]byte, client *connection.Client) (int, int, error) {
 	// TODO: integrate real OSS/S3 creds for publishing previews.
 	// For now, return success with empty credentials.
 	resp := protobuf.SC_19104{
@@ -38,7 +38,7 @@ func GetOSSArgs19103(buffer *[]byte, client *connection.Client) (int, int, error
 	return client.SendMessage(19104, &resp)
 }
 
-func GetCustomThemeTemplates19105(buffer *[]byte, client *connection.Client) (int, int, error) {
+func ListCustomThemeTemplates(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19105
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19106, err
@@ -56,9 +56,9 @@ func GetCustomThemeTemplates19105(buffer *[]byte, client *connection.Client) (in
 	return client.SendMessage(19106, &resp)
 }
 
-// GetThemeListLegacy19107 keeps compatibility for the legacy full-list packet.
+// ListLegacyThemeTemplates keeps compatibility for the legacy full-list packet.
 // Active clients use the paged 19117/19118 flow.
-func GetThemeListLegacy19107(buffer *[]byte, client *connection.Client) (int, int, error) {
+func ListLegacyThemeTemplates(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19107
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19108, err
@@ -72,11 +72,11 @@ func GetThemeListLegacy19107(buffer *[]byte, client *connection.Client) (int, in
 		resp := protobuf.SC_19108{Result: proto.Uint32(1), ThemeList: []*protobuf.DORMTHEME{}}
 		return client.SendMessage(19108, &resp)
 	}
-	resp := buildLegacyThemeList19108Response(versions)
+	resp := buildLegacyThemeListResponse(versions)
 	return client.SendMessage(19108, &resp)
 }
 
-func buildLegacyThemeList19108Response(versions []orm.BackyardPublishedThemeVersion) protobuf.SC_19108 {
+func buildLegacyThemeListResponse(versions []orm.BackyardPublishedThemeVersion) protobuf.SC_19108 {
 	resp := protobuf.SC_19108{Result: proto.Uint32(0), ThemeList: make([]*protobuf.DORMTHEME, 0, len(versions))}
 	for _, version := range versions {
 		resp.ThemeList = append(resp.ThemeList, buildDormThemeFromPublishedVersion(version))
@@ -91,7 +91,7 @@ func buildLegacyThemeList19108Response(versions []orm.BackyardPublishedThemeVers
 	return resp
 }
 
-func SaveCustomThemeTemplate19109(buffer *[]byte, client *connection.Client) (int, int, error) {
+func SaveCustomThemeTemplate(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19109
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19110, err
@@ -129,7 +129,7 @@ func SaveCustomThemeTemplate19109(buffer *[]byte, client *connection.Client) (in
 	return client.SendMessage(19110, &resp)
 }
 
-func PublishCustomThemeTemplate19111(buffer *[]byte, client *connection.Client) (int, int, error) {
+func PublishCustomThemeTemplate(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19111
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19112, err
@@ -171,7 +171,7 @@ WHERE commander_id = $1 AND pos = $2
 	return client.SendMessage(19112, &resp)
 }
 
-func UnpublishCustomThemeTemplate19125(buffer *[]byte, client *connection.Client) (int, int, error) {
+func UnpublishCustomThemeTemplate(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19125
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19126, err
@@ -203,7 +203,7 @@ func UnpublishCustomThemeTemplate19125(buffer *[]byte, client *connection.Client
 	return client.SendMessage(19126, &resp)
 }
 
-func DeleteCustomThemeTemplate19123(buffer *[]byte, client *connection.Client) (int, int, error) {
+func DeleteCustomThemeTemplate(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19123
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19124, err
@@ -224,7 +224,7 @@ func DeleteCustomThemeTemplate19123(buffer *[]byte, client *connection.Client) (
 	return client.SendMessage(19124, &resp)
 }
 
-func GetThemeShopList19117(buffer *[]byte, client *connection.Client) (int, int, error) {
+func ListPublishedThemeIDs(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19117
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19118, err
@@ -238,7 +238,7 @@ func GetThemeShopList19117(buffer *[]byte, client *connection.Client) (int, int,
 	return client.SendMessage(19118, &resp)
 }
 
-func GetCollectionList19115(buffer *[]byte, client *connection.Client) (int, int, error) {
+func ListCollectedThemes(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19115
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19116, err
@@ -273,7 +273,7 @@ ORDER BY upload_time DESC
 	return client.SendMessage(19116, &resp)
 }
 
-func GetPreviewMd5s19131(buffer *[]byte, client *connection.Client) (int, int, error) {
+func GetThemePreviewMD5s(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19131
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19132, err
@@ -290,7 +290,7 @@ func GetPreviewMd5s19131(buffer *[]byte, client *connection.Client) (int, int, e
 	return client.SendMessage(19132, &resp)
 }
 
-func SearchTheme19113(buffer *[]byte, client *connection.Client) (int, int, error) {
+func GetThemeByID(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19113
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19114, err
@@ -385,7 +385,7 @@ func toFurniturePutInfoList(raw []byte) []*protobuf.FURNITUREPUTINFO {
 	return putList
 }
 
-func LikeTheme19121(buffer *[]byte, client *connection.Client) (int, int, error) {
+func LikeTheme(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19121
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19122, err
@@ -420,7 +420,7 @@ WHERE theme_id = $1 AND upload_time = $2
 	return client.SendMessage(19122, &resp)
 }
 
-func CollectTheme19119(buffer *[]byte, client *connection.Client) (int, int, error) {
+func CollectTheme(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19119
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19120, err
@@ -460,7 +460,7 @@ WHERE theme_id = $1 AND upload_time = $2
 	return client.SendMessage(19120, &resp)
 }
 
-func CancelCollectTheme19127(buffer *[]byte, client *connection.Client) (int, int, error) {
+func CancelThemeCollection(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19127
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19128, err
@@ -507,7 +507,7 @@ WHERE theme_id = $1 AND upload_time = $2 AND fav_count > 0
 	return client.SendMessage(19128, &resp)
 }
 
-func InformTheme19129(buffer *[]byte, client *connection.Client) (int, int, error) {
+func ReportTheme(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var request protobuf.CS_19129
 	if err := proto.Unmarshal(*buffer, &request); err != nil {
 		return 0, 19130, err
