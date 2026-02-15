@@ -241,15 +241,20 @@ func registerPackets() {
 	packets.RegisterPacketHandler(11401, []packets.PacketHandler{answer.ChatRoomChange})
 	packets.RegisterPacketHandler(50102, []packets.PacketHandler{answer.ReceiveChatMessage})
 	packets.RegisterPacketHandler(12032, []packets.PacketHandler{answer.ProposeShip})
+	packets.RegisterPacketHandler(20005, []packets.PacketHandler{answer.SubmitTask})
 	packets.RegisterPacketHandler(20007, []packets.PacketHandler{func(b *[]byte, c *connection.Client) (int, int, error) {
 		response := protobuf.SC_20008{
 			Result: proto.Uint32(1),
 		}
 		return c.SendMessage(20008, &response)
 	}})
+	packets.RegisterPacketHandler(20009, []packets.PacketHandler{answer.UpdateTaskProgress})
+	packets.RegisterPacketHandler(20011, []packets.PacketHandler{answer.SubmitTaskBatch})
+	packets.RegisterPacketHandler(20013, []packets.PacketHandler{answer.SubmitQuickTask})
+	packets.RegisterPacketHandler(20016, []packets.PacketHandler{answer.TaskProgressEvent})
 	packets.RegisterPacketHandler(20205, []packets.PacketHandler{answer.SubmitActivityTask})
 	packets.RegisterPacketHandler(20207, []packets.PacketHandler{answer.QuickFinishActivityTask})
-	packets.RegisterPacketHandler(20209, []packets.PacketHandler{answer.UpdateLowPriorityActivityTaskProgress})
+	packets.RegisterPacketHandler(20209, []packets.PacketHandler{answer.UpdateLowPriorityActivityTaskProgress}) main
 	packets.RegisterPacketHandler(11011, []packets.PacketHandler{answer.UpdateSecretaries})
 	packets.RegisterPacketHandler(12038, []packets.PacketHandler{answer.UpgradeShipMaxLevel})
 	packets.RegisterPacketHandler(12040, []packets.PacketHandler{answer.SetFavoriteShip})
@@ -316,6 +321,9 @@ func registerPackets() {
 	packets.RegisterPacketHandler(17107, []packets.PacketHandler{answer.UpdateShipLike})
 	packets.RegisterPacketHandler(17109, []packets.PacketHandler{answer.ReportShipEvaluation})
 	packets.RegisterPacketHandler(17301, []packets.PacketHandler{answer.TrophyClaim17301})
+	packets.RegisterPacketHandler(20106, []packets.PacketHandler{answer.SubmitWeeklyTask})
+	packets.RegisterPacketHandler(20108, []packets.PacketHandler{answer.SubmitWeeklyTaskBatch})
+	packets.RegisterPacketHandler(20110, []packets.PacketHandler{answer.ClaimWeeklyTaskProgressReward})
 	// Dorm / Backyard (190xx)
 	packets.RegisterPacketHandler(19002, []packets.PacketHandler{answer.AddDormShip19002})
 	packets.RegisterPacketHandler(19004, []packets.PacketHandler{answer.ExitDormShip19004})

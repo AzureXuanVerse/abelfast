@@ -375,6 +375,14 @@ type CommanderSurvey struct {
 	CompletedAt pgtype.Timestamptz
 }
 
+type CommanderTask struct {
+	CommanderID int64
+	TaskID      int64
+	Progress    int64
+	AcceptTime  int64
+	SubmitTime  int64
+}
+
 type CommanderTb struct {
 	CommanderID int64
 	State       []byte
@@ -1149,6 +1157,16 @@ type WebAuthnCredential struct {
 	LastUsedAt     pgtype.Timestamptz
 	Label          pgtype.Text
 	RpID           string
+}
+
+type WeeklyTaskProgress struct {
+	CommanderID   int64
+	WeekStartUnix int64
+	Pt            int64
+	RewardLv      int64
+	Tasks         []byte
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
 }
 
 type YostarusMap struct {
