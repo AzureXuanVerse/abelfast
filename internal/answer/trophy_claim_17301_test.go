@@ -16,7 +16,7 @@ func seedMedalTemplate(t *testing.T, id uint32, next uint32, targetNum uint32, c
 	seedConfigEntry(t, medalTemplateCategory, strconv.FormatUint(uint64(id), 10), payload)
 }
 
-func TestTrophyClaim17301ClaimsAndPersistsTimestamp(t *testing.T) {
+func TestClaimTrophyClaimsAndPersistsTimestamp(t *testing.T) {
 	client := setupHandlerCommander(t)
 	clearTable(t, &orm.ConfigEntry{})
 	clearTable(t, &orm.CommanderTrophyProgress{})
@@ -33,7 +33,7 @@ func TestTrophyClaim17301ClaimsAndPersistsTimestamp(t *testing.T) {
 		t.Fatalf("marshal payload: %v", err)
 	}
 	client.Buffer.Reset()
-	if _, _, err := TrophyClaim17301(&buf, client); err != nil {
+	if _, _, err := ClaimTrophy(&buf, client); err != nil {
 		t.Fatalf("handler failed: %v", err)
 	}
 
@@ -55,7 +55,7 @@ func TestTrophyClaim17301ClaimsAndPersistsTimestamp(t *testing.T) {
 	}
 }
 
-func TestTrophyClaim17301CreatesProgressRowWhenMissing(t *testing.T) {
+func TestClaimTrophyCreatesProgressRowWhenMissing(t *testing.T) {
 	client := setupHandlerCommander(t)
 	clearTable(t, &orm.ConfigEntry{})
 	clearTable(t, &orm.CommanderTrophyProgress{})
@@ -68,7 +68,7 @@ func TestTrophyClaim17301CreatesProgressRowWhenMissing(t *testing.T) {
 		t.Fatalf("marshal payload: %v", err)
 	}
 	client.Buffer.Reset()
-	if _, _, err := TrophyClaim17301(&buf, client); err != nil {
+	if _, _, err := ClaimTrophy(&buf, client); err != nil {
 		t.Fatalf("handler failed: %v", err)
 	}
 
@@ -93,7 +93,7 @@ func TestTrophyClaim17301CreatesProgressRowWhenMissing(t *testing.T) {
 	}
 }
 
-func TestTrophyClaim17301UnlocksNextWhenMissing(t *testing.T) {
+func TestClaimTrophyUnlocksNextWhenMissing(t *testing.T) {
 	client := setupHandlerCommander(t)
 	clearTable(t, &orm.ConfigEntry{})
 	clearTable(t, &orm.CommanderTrophyProgress{})
@@ -111,7 +111,7 @@ func TestTrophyClaim17301UnlocksNextWhenMissing(t *testing.T) {
 		t.Fatalf("marshal payload: %v", err)
 	}
 	client.Buffer.Reset()
-	if _, _, err := TrophyClaim17301(&buf, client); err != nil {
+	if _, _, err := ClaimTrophy(&buf, client); err != nil {
 		t.Fatalf("handler failed: %v", err)
 	}
 
@@ -143,7 +143,7 @@ func TestTrophyClaim17301UnlocksNextWhenMissing(t *testing.T) {
 	}
 }
 
-func TestTrophyClaim17301NextInheritsProgressWhenConfigured(t *testing.T) {
+func TestClaimTrophyNextInheritsProgressWhenConfigured(t *testing.T) {
 	client := setupHandlerCommander(t)
 	clearTable(t, &orm.ConfigEntry{})
 	clearTable(t, &orm.CommanderTrophyProgress{})
@@ -161,7 +161,7 @@ func TestTrophyClaim17301NextInheritsProgressWhenConfigured(t *testing.T) {
 		t.Fatalf("marshal payload: %v", err)
 	}
 	client.Buffer.Reset()
-	if _, _, err := TrophyClaim17301(&buf, client); err != nil {
+	if _, _, err := ClaimTrophy(&buf, client); err != nil {
 		t.Fatalf("handler failed: %v", err)
 	}
 
@@ -186,7 +186,7 @@ func TestTrophyClaim17301NextInheritsProgressWhenConfigured(t *testing.T) {
 	}
 }
 
-func TestTrophyClaim17301RejectsAlreadyClaimedWithoutMutation(t *testing.T) {
+func TestClaimTrophyRejectsAlreadyClaimedWithoutMutation(t *testing.T) {
 	client := setupHandlerCommander(t)
 	clearTable(t, &orm.ConfigEntry{})
 	clearTable(t, &orm.CommanderTrophyProgress{})
@@ -203,7 +203,7 @@ func TestTrophyClaim17301RejectsAlreadyClaimedWithoutMutation(t *testing.T) {
 		t.Fatalf("marshal payload: %v", err)
 	}
 	client.Buffer.Reset()
-	if _, _, err := TrophyClaim17301(&buf, client); err != nil {
+	if _, _, err := ClaimTrophy(&buf, client); err != nil {
 		t.Fatalf("handler failed: %v", err)
 	}
 
@@ -221,7 +221,7 @@ func TestTrophyClaim17301RejectsAlreadyClaimedWithoutMutation(t *testing.T) {
 	}
 }
 
-func TestTrophyClaim17301RejectsInsufficientProgressWithoutMutation(t *testing.T) {
+func TestClaimTrophyRejectsInsufficientProgressWithoutMutation(t *testing.T) {
 	client := setupHandlerCommander(t)
 	clearTable(t, &orm.ConfigEntry{})
 	clearTable(t, &orm.CommanderTrophyProgress{})
@@ -238,7 +238,7 @@ func TestTrophyClaim17301RejectsInsufficientProgressWithoutMutation(t *testing.T
 		t.Fatalf("marshal payload: %v", err)
 	}
 	client.Buffer.Reset()
-	if _, _, err := TrophyClaim17301(&buf, client); err != nil {
+	if _, _, err := ClaimTrophy(&buf, client); err != nil {
 		t.Fatalf("handler failed: %v", err)
 	}
 

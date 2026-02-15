@@ -323,7 +323,7 @@ func registerPackets() {
 	packets.RegisterPacketHandler(17105, []packets.PacketHandler{answer.ZanShipEvaluation})
 	packets.RegisterPacketHandler(17107, []packets.PacketHandler{answer.UpdateShipLike})
 	packets.RegisterPacketHandler(17109, []packets.PacketHandler{answer.ReportShipEvaluation})
-	packets.RegisterPacketHandler(17301, []packets.PacketHandler{answer.TrophyClaim17301})
+	packets.RegisterPacketHandler(17301, []packets.PacketHandler{answer.ClaimTrophy})
 	packets.RegisterPacketHandler(20106, []packets.PacketHandler{answer.SubmitWeeklyTask})
 	packets.RegisterPacketHandler(20108, []packets.PacketHandler{answer.SubmitWeeklyTaskBatch})
 	packets.RegisterPacketHandler(20110, []packets.PacketHandler{answer.ClaimWeeklyTaskProgressReward})
