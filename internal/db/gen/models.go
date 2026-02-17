@@ -609,6 +609,16 @@ type IslandDelegation struct {
 	PtAward       int64
 }
 
+type IslandHandPlant struct {
+	CommanderID int64
+	BuildID     int64
+	SlotID      int64
+	State       int64
+	FormulaID   int64
+	StartTime   int64
+	EndTime     int64
+}
+
 type IslandInventory struct {
 	CommanderID int64
 	ItemID      int64
