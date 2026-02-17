@@ -2,11 +2,14 @@ package orm
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/ggmolly/belfast/internal/db"
 )
+
+var ErrInsufficientIslandOverflowInventory = errors.New("insufficient island overflow inventory")
 
 type IslandOverflowInventory struct {
 	CommanderID uint32 `gorm:"primaryKey;column:commander_id"`
@@ -66,5 +69,27 @@ func ClearIslandOverflowInventoryTx(ctx context.Context, tx pgx.Tx, commanderID 
 DELETE FROM island_overflow_inventories
 WHERE commander_id = $1
 `, int64(commanderID))
+	return err
+}
+
+func ConsumeIslandOverflowInventoryCheckedTx(ctx context.Context, tx pgx.Tx, commanderID uint32, itemID uint32, count uint32) error {
+	if count == 0 {
+		return nil
+	}
+	result, err := tx.Exec(ctx, `
+UPDATE island_overflow_inventories
+SET count = count - $3
+WHERE commander_id = $1 AND item_id = $2 AND count >= $3
+`, int64(commanderID), int64(itemID), int64(count))
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return ErrInsufficientIslandOverflowInventory
+	}
+	_, err = tx.Exec(ctx, `
+DELETE FROM island_overflow_inventories
+WHERE commander_id = $1 AND item_id = $2 AND count = 0
+`, int64(commanderID), int64(itemID))
 	return err
 }

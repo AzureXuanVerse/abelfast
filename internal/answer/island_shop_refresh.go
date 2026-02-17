@@ -107,20 +107,23 @@ func IslandShopPlayerRefresh(buffer *[]byte, client *connection.Client) (int, in
 		return client.SendMessage(21021, response)
 	}
 
+	response.Result = proto.Uint32(0)
+	response.ShopInfo = buildPBShop(state)
+	return client.SendMessage(21021, response)
+}
+
+func buildPBShop(state *orm.IslandShopState) *protobuf.PB_SHOP {
 	goods := make([]*protobuf.PB_GOODS, 0, len(state.Goods))
 	for _, item := range state.Goods {
 		goods = append(goods, &protobuf.PB_GOODS{Id: proto.Uint32(item.ID), Num: proto.Uint32(item.Num)})
 	}
-
-	response.Result = proto.Uint32(0)
-	response.ShopInfo = &protobuf.PB_SHOP{
-		Id:           proto.Uint32(shopID),
+	return &protobuf.PB_SHOP{
+		Id:           proto.Uint32(state.ShopID),
 		ExistTime:    proto.Uint32(state.ExistTime),
 		RefreshTime:  proto.Uint32(state.RefreshTime),
 		GoodsList:    goods,
 		RefreshCount: proto.Uint32(state.RefreshCount),
 	}
-	return client.SendMessage(21021, response)
 }
 
 func loadIslandShopTemplate(shopID uint32) (*islandShopTemplate, bool) {

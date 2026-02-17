@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/ggmolly/belfast/internal/db"
 )
 
@@ -111,6 +114,18 @@ ORDER BY shop_id
 }
 
 func UpsertIslandShopState(state *IslandShopState) error {
+	return upsertIslandShopStateWithExecer(context.Background(), db.DefaultStore.Pool, state)
+}
+
+func UpsertIslandShopStateTx(ctx context.Context, tx pgx.Tx, state *IslandShopState) error {
+	return upsertIslandShopStateWithExecer(ctx, tx, state)
+}
+
+type islandShopStateExecer interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+}
+
+func upsertIslandShopStateWithExecer(ctx context.Context, execer islandShopStateExecer, state *IslandShopState) error {
 	goods := state.Goods
 	if goods == nil {
 		goods = []IslandShopGoodsState{}
@@ -119,7 +134,7 @@ func UpsertIslandShopState(state *IslandShopState) error {
 	if err != nil {
 		return err
 	}
-	_, err = db.DefaultStore.Pool.Exec(context.Background(), `
+	_, err = execer.Exec(ctx, `
 INSERT INTO island_shop_states (commander_id, shop_id, exist_time, refresh_time, refresh_count, goods)
 VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (commander_id, shop_id)

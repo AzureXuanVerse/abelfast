@@ -19,6 +19,9 @@ func IslandOrderSync(buffer *[]byte, client *connection.Client) (int, int, error
 	}
 
 	response := &protobuf.SC_21025{Result: proto.Uint32(1), DropList: []*protobuf.DROPINFO{}, OrderSys: nil}
+	if payload.GetType() != 0 && payload.GetType() != 1 {
+		return client.SendMessage(21025, response)
+	}
 	err := db.DefaultStore.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
 		state, err := orm.GetIslandOrderStateForUpdateTx(context.Background(), tx, client.Commander.CommanderID)
 		if err != nil {
