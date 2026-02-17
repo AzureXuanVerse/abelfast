@@ -155,8 +155,29 @@ func buildIslandPrivateData(ownerID uint32, snapshot *orm.IslandSnapshot) (*prot
 		ViewBook:              &protobuf.PB_VIEW_BOOK{CondList: []*protobuf.PB_BOOK_COND{}, BookList: []uint32{}, BookAwards: []uint32{}, BookCollects: []*protobuf.PB_BOOK_COLLECT{}, ItemList: []*protobuf.PB_ISLAND_ITEM{}},
 		FollowShips:           snapshot.FollowShips,
 		ImageList:             []*protobuf.PB_CARD_IMAGE{},
-		FishSys:               &protobuf.PB_FISH_SYS{OldBait: proto.Uint32(0), FishRod: proto.Uint32(0), FishWeight: []*protobuf.PB_FISH_WEIGHT{}},
+		FishSys:               buildIslandFishSys(ownerID),
 	}, nil
+}
+
+func buildIslandFishSys(ownerID uint32) *protobuf.PB_FISH_SYS {
+	state, err := orm.GetIslandFishingState(ownerID)
+	if err != nil {
+		return &protobuf.PB_FISH_SYS{OldBait: proto.Uint32(0), FishRod: proto.Uint32(0), FishWeight: []*protobuf.PB_FISH_WEIGHT{}}
+	}
+	weights := make([]*protobuf.PB_FISH_WEIGHT, 0, len(state.FishWeights))
+	for i := range state.FishWeights {
+		weights = append(weights, &protobuf.PB_FISH_WEIGHT{
+			FishId:    proto.Uint32(state.FishWeights[i].FishID),
+			MinWeight: proto.Uint32(state.FishWeights[i].MinWeight),
+			MaxWeight: proto.Uint32(state.FishWeights[i].MaxWeight),
+			GoldState: proto.Uint32(state.FishWeights[i].GoldState),
+		})
+	}
+	return &protobuf.PB_FISH_SYS{
+		OldBait:    proto.Uint32(state.BaitID),
+		FishRod:    proto.Uint32(state.FishRod),
+		FishWeight: weights,
+	}
 }
 
 func buildIslandPrivateShopList(ownerID uint32) []*protobuf.PB_SHOP {

@@ -639,6 +639,15 @@ type IslandDelegation struct {
 	ReturnNum     int64
 }
 
+type IslandFishingState struct {
+	CommanderID int64
+	BaitID      int64
+	FishRod     int64
+	FishWeights []byte
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type IslandFollower struct {
 	CommanderID int64
 	ShipID      int64

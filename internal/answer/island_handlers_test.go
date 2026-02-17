@@ -1,9 +1,11 @@
 package answer
 
 import (
+	"math"
 	"math/rand"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ggmolly/belfast/internal/orm"
 	"github.com/ggmolly/belfast/internal/protobuf"
@@ -293,5 +295,229 @@ func TestIslandFishingIntnConcurrent(t *testing.T) {
 	wg.Wait()
 	if len(failures) > 0 {
 		t.Fatalf("expected islandFishingIntn to stay within bounds under concurrency")
+	}
+}
+
+func TestIslandGoFishingStoresRollForFinalize(t *testing.T) {
+	client := setupHandlerCommander(t)
+	clearTable(t, &orm.ConfigEntry{})
+
+	seedConfigEntry(t, islandFishPointCategory, "300", `{"id":300}`)
+	seedConfigEntry(t, islandFishCategory, "9001", `{"id":9001,"min_weight":10,"max_weight":10,"gold_state":1}`)
+
+	islandFishingStateMu.Lock()
+	islandFishingState = map[string]islandFishingRoll{}
+	islandFishingStateMu.Unlock()
+	previousNow := islandFishingNow
+	now := time.Unix(1_700_000_000, 0).UTC()
+	islandFishingNow = func() time.Time { return now }
+	t.Cleanup(func() {
+		islandFishingNow = previousNow
+	})
+
+	payload := &protobuf.CS_21060{IslandId: proto.Uint32(client.Commander.CommanderID), PointId: proto.Uint32(300)}
+	buffer, _ := proto.Marshal(payload)
+	client.Buffer.Reset()
+	if _, _, err := IslandGoFishing(&buffer, client); err != nil {
+		t.Fatalf("go fishing failed: %v", err)
+	}
+
+	key := islandFishingKey(client.Commander.CommanderID, client.Commander.CommanderID, 300)
+	islandFishingStateMu.Lock()
+	roll, ok := islandFishingState[key]
+	islandFishingStateMu.Unlock()
+	if !ok {
+		t.Fatalf("expected fishing roll state to be cached")
+	}
+	if roll.ExpiresAt.Sub(now) != 5*time.Minute {
+		t.Fatalf("expected 5 minute expiry window")
+	}
+}
+
+func TestIslandFishingResultSuccessPersistsFishWeight(t *testing.T) {
+	client := setupHandlerCommander(t)
+	clearTable(t, &orm.ConfigEntry{})
+	clearTable(t, &orm.IslandFishingState{})
+
+	seedConfigEntry(t, islandFishPointCategory, "300", `{"id":300}`)
+	seedConfigEntry(t, islandFishCategory, "9001", `{"id":9001,"min_weight":10,"max_weight":10,"gold_state":1}`)
+
+	startPayload := &protobuf.CS_21060{IslandId: proto.Uint32(client.Commander.CommanderID), PointId: proto.Uint32(300)}
+	startBuffer, _ := proto.Marshal(startPayload)
+	client.Buffer.Reset()
+	if _, _, err := IslandGoFishing(&startBuffer, client); err != nil {
+		t.Fatalf("go fishing failed: %v", err)
+	}
+
+	finalizePayload := &protobuf.CS_21062{
+		IslandId:  proto.Uint32(client.Commander.CommanderID),
+		PointId:   proto.Uint32(300),
+		EndResult: proto.Uint32(islandFishingEndResultSuccess),
+	}
+	finalizeBuffer, _ := proto.Marshal(finalizePayload)
+	client.Buffer.Reset()
+	if _, _, err := IslandFishingResult(&finalizeBuffer, client); err != nil {
+		t.Fatalf("fishing finalize failed: %v", err)
+	}
+	var response protobuf.SC_21063
+	decodePacketAt(t, client, 0, 21063, &response)
+	if response.GetResult() != 0 {
+		t.Fatalf("expected finalize success, got %d", response.GetResult())
+	}
+
+	state, err := orm.GetIslandFishingState(client.Commander.CommanderID)
+	if err != nil {
+		t.Fatalf("load fishing state: %v", err)
+	}
+	if state.BaitID != 0 || state.FishRod != 0 {
+		t.Fatalf("unexpected bait state mutation: %+v", state)
+	}
+	if len(state.FishWeights) != 1 || state.FishWeights[0].FishID != 9001 || state.FishWeights[0].MinWeight != 10 || state.FishWeights[0].MaxWeight != 10 {
+		t.Fatalf("expected persisted fish weight, got %+v", state.FishWeights)
+	}
+}
+
+func TestIslandFishingResultFailsWhenNoActiveRoll(t *testing.T) {
+	client := setupHandlerCommander(t)
+
+	islandFishingStateMu.Lock()
+	islandFishingState = map[string]islandFishingRoll{}
+	islandFishingStateMu.Unlock()
+
+	payload := &protobuf.CS_21062{
+		IslandId:  proto.Uint32(client.Commander.CommanderID),
+		PointId:   proto.Uint32(300),
+		EndResult: proto.Uint32(islandFishingEndResultSuccess),
+	}
+	buffer, _ := proto.Marshal(payload)
+	client.Buffer.Reset()
+	if _, _, err := IslandFishingResult(&buffer, client); err != nil {
+		t.Fatalf("fishing finalize failed: %v", err)
+	}
+	var response protobuf.SC_21063
+	decodePacketAt(t, client, 0, 21063, &response)
+	if response.GetResult() == 0 {
+		t.Fatalf("expected finalize failure without active roll")
+	}
+}
+
+func TestIslandExchangeLureSuccess(t *testing.T) {
+	client := setupHandlerCommander(t)
+	clearTable(t, &orm.ConfigEntry{})
+	clearTable(t, &orm.IslandInventory{})
+	clearTable(t, &orm.IslandFishingState{})
+
+	seedConfigEntry(t, islandFishingBaitCategory, "1001", `{"id":1001,"fish_rod":7,"cost":[[41,5001,2]]}`)
+	execAnswerTestSQLT(t, "INSERT INTO island_inventories (commander_id, item_id, count) VALUES ($1, $2, $3)", int64(client.Commander.CommanderID), int64(5001), int64(5))
+
+	payload := &protobuf.CS_21064{BaitId: proto.Uint32(1001)}
+	buffer, _ := proto.Marshal(payload)
+	client.Buffer.Reset()
+	if _, _, err := IslandExchangeLure(&buffer, client); err != nil {
+		t.Fatalf("exchange lure failed: %v", err)
+	}
+
+	var response protobuf.SC_21065
+	decodePacketAt(t, client, 0, 21065, &response)
+	if response.GetResult() != 0 {
+		t.Fatalf("expected lure exchange success, got %d", response.GetResult())
+	}
+
+	remaining := queryAnswerTestInt64(t, "SELECT count FROM island_inventories WHERE commander_id = $1 AND item_id = $2", int64(client.Commander.CommanderID), int64(5001))
+	if remaining != 3 {
+		t.Fatalf("expected lure cost consumption, got %d", remaining)
+	}
+
+	state, err := orm.GetIslandFishingState(client.Commander.CommanderID)
+	if err != nil {
+		t.Fatalf("load fishing state: %v", err)
+	}
+	if state.BaitID != 1001 || state.FishRod != 7 {
+		t.Fatalf("expected persisted bait/rod state, got %+v", state)
+	}
+}
+
+func TestIslandExchangeItemBatchSuccessAndRollback(t *testing.T) {
+	client := setupHandlerCommander(t)
+	clearTable(t, &orm.ConfigEntry{})
+	clearTable(t, &orm.IslandInventory{})
+
+	seedConfigEntry(t, islandExchangeCategory, "1", `{"id":1,"origin_item":[41,7001,2],"target_item":[41,8001],"target_num":3}`)
+	seedConfigEntry(t, islandExchangeCategory, "2", `{"id":2,"origin_item":[2,20001,1],"target_item":[2,20002],"target_num":2}`)
+	seedConfigEntry(t, islandExchangeCategory, "3", `{"id":3,"origin_item":[41,7001,7],"target_item":[41,8003],"target_num":1}`)
+	execAnswerTestSQLT(t, "INSERT INTO island_inventories (commander_id, item_id, count) VALUES ($1, $2, $3)", int64(client.Commander.CommanderID), int64(7001), int64(10))
+	seedHandlerCommanderItem(t, client, 20001, 5)
+
+	payload := &protobuf.CS_21066{Makes: []*protobuf.PB_ISLAND_MAKE{{MakeId: proto.Uint32(1), Num: proto.Uint32(2)}, {MakeId: proto.Uint32(2), Num: proto.Uint32(1)}}}
+	buffer, _ := proto.Marshal(payload)
+	client.Buffer.Reset()
+	if _, _, err := IslandExchangeItem(&buffer, client); err != nil {
+		t.Fatalf("exchange item failed: %v", err)
+	}
+
+	var response protobuf.SC_21067
+	decodePacketAt(t, client, 0, 21067, &response)
+	if response.GetResult() != 0 || len(response.GetDropList()) != 2 {
+		t.Fatalf("expected batch exchange success with merged drops, got result=%d drops=%d", response.GetResult(), len(response.GetDropList()))
+	}
+
+	remainingSource := queryAnswerTestInt64(t, "SELECT count FROM island_inventories WHERE commander_id = $1 AND item_id = $2", int64(client.Commander.CommanderID), int64(7001))
+	if remainingSource != 6 {
+		t.Fatalf("expected source island item consumption, got %d", remainingSource)
+	}
+	producedIslandItem := queryAnswerTestInt64(t, "SELECT count FROM island_inventories WHERE commander_id = $1 AND item_id = $2", int64(client.Commander.CommanderID), int64(8001))
+	if producedIslandItem != 6 {
+		t.Fatalf("expected produced island item count 6, got %d", producedIslandItem)
+	}
+	if client.Commander.GetItemCount(20001) != 4 || client.Commander.GetItemCount(20002) != 2 {
+		t.Fatalf("expected commander item mutation for exchange template")
+	}
+
+	rollbackPayload := &protobuf.CS_21066{Makes: []*protobuf.PB_ISLAND_MAKE{{MakeId: proto.Uint32(1), Num: proto.Uint32(4)}}}
+	rollbackBuffer, _ := proto.Marshal(rollbackPayload)
+	client.Buffer.Reset()
+	if _, _, err := IslandExchangeItem(&rollbackBuffer, client); err != nil {
+		t.Fatalf("exchange rollback request failed: %v", err)
+	}
+	var rollbackResponse protobuf.SC_21067
+	decodePacketAt(t, client, 0, 21067, &rollbackResponse)
+	if rollbackResponse.GetResult() != islandFishingResultLack {
+		t.Fatalf("expected insufficient result, got %d", rollbackResponse.GetResult())
+	}
+	postRollbackSource := queryAnswerTestInt64(t, "SELECT count FROM island_inventories WHERE commander_id = $1 AND item_id = $2", int64(client.Commander.CommanderID), int64(7001))
+	if postRollbackSource != 6 {
+		t.Fatalf("expected atomic rollback on insufficient source, got %d", postRollbackSource)
+	}
+
+	partialPayload := &protobuf.CS_21066{Makes: []*protobuf.PB_ISLAND_MAKE{{MakeId: proto.Uint32(1), Num: proto.Uint32(1)}, {MakeId: proto.Uint32(3), Num: proto.Uint32(1)}}}
+	partialBuffer, _ := proto.Marshal(partialPayload)
+	client.Buffer.Reset()
+	if _, _, err := IslandExchangeItem(&partialBuffer, client); err != nil {
+		t.Fatalf("exchange partial rollback request failed: %v", err)
+	}
+	var partialResponse protobuf.SC_21067
+	decodePacketAt(t, client, 0, 21067, &partialResponse)
+	if partialResponse.GetResult() != islandFishingResultLack {
+		t.Fatalf("expected insufficient result for partial batch, got %d", partialResponse.GetResult())
+	}
+	postPartialSource := queryAnswerTestInt64(t, "SELECT count FROM island_inventories WHERE commander_id = $1 AND item_id = $2", int64(client.Commander.CommanderID), int64(7001))
+	if postPartialSource != 6 {
+		t.Fatalf("expected atomic rollback when later batch entry fails, got %d", postPartialSource)
+	}
+
+	overflowPayload := &protobuf.CS_21066{Makes: []*protobuf.PB_ISLAND_MAKE{{MakeId: proto.Uint32(1), Num: proto.Uint32(math.MaxUint32)}}}
+	overflowBuffer, _ := proto.Marshal(overflowPayload)
+	client.Buffer.Reset()
+	if _, _, err := IslandExchangeItem(&overflowBuffer, client); err != nil {
+		t.Fatalf("exchange overflow request failed: %v", err)
+	}
+	var overflowResponse protobuf.SC_21067
+	decodePacketAt(t, client, 0, 21067, &overflowResponse)
+	if overflowResponse.GetResult() != islandFishingResultInvalid {
+		t.Fatalf("expected invalid result for overflowed batch size, got %d", overflowResponse.GetResult())
+	}
+	postOverflowSource := queryAnswerTestInt64(t, "SELECT count FROM island_inventories WHERE commander_id = $1 AND item_id = $2", int64(client.Commander.CommanderID), int64(7001))
+	if postOverflowSource != 6 {
+		t.Fatalf("expected no mutation for overflowed batch size, got %d", postOverflowSource)
 	}
 }

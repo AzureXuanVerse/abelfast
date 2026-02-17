@@ -83,9 +83,7 @@ func IslandGoFishing(buffer *[]byte, client *connection.Client) (int, int, error
 
 	now := islandFishingNow()
 	roll := islandFishingRoll{FishID: selected.ID, Weight: weight, GoldState: selected.GoldState, ExpiresAt: now.Add(5 * time.Minute)}
-	islandFishingStateMu.Lock()
-	islandFishingState[islandFishingKey(client.Commander.CommanderID, islandID, pointID)] = roll
-	islandFishingStateMu.Unlock()
+	storeIslandFishingRoll(client.Commander.CommanderID, islandID, pointID, roll)
 
 	response.Result = proto.Uint32(0)
 	response.FishId = proto.Uint32(roll.FishID)
@@ -103,6 +101,28 @@ func islandFishingIntn(n int) int {
 
 func islandFishingKey(commanderID uint32, islandID uint32, pointID uint32) string {
 	return strconv.FormatUint(uint64(commanderID), 10) + ":" + strconv.FormatUint(uint64(islandID), 10) + ":" + strconv.FormatUint(uint64(pointID), 10)
+}
+
+func storeIslandFishingRoll(commanderID uint32, islandID uint32, pointID uint32, roll islandFishingRoll) {
+	islandFishingStateMu.Lock()
+	islandFishingState[islandFishingKey(commanderID, islandID, pointID)] = roll
+	islandFishingStateMu.Unlock()
+}
+
+func consumeIslandFishingRoll(commanderID uint32, islandID uint32, pointID uint32, now time.Time) (islandFishingRoll, bool) {
+	key := islandFishingKey(commanderID, islandID, pointID)
+	islandFishingStateMu.Lock()
+	roll, ok := islandFishingState[key]
+	if !ok {
+		islandFishingStateMu.Unlock()
+		return islandFishingRoll{}, false
+	}
+	delete(islandFishingState, key)
+	islandFishingStateMu.Unlock()
+	if now.After(roll.ExpiresAt) {
+		return islandFishingRoll{}, false
+	}
+	return roll, true
 }
 
 func isIslandFishingPointKnown(pointID uint32) bool {

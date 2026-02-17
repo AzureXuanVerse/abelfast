@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS island_fishing_states (
+    commander_id BIGINT PRIMARY KEY,
+    bait_id BIGINT NOT NULL DEFAULT 0,
+    fish_rod BIGINT NOT NULL DEFAULT 0,
+    fish_weights JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
