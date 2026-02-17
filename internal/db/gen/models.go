@@ -609,6 +609,12 @@ type IslandDelegation struct {
 	PtAward       int64
 }
 
+type IslandFollower struct {
+	CommanderID int64
+	ShipID      int64
+	OrderIdx    int64
+}
+
 type IslandInventory struct {
 	CommanderID int64
 	ItemID      int64
@@ -618,6 +624,30 @@ type IslandInventory struct {
 type IslandSeason struct {
 	CommanderID int64
 	Pt          int64
+}
+
+type IslandShip struct {
+	CommanderID int64
+	ShipID      int64
+	Level       int64
+	BreakLv     int64
+	CanFollow   bool
+}
+
+type IslandShipOrderSlot struct {
+	CommanderID int64
+	SlotID      int64
+	State       int64
+	LoadTime    int64
+	GetTime     int64
+	FinishNum   int64
+	AutoTime    int64
+}
+
+type IslandShipOrderState struct {
+	CommanderID int64
+	RefreshAt   int64
+	AppointList []byte
 }
 
 type IslandTaskProgress struct {

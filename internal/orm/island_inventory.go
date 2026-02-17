@@ -2,11 +2,14 @@ package orm
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/ggmolly/belfast/internal/db"
 )
+
+var ErrInsufficientIslandInventory = errors.New("insufficient island inventory")
 
 type IslandInventory struct {
 	CommanderID uint32 `gorm:"primaryKey;column:commander_id"`
@@ -51,4 +54,22 @@ WHERE commander_id = $1 AND item_id = $2
 		ItemID:      uint32(itemIDRaw),
 		Count:       uint32(countRaw),
 	}, nil
+}
+
+func ConsumeIslandInventoryTx(ctx context.Context, tx pgx.Tx, commanderID uint32, itemID uint32, count uint32) error {
+	if count == 0 {
+		return nil
+	}
+	row := tx.QueryRow(ctx, `
+UPDATE island_inventories
+SET count = count - $3
+WHERE commander_id = $1 AND item_id = $2 AND count >= $3
+RETURNING count
+`, int64(commanderID), int64(itemID), int64(count))
+	var remaining int64
+	err := row.Scan(&remaining)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrInsufficientIslandInventory
+	}
+	return err
 }
