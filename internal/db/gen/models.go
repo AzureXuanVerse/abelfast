@@ -598,6 +598,14 @@ type GuildShopState struct {
 	NextRefreshTime int64
 }
 
+type IslandAchievementState struct {
+	CommanderID  int64
+	ProgressList []byte
+	FinishList   []byte
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+}
+
 type IslandAgoraTheme struct {
 	CommanderID int64
 	ThemeSlotID int64

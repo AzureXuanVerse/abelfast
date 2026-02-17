@@ -352,6 +352,8 @@ func registerPackets() {
 	packets.RegisterPacketHandler(20108, []packets.PacketHandler{answer.SubmitWeeklyTaskBatch})
 	packets.RegisterPacketHandler(20110, []packets.PacketHandler{answer.ClaimWeeklyTaskProgressReward})
 	packets.RegisterPacketHandler(21010, []packets.PacketHandler{answer.IslandClaimProsperityReward})
+	packets.RegisterPacketHandler(21050, []packets.PacketHandler{answer.IslandClaimAchievementAward})
+	packets.RegisterPacketHandler(21052, []packets.PacketHandler{answer.IslandSyncAchievementProgress})
 	packets.RegisterPacketHandler(21022, []packets.PacketHandler{answer.IslandClaimSeasonPTReward})
 	packets.RegisterPacketHandler(21024, []packets.PacketHandler{answer.IslandOrderSync})
 	packets.RegisterPacketHandler(21030, []packets.PacketHandler{answer.IslandRandomTaskRefresh})
