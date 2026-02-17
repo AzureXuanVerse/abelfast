@@ -36,6 +36,15 @@ type islandAchievementConfig struct {
 	AwardRaw     json.RawMessage `json:"award"`
 }
 
+type islandAchievementEventKey struct {
+	EventType uint32
+	EventArg  uint32
+}
+
+type islandAchievementSyncRule struct {
+	MaxValue uint32
+}
+
 func IslandClaimAchievementAward(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var payload protobuf.CS_21050
 	if err := proto.Unmarshal(*buffer, &payload); err != nil {
@@ -132,19 +141,32 @@ func IslandSyncAchievementProgress(buffer *[]byte, client *connection.Client) (i
 		rawEvents = rawEvents[:islandAchievementMaxSyncEvents]
 	}
 	normalizedEvents := normalizeIslandAchievementEvents(rawEvents)
+	configsByID, err := loadIslandAchievementConfigByID()
+	if err != nil {
+		return 0, 21053, err
+	}
+	syncRules := buildIslandAchievementSyncRules(configsByID)
+	acceptedEvents := make([]orm.IslandAchievementProgressEntry, 0, len(normalizedEvents))
 
-	err := db.DefaultStore.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
+	err = db.DefaultStore.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
 		state, err := orm.GetIslandAchievementStateForUpdateTx(context.Background(), tx, client.Commander.CommanderID)
 		if err != nil {
 			return err
 		}
 		for _, entry := range normalizedEvents {
+			if !isIslandAchievementSyncEventAllowed(entry, syncRules) {
+				continue
+			}
+			if current, exists := state.ProgressValue(entry.EventType, entry.EventArg); exists && entry.Value < current {
+				continue
+			}
 			state.SetProgress(entry.EventType, entry.EventArg, entry.Value)
+			acceptedEvents = append(acceptedEvents, entry)
 		}
 		if err := orm.SaveIslandAchievementStateTx(context.Background(), tx, state); err != nil {
 			return err
 		}
-		response.EventList = buildIslandAchievementEventList(normalizedEvents)
+		response.EventList = buildIslandAchievementEventList(acceptedEvents)
 		return nil
 	})
 	if err != nil {
@@ -257,4 +279,31 @@ func normalizeIslandAchievementEvents(events []*protobuf.PB_ISLAND_ACHIEVENT) []
 		return normalized[i].EventType < normalized[j].EventType
 	})
 	return normalized
+}
+
+func buildIslandAchievementSyncRules(configsByID map[uint32]islandAchievementConfig) map[islandAchievementEventKey]islandAchievementSyncRule {
+	rules := make(map[islandAchievementEventKey]islandAchievementSyncRule, len(configsByID))
+	for _, cfg := range configsByID {
+		if cfg.TargetType == 0 || cfg.TargetNum == 0 {
+			continue
+		}
+		key := islandAchievementEventKey{EventType: cfg.TargetType, EventArg: cfg.TargetValue}
+		rule := rules[key]
+		if cfg.TargetNum > rule.MaxValue {
+			rule.MaxValue = cfg.TargetNum
+		}
+		rules[key] = rule
+	}
+	return rules
+}
+
+func isIslandAchievementSyncEventAllowed(entry orm.IslandAchievementProgressEntry, rules map[islandAchievementEventKey]islandAchievementSyncRule) bool {
+	rule, ok := rules[islandAchievementEventKey{EventType: entry.EventType, EventArg: entry.EventArg}]
+	if !ok {
+		return false
+	}
+	if rule.MaxValue == 0 {
+		return false
+	}
+	return entry.Value <= rule.MaxValue
 }

@@ -37,17 +37,20 @@ func seedIslandAchievementConfig(t *testing.T) {
 
 func TestIslandSyncAchievementProgressPersistsAndHydrates(t *testing.T) {
 	client := setupHandlerCommander(t)
+	clearTable(t, &orm.ConfigEntry{})
 	clearTable(t, &orm.IslandAchievementState{})
 	clearTable(t, &orm.IslandSnapshot{})
 	clearTable(t, &orm.IslandTechnologyState{})
 	clearTable(t, &orm.IslandCommanderDressState{})
 	clearTable(t, &orm.IslandShopState{})
+	seedIslandAchievementConfig(t)
 
 	updatePayload := &protobuf.CS_21052{EventList: []*protobuf.PB_ISLAND_ACHIEVENT{
-		{EventType: proto.Uint32(5), EventArg: proto.Uint32(2), Value: proto.Uint32(3)},
+		{EventType: proto.Uint32(1), EventArg: proto.Uint32(1001), Value: proto.Uint32(3)},
 		{EventType: proto.Uint32(0), EventArg: proto.Uint32(8), Value: proto.Uint32(1)},
-		{EventType: proto.Uint32(5), EventArg: proto.Uint32(2), Value: proto.Uint32(8)},
-		{EventType: proto.Uint32(1), EventArg: proto.Uint32(9), Value: proto.Uint32(4)},
+		{EventType: proto.Uint32(1), EventArg: proto.Uint32(1001), Value: proto.Uint32(5)},
+		{EventType: proto.Uint32(2), EventArg: proto.Uint32(2002), Value: proto.Uint32(3)},
+		{EventType: proto.Uint32(9), EventArg: proto.Uint32(9), Value: proto.Uint32(99)},
 	}}
 	updateBuffer, err := proto.Marshal(updatePayload)
 	if err != nil {
@@ -61,12 +64,12 @@ func TestIslandSyncAchievementProgressPersistsAndHydrates(t *testing.T) {
 	updateResponse := protobuf.SC_21053{}
 	decodePacketAt(t, client, 0, 21053, &updateResponse)
 	if len(updateResponse.GetEventList()) != 2 {
-		t.Fatalf("expected two normalized events, got %+v", updateResponse.GetEventList())
+		t.Fatalf("expected two accepted events, got %+v", updateResponse.GetEventList())
 	}
-	if updateResponse.GetEventList()[0].GetEventType() != 1 || updateResponse.GetEventList()[0].GetEventArg() != 9 || updateResponse.GetEventList()[0].GetValue() != 4 {
+	if updateResponse.GetEventList()[0].GetEventType() != 1 || updateResponse.GetEventList()[0].GetEventArg() != 1001 || updateResponse.GetEventList()[0].GetValue() != 5 {
 		t.Fatalf("unexpected first normalized event: %+v", updateResponse.GetEventList()[0])
 	}
-	if updateResponse.GetEventList()[1].GetEventType() != 5 || updateResponse.GetEventList()[1].GetEventArg() != 2 || updateResponse.GetEventList()[1].GetValue() != 8 {
+	if updateResponse.GetEventList()[1].GetEventType() != 2 || updateResponse.GetEventList()[1].GetEventArg() != 2002 || updateResponse.GetEventList()[1].GetValue() != 3 {
 		t.Fatalf("unexpected second normalized event: %+v", updateResponse.GetEventList()[1])
 	}
 
@@ -96,6 +99,41 @@ func TestIslandSyncAchievementProgressPersistsAndHydrates(t *testing.T) {
 	}
 	if len(achievementSys.GetFinishList()) != 0 {
 		t.Fatalf("expected no finished IDs after sync-only update")
+	}
+}
+
+func TestIslandSyncAchievementProgressRejectsUnknownOrRegressiveUpdates(t *testing.T) {
+	client := setupHandlerCommander(t)
+	clearTable(t, &orm.ConfigEntry{})
+	clearTable(t, &orm.IslandAchievementState{})
+	seedIslandAchievementConfig(t)
+	seedIslandAchievementState(t, client.Commander.CommanderID, []orm.IslandAchievementProgressEntry{{EventType: 1, EventArg: 1001, Value: 5}}, nil)
+
+	payload := &protobuf.CS_21052{EventList: []*protobuf.PB_ISLAND_ACHIEVENT{
+		{EventType: proto.Uint32(1), EventArg: proto.Uint32(1001), Value: proto.Uint32(4)},
+		{EventType: proto.Uint32(7), EventArg: proto.Uint32(7007), Value: proto.Uint32(9)},
+	}}
+	buffer, err := proto.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	client.Buffer.Reset()
+	if _, _, err := IslandSyncAchievementProgress(&buffer, client); err != nil {
+		t.Fatalf("sync achievement progress failed: %v", err)
+	}
+
+	response := protobuf.SC_21053{}
+	decodePacketAt(t, client, 0, 21053, &response)
+	if len(response.GetEventList()) != 0 {
+		t.Fatalf("expected no accepted updates for unknown/regressive entries, got %+v", response.GetEventList())
+	}
+
+	stored, err := orm.GetIslandAchievementState(client.Commander.CommanderID)
+	if err != nil {
+		t.Fatalf("load stored state: %v", err)
+	}
+	if len(stored.ProgressEntries) != 1 || stored.ProgressEntries[0].EventType != 1 || stored.ProgressEntries[0].EventArg != 1001 || stored.ProgressEntries[0].Value != 5 {
+		t.Fatalf("expected progress to remain unchanged, got %+v", stored.ProgressEntries)
 	}
 }
 
