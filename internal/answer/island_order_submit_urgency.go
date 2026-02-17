@@ -2,6 +2,7 @@ package answer
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -21,6 +22,8 @@ const (
 	islandUrgencySubmitInsufficient = uint32(3)
 	islandUrgencySubmitPersist      = uint32(4)
 )
+
+var errIslandUrgencySubmitInsufficientRollback = errors.New("island urgency submit insufficient rollback")
 
 func IslandSubmitUrgencyOrder(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var payload protobuf.CS_21405
@@ -72,7 +75,7 @@ func IslandSubmitUrgencyOrder(buffer *[]byte, client *connection.Client) (int, i
 			}
 			if !ok {
 				response.Result = proto.Uint32(islandUrgencySubmitInsufficient)
-				return nil
+				return errIslandUrgencySubmitInsufficientRollback
 			}
 		}
 
@@ -116,6 +119,9 @@ func IslandSubmitUrgencyOrder(buffer *[]byte, client *connection.Client) (int, i
 		return nil
 	})
 	if err != nil {
+		if errors.Is(err, errIslandUrgencySubmitInsufficientRollback) {
+			return client.SendMessage(21406, response)
+		}
 		return client.SendMessage(21406, response)
 	}
 

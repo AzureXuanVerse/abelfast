@@ -96,6 +96,15 @@ func IslandClaimSeasonPTReward(buffer *[]byte, client *connection.Client) (int, 
 
 		drops := make([]*protobuf.DROPINFO, 0)
 		for _, value := range pending {
+			inserted, err := orm.AddIslandSeasonRewardClaimTx(context.Background(), tx, client.Commander.CommanderID, value)
+			if err != nil {
+				response.Result = proto.Uint32(islandSeasonPTAwardPersist)
+				return err
+			}
+			if !inserted {
+				continue
+			}
+
 			display, _ := seasonTargetDropByPT(seasonConfig, value)
 			awardDrops, err := buildAwardDrops([][]uint32{display})
 			if err != nil {
@@ -104,15 +113,15 @@ func IslandClaimSeasonPTReward(buffer *[]byte, client *connection.Client) (int, 
 			}
 			drops = append(drops, awardDrops...)
 		}
+
+		if len(drops) == 0 {
+			response.Result = proto.Uint32(islandSeasonPTAwardState)
+			return nil
+		}
+
 		if err := applyIslandDropsTx(context.Background(), tx, client, drops); err != nil {
 			response.Result = proto.Uint32(islandSeasonPTAwardPersist)
 			return err
-		}
-		for _, value := range pending {
-			if _, err := orm.AddIslandSeasonRewardClaimTx(context.Background(), tx, client.Commander.CommanderID, value); err != nil {
-				response.Result = proto.Uint32(islandSeasonPTAwardPersist)
-				return err
-			}
 		}
 
 		response.Result = proto.Uint32(islandSeasonPTAwardOK)

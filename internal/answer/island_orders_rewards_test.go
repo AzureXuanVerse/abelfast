@@ -83,6 +83,44 @@ func TestIslandSubmitUrgencyOrderSuccess(t *testing.T) {
 	}
 }
 
+func TestIslandSubmitUrgencyOrderMissingCostRollsBackConsumption(t *testing.T) {
+	client := setupHandlerCommander(t)
+	clearIslandEconomyTables(t)
+	seedConfigEntry(t, islandSetCategory, "order_favor", `{"key":"order_favor","key_value_int":20,"key_value_varchar":""}`)
+	seedConfigEntry(t, islandOrderPriceCategory, "3", `{"id":3,"order_award_special":[7001,5]}`)
+
+	err := db.DefaultStore.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
+		if err := orm.AddIslandInventoryTx(context.Background(), tx, client.Commander.CommanderID, 9001, 10); err != nil {
+			return err
+		}
+		slot := &protobuf.PB_ISLAND_ORDER_SLOT{Id: proto.Uint32(202), Type: proto.Uint32(2), CurSelect: proto.Uint32(1), StartTime: proto.Uint32(1), SubmitTime: proto.Uint32(1), Position: proto.Uint32(1), DialogId: proto.Uint32(1), Cost: []*protobuf.PB_ISLAND_ITEM{{Id: proto.Uint32(9001), Num: proto.Uint32(4)}, {Id: proto.Uint32(9002), Num: proto.Uint32(1)}}, OrderLv: proto.Uint32(3), ViewFlag: proto.Uint32(0)}
+		return orm.UpsertIslandOrderSlotTx(context.Background(), tx, client.Commander.CommanderID, slot)
+	})
+	if err != nil {
+		t.Fatalf("seed urgency state: %v", err)
+	}
+
+	payload := protobuf.CS_21405{SlotId: proto.Uint32(202)}
+	buffer, _ := proto.Marshal(&payload)
+	client.Buffer.Reset()
+	if _, _, err := IslandSubmitUrgencyOrder(&buffer, client); err != nil {
+		t.Fatalf("submit urgency: %v", err)
+	}
+	var response protobuf.SC_21406
+	decodeResponse(t, client, &response)
+	if response.GetResult() != islandUrgencySubmitInsufficient {
+		t.Fatalf("expected insufficient result, got: %+v", response)
+	}
+
+	item, err := orm.GetIslandInventoryItem(client.Commander.CommanderID, 9001)
+	if err != nil {
+		t.Fatalf("load inventory after failure: %v", err)
+	}
+	if item.Count != 10 {
+		t.Fatalf("expected inventory rollback to preserve count 10, got %d", item.Count)
+	}
+}
+
 func TestIslandReplaceOrderSuccess(t *testing.T) {
 	client := setupHandlerCommander(t)
 	clearIslandEconomyTables(t)
@@ -134,6 +172,45 @@ func TestIslandClaimSeasonPTRewardClaimAll(t *testing.T) {
 	decodeResponse(t, client, &response)
 	if response.GetResult() != 0 || len(response.GetDropList()) != 2 {
 		t.Fatalf("unexpected season response: %+v", response)
+	}
+}
+
+func TestIslandClaimSeasonPTRewardClaimAllSkipsConflictedClaims(t *testing.T) {
+	client := setupHandlerCommander(t)
+	clearIslandEconomyTables(t)
+	seedConfigEntry(t, islandSetCategory, "season_now", `{"key":"season_now","key_value_int":1,"key_value_varchar":""}`)
+	seedConfigEntry(t, islandSeasonCategory, "1", `{"id":1,"target":[100,100],"ptaward_display":[[41,1,2],[41,1,2]]}`)
+
+	err := db.DefaultStore.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
+		return orm.AddIslandSeasonPTTx(context.Background(), tx, client.Commander.CommanderID, 500)
+	})
+	if err != nil {
+		t.Fatalf("seed season pt: %v", err)
+	}
+
+	payload := protobuf.CS_21022{TargetPt: proto.Uint32(0)}
+	buffer, _ := proto.Marshal(&payload)
+	client.Buffer.Reset()
+	if _, _, err := IslandClaimSeasonPTReward(&buffer, client); err != nil {
+		t.Fatalf("claim season rewards: %v", err)
+	}
+	var response protobuf.SC_21023
+	decodeResponse(t, client, &response)
+	if response.GetResult() != islandSeasonPTAwardOK || len(response.GetDropList()) != 1 || response.GetDropList()[0].GetNumber() != 2 {
+		t.Fatalf("unexpected season response: %+v", response)
+	}
+
+	var claimed []uint32
+	err = db.DefaultStore.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
+		var listErr error
+		claimed, listErr = orm.ListIslandSeasonRewardClaimsTx(context.Background(), tx, client.Commander.CommanderID)
+		return listErr
+	})
+	if err != nil {
+		t.Fatalf("list reward claims: %v", err)
+	}
+	if len(claimed) != 1 || claimed[0] != 100 {
+		t.Fatalf("expected one claim row for target 100, got %v", claimed)
 	}
 }
 
