@@ -128,6 +128,16 @@ func buildIslandPrivateData(ownerID uint32, snapshot *orm.IslandSnapshot) (*prot
 		season.Pt = proto.Uint32(seasonState.PT)
 	}
 
+	achievementSys := &protobuf.PB_ISLAND_ACHIEVEMENT_SYS{AchieveList: []*protobuf.PB_ISLAND_ACHIEVENT{}, FinishList: []uint32{}}
+	achievementState, err := orm.GetIslandAchievementState(ownerID)
+	if err != nil && !db.IsNotFound(err) {
+		return nil, err
+	}
+	if achievementState != nil {
+		achievementSys.AchieveList = buildIslandAchievementEventList(achievementState.ProgressEntries)
+		achievementSys.FinishList = append([]uint32(nil), achievementState.FinishList...)
+	}
+
 	return &protobuf.PB_ISLAND_PRIVATE{
 		OpenFlag:              proto.Uint32(snapshot.OpenFlag),
 		WhiteList:             []uint32{},
@@ -146,7 +156,7 @@ func buildIslandPrivateData(ownerID uint32, snapshot *orm.IslandSnapshot) (*prot
 		CollectSys:            &protobuf.PB_ISLAND_COLLECT_SYS{CollectItem: []*protobuf.PB_ISLAND_COLLECT_ITEM{}, FinishList: []uint32{}},
 		FormulaNum:            []*protobuf.PB_USE_FORMULA{},
 		UserDress:             &protobuf.PB_ISLAND_USER_DRESS_SYS{CurDress: []*protobuf.PB_ISLAND_CUR_DRESS{}, HadDress: hadDress, CapList: []*protobuf.PB_CAP_STATE{}},
-		AchievementSys:        &protobuf.PB_ISLAND_ACHIEVEMENT_SYS{AchieveList: []*protobuf.PB_ISLAND_ACHIEVENT{}, FinishList: []uint32{}},
+		AchievementSys:        achievementSys,
 		GlobalBuff:            &protobuf.PB_ISLAND_GLOBAL_BUFF{ForeverList: []uint32{}, LimitList: []*protobuf.PB_ISLAND_BUFF{}},
 		SpeedTickets:          []*protobuf.PB_SPEEDUP_TICKET{},
 		ActionList:            []uint32{},
@@ -157,6 +167,21 @@ func buildIslandPrivateData(ownerID uint32, snapshot *orm.IslandSnapshot) (*prot
 		ImageList:             []*protobuf.PB_CARD_IMAGE{},
 		FishSys:               &protobuf.PB_FISH_SYS{OldBait: proto.Uint32(0), FishRod: proto.Uint32(0), FishWeight: []*protobuf.PB_FISH_WEIGHT{}},
 	}, nil
+}
+
+func buildIslandAchievementEventList(entries []orm.IslandAchievementProgressEntry) []*protobuf.PB_ISLAND_ACHIEVENT {
+	if len(entries) == 0 {
+		return []*protobuf.PB_ISLAND_ACHIEVENT{}
+	}
+	events := make([]*protobuf.PB_ISLAND_ACHIEVENT, 0, len(entries))
+	for _, entry := range entries {
+		events = append(events, &protobuf.PB_ISLAND_ACHIEVENT{
+			EventType: proto.Uint32(entry.EventType),
+			EventArg:  proto.Uint32(entry.EventArg),
+			Value:     proto.Uint32(entry.Value),
+		})
+	}
+	return events
 }
 
 func buildIslandPrivateShopList(ownerID uint32) []*protobuf.PB_SHOP {
