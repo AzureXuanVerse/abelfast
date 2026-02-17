@@ -84,8 +84,8 @@ DO UPDATE SET refresh_at = EXCLUDED.refresh_at, appoint_list = EXCLUDED.appoint_
 
 func UpsertIslandShipOrderSlotTx(ctx context.Context, tx pgx.Tx, slot *IslandShipOrderSlot) error {
 	_, err := tx.Exec(ctx, `
-INSERT INTO island_ship_order_slots (commander_id, slot_id, state, load_time, get_time, finish_num, auto_time)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO island_ship_order_slots (commander_id, slot_id, slot_data, state, load_time, get_time, finish_num, auto_time)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT (commander_id, slot_id)
 DO UPDATE SET
 	state = EXCLUDED.state,
@@ -96,6 +96,7 @@ DO UPDATE SET
 `,
 		int64(slot.CommanderID),
 		int64(slot.SlotID),
+		[]byte{},
 		int64(slot.State),
 		int64(slot.LoadTime),
 		int64(slot.GetTime),
