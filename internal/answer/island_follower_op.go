@@ -26,7 +26,7 @@ const (
 	islandFollowerResultPersistError = uint32(4)
 )
 
-type islandSetConfigEntry struct {
+type islandFollowerSetConfigEntry struct {
 	Key         string `json:"key"`
 	KeyValueInt uint32 `json:"key_value_int"`
 }
@@ -128,7 +128,7 @@ func IslandFollowerOp(buffer *[]byte, client *connection.Client) (int, int, erro
 func loadIslandMaxFollowerCount() (uint32, error) {
 	entry, err := orm.GetConfigEntry(islandFollowerConfigCategory, "max_follower_cnt")
 	if err == nil {
-		var cfg islandSetConfigEntry
+		var cfg islandFollowerSetConfigEntry
 		if unmarshalErr := json.Unmarshal(entry.Data, &cfg); unmarshalErr == nil {
 			return cfg.KeyValueInt, nil
 		}
@@ -139,7 +139,7 @@ func loadIslandMaxFollowerCount() (uint32, error) {
 		return 0, err
 	}
 	for i := range entries {
-		mapped := map[string]islandSetConfigEntry{}
+		mapped := map[string]islandFollowerSetConfigEntry{}
 		if unmarshalErr := json.Unmarshal(entries[i].Data, &mapped); unmarshalErr == nil {
 			if cfg, ok := mapped["max_follower_cnt"]; ok {
 				return cfg.KeyValueInt, nil

@@ -607,6 +607,15 @@ type IslandDelegation struct {
 	ExtraOtherNum int64
 	GetTimes      int64
 	PtAward       int64
+	ShipID        int64
+	MaxTimes      int64
+	StartTime     int64
+	CostTimeList  []byte
+	SpeedTime     int64
+	TimesExtra    []byte
+	RecoverTime   int64
+	AddExp        int64
+	ReturnNum     int64
 }
 
 type IslandFollower struct {
@@ -652,6 +661,12 @@ type IslandOrderState struct {
 	ShipRefresh        int64
 }
 
+type IslandOverflowInventory struct {
+	CommanderID int64
+	ItemID      int64
+	Count       int64
+}
+
 type IslandProsperityState struct {
 	CommanderID   int64
 	Prosperity    int64
@@ -691,12 +706,29 @@ type IslandShipOrderSlot struct {
 	GetTime     int64
 	FinishNum   int64
 	AutoTime    int64
+	ShipSlotID  pgtype.Int8
+	EndTime     int64
+	CostList    []byte
 }
 
 type IslandShipOrderState struct {
 	CommanderID int64
 	RefreshAt   int64
 	AppointList []byte
+}
+
+type IslandSpeedupTarget struct {
+	CommanderID int64
+	TargetType  int64
+	TargetID    int64
+	EndTime     int64
+}
+
+type IslandSpeedupTicket struct {
+	CommanderID int64
+	SpeedID     int64
+	EndTime     int64
+	Count       int64
 }
 
 type IslandTaskProgress struct {

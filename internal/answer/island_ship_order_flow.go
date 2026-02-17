@@ -27,6 +27,11 @@ const (
 	islandOrderResultInvalidState = uint32(1)
 )
 
+type islandSetConfigEntry struct {
+	Key         string `json:"key"`
+	KeyValueInt uint32 `json:"key_value_int"`
+}
+
 type islandOrderTemplateConfig struct {
 	ID      uint32     `json:"id"`
 	Type    uint32     `json:"type"`
