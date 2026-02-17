@@ -663,17 +663,17 @@ type IslandSeason struct {
 	Pt          int64
 }
 
+type IslandSeasonRewardClaim struct {
+	CommanderID int64
+	TargetPt    int64
+}
+
 type IslandShip struct {
 	CommanderID int64
 	ShipID      int64
 	Level       int64
 	BreakLv     int64
 	CanFollow   bool
-}
-
-type IslandSeasonRewardClaim struct {
-	CommanderID int64
-	TargetPt    int64
 }
 
 type IslandShipOrderAppoint struct {
@@ -685,11 +685,7 @@ type IslandShipOrderAppoint struct {
 type IslandShipOrderSlot struct {
 	CommanderID int64
 	SlotID      int64
-	State       int64
-	LoadTime    int64
-	GetTime     int64
-	FinishNum   int64
-	AutoTime    int64
+	SlotData    []byte
 }
 
 type IslandShipOrderState struct {
