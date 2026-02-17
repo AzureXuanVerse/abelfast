@@ -2,6 +2,9 @@ package answer
 
 import (
 	"context"
+	"errors"
+	"sort"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"google.golang.org/protobuf/proto"
@@ -12,6 +15,8 @@ import (
 	"github.com/ggmolly/belfast/internal/orm"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
+
+var errIslandShopPurchaseRollback = errors.New("island shop purchase rollback")
 
 type islandPurchaseRequest struct {
 	ShopID  uint32
@@ -56,18 +61,24 @@ func IslandShopPurchase(buffer *[]byte, client *connection.Client) (int, int, er
 			if state == nil {
 				loaded, err := orm.GetIslandShopState(client.Commander.CommanderID, req.ShopID)
 				if err != nil {
-					return nil
+					if db.IsNotFound(err) {
+						return errIslandShopPurchaseRollback
+					}
+					return err
 				}
 				shopStates[req.ShopID] = loaded
 				state = loaded
 			}
 
 			cfg, found, err := loadIslandShopGoodsTemplate(req.GoodsID)
-			if err != nil || !found {
-				return nil
+			if err != nil {
+				return err
+			}
+			if !found {
+				return errIslandShopPurchaseRollback
 			}
 			if cfg.PayID != 0 {
-				return nil
+				return errIslandShopPurchaseRollback
 			}
 
 			goodsIndex := -1
@@ -78,10 +89,10 @@ func IslandShopPurchase(buffer *[]byte, client *connection.Client) (int, int, er
 				}
 			}
 			if goodsIndex < 0 {
-				return nil
+				return errIslandShopPurchaseRollback
 			}
 			if cfg.LimitedNum > 0 && state.Goods[goodsIndex].Num+req.Count > cfg.LimitedNum {
-				return nil
+				return errIslandShopPurchaseRollback
 			}
 
 			state.Goods[goodsIndex].Num += req.Count
@@ -98,22 +109,42 @@ func IslandShopPurchase(buffer *[]byte, client *connection.Client) (int, int, er
 			seasonPT += cfg.PTAward * req.Count
 		}
 
-		for key, count := range costs {
+		keys := make([]costKey, 0, len(costs))
+		for key := range costs {
+			keys = append(keys, key)
+		}
+		sort.Slice(keys, func(i, j int) bool {
+			if keys[i].DropType == keys[j].DropType {
+				return keys[i].DropID < keys[j].DropID
+			}
+			return keys[i].DropType < keys[j].DropType
+		})
+		for _, key := range keys {
+			count := costs[key]
 			switch key.DropType {
 			case consts.DROP_TYPE_RESOURCE:
 				if err := client.Commander.ConsumeResourceTx(context.Background(), tx, key.DropID, count); err != nil {
-					return nil
+					if isIslandShopPurchaseInsufficient(err) {
+						return errIslandShopPurchaseRollback
+					}
+					return err
 				}
 			case consts.DROP_TYPE_ITEM:
 				if err := client.Commander.ConsumeItemTx(context.Background(), tx, key.DropID, count); err != nil {
-					return nil
+					if isIslandShopPurchaseInsufficient(err) {
+						return errIslandShopPurchaseRollback
+					}
+					return err
 				}
 			case consts.DROP_TYPE_ISLAND_ITEM:
 				if err := orm.ConsumeIslandInventoryCheckedTx(context.Background(), tx, client.Commander.CommanderID, key.DropID, count); err != nil {
-					return nil
+					if isIslandShopPurchaseInsufficient(err) {
+						return errIslandShopPurchaseRollback
+					}
+					return err
 				}
 			default:
-				return nil
+				return errIslandShopPurchaseRollback
 			}
 		}
 
@@ -137,7 +168,19 @@ func IslandShopPurchase(buffer *[]byte, client *connection.Client) (int, int, er
 	})
 	if err != nil {
 		response.Result = proto.Uint32(1)
+		_ = client.Commander.Load()
 	}
 
 	return client.SendMessage(21019, response)
+}
+
+func isIslandShopPurchaseInsufficient(err error) bool {
+	if err == nil {
+		return false
+	}
+	if db.IsNotFound(err) || errors.Is(err, orm.ErrInsufficientIslandInventory) {
+		return true
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "not enough")
 }

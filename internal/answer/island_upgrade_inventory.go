@@ -2,6 +2,8 @@ package answer
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -13,6 +15,8 @@ import (
 	"github.com/ggmolly/belfast/internal/orm"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
+
+var errIslandUpgradeInventoryRollback = errors.New("island upgrade inventory rollback")
 
 func IslandUpgradeInventory(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var payload protobuf.CS_21012
@@ -69,18 +73,27 @@ func IslandUpgradeInventory(buffer *[]byte, client *connection.Client) (int, int
 			switch dropType {
 			case consts.DROP_TYPE_ISLAND_ITEM:
 				if err := orm.ConsumeIslandInventoryCheckedTx(context.Background(), tx, client.Commander.CommanderID, dropID, count); err != nil {
-					return nil
+					if isIslandUpgradeInventoryInsufficient(err) {
+						return errIslandUpgradeInventoryRollback
+					}
+					return err
 				}
 			case consts.DROP_TYPE_RESOURCE:
 				if err := client.Commander.ConsumeResourceTx(context.Background(), tx, dropID, count); err != nil {
-					return nil
+					if isIslandUpgradeInventoryInsufficient(err) {
+						return errIslandUpgradeInventoryRollback
+					}
+					return err
 				}
 			case consts.DROP_TYPE_ITEM:
 				if err := client.Commander.ConsumeItemTx(context.Background(), tx, dropID, count); err != nil {
-					return nil
+					if isIslandUpgradeInventoryInsufficient(err) {
+						return errIslandUpgradeInventoryRollback
+					}
+					return err
 				}
 			default:
-				return nil
+				return errIslandUpgradeInventoryRollback
 			}
 		}
 
@@ -93,6 +106,18 @@ func IslandUpgradeInventory(buffer *[]byte, client *connection.Client) (int, int
 	})
 	if err != nil {
 		response.Ret = proto.Uint32(1)
+		_ = client.Commander.Load()
 	}
 	return client.SendMessage(21013, response)
+}
+
+func isIslandUpgradeInventoryInsufficient(err error) bool {
+	if err == nil {
+		return false
+	}
+	if db.IsNotFound(err) || errors.Is(err, orm.ErrInsufficientIslandInventory) {
+		return true
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "not enough")
 }

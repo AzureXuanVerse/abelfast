@@ -2,6 +2,7 @@ package answer
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jackc/pgx/v5"
 	"google.golang.org/protobuf/proto"
@@ -12,6 +13,8 @@ import (
 	"github.com/ggmolly/belfast/internal/orm"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
+
+var errIslandUseItemRollback = errors.New("island use item rollback")
 
 func IslandUseItem(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var payload protobuf.CS_21026
@@ -28,11 +31,14 @@ func IslandUseItem(buffer *[]byte, client *connection.Client) (int, int, error) 
 
 	err := db.DefaultStore.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
 		if err := orm.ConsumeIslandInventoryCheckedTx(context.Background(), tx, client.Commander.CommanderID, itemID, count); err != nil {
-			return nil
+			return errIslandUseItemRollback
 		}
 		cfg, found, err := loadIslandItemTemplate(itemID)
-		if err != nil || !found {
-			return nil
+		if err != nil {
+			return err
+		}
+		if !found {
+			return errIslandUseItemRollback
 		}
 
 		drops := make([]*protobuf.DROPINFO, 0)
@@ -66,6 +72,7 @@ func IslandUseItem(buffer *[]byte, client *connection.Client) (int, int, error) 
 	})
 	if err != nil {
 		response.Result = proto.Uint32(1)
+		_ = client.Commander.Load()
 	}
 
 	return client.SendMessage(21027, response)
