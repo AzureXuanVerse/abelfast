@@ -359,6 +359,8 @@ func registerPackets() {
 	packets.RegisterPacketHandler(19127, []packets.PacketHandler{answer.CancelThemeCollection})
 	packets.RegisterPacketHandler(19129, []packets.PacketHandler{answer.ReportTheme})
 	packets.RegisterPacketHandler(19131, []packets.PacketHandler{answer.GetThemePreviewMD5s})
+	// Island agora themes (2131x)
+	packets.RegisterPacketHandler(21319, []packets.PacketHandler{answer.DeleteIslandAgoraTheme})
 	packets.RegisterPacketHandler(17401, []packets.PacketHandler{answer.ChangeMedalDisplay})
 	packets.RegisterPacketHandler(17601, []packets.PacketHandler{answer.EquipCodeShareListRequest})
 	packets.RegisterPacketHandler(17603, []packets.PacketHandler{answer.EquipCodeShare})
