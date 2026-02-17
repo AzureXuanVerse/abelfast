@@ -47,8 +47,8 @@ func upsertIslandShipOrderSlotWithExecer(ctx context.Context, execer islandShipO
 		return err
 	}
 	_, err = execer.Exec(ctx, `
-INSERT INTO island_ship_order_slots (commander_id, slot_id, ship_slot_id, state, get_time, end_time, cost_list)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO island_ship_order_slots (commander_id, slot_id, slot_data, ship_slot_id, state, get_time, end_time, cost_list)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT (commander_id, slot_id)
 DO UPDATE SET
 	ship_slot_id = EXCLUDED.ship_slot_id,
@@ -56,7 +56,7 @@ DO UPDATE SET
 	get_time = EXCLUDED.get_time,
 	end_time = EXCLUDED.end_time,
 	cost_list = EXCLUDED.cost_list
-`, int64(slot.CommanderID), int64(slot.ShipSlotID), int64(slot.ShipSlotID), int64(slot.State), int64(slot.GetTime), int64(slot.EndTime), costBytes)
+`, int64(slot.CommanderID), int64(slot.ShipSlotID), []byte{}, int64(slot.ShipSlotID), int64(slot.State), int64(slot.GetTime), int64(slot.EndTime), costBytes)
 	return err
 }
 
