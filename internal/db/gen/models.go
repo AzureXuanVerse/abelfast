@@ -634,12 +634,6 @@ type IslandInventory struct {
 	Count       int64
 }
 
-type IslandOverflowInventory struct {
-	CommanderID int64
-	ItemID      int64
-	Count       int64
-}
-
 type IslandOrderFavorClaim struct {
 	CommanderID int64
 	Level       int64
@@ -661,6 +655,12 @@ type IslandOrderState struct {
 	ShipRefresh        int64
 }
 
+type IslandOverflowInventory struct {
+	CommanderID int64
+	ItemID      int64
+	Count       int64
+}
+
 type IslandProsperityState struct {
 	CommanderID   int64
 	Prosperity    int64
@@ -672,13 +672,21 @@ type IslandSeason struct {
 	Pt          int64
 }
 
+type IslandSeasonRewardClaim struct {
+	CommanderID int64
+	TargetPt    int64
+}
+
+type IslandShipOrderAppoint struct {
+	CommanderID int64
+	AppointID   int64
+	AppointData []byte
+}
+
 type IslandShipOrderSlot struct {
 	CommanderID int64
-	ShipSlotID  int64
-	State       int64
-	GetTime     int64
-	EndTime     int64
-	CostList    []byte
+	SlotID      int64
+	SlotData    []byte
 }
 
 type IslandSpeedupTarget struct {
@@ -693,17 +701,6 @@ type IslandSpeedupTicket struct {
 	SpeedID     int64
 	EndTime     int64
 	Count       int64
-}
-
-type IslandSeasonRewardClaim struct {
-	CommanderID int64
-	TargetPt    int64
-}
-
-type IslandShipOrderAppoint struct {
-	CommanderID int64
-	AppointID   int64
-	AppointData []byte
 }
 
 type IslandTaskProgress struct {
