@@ -139,18 +139,8 @@ func TestIslandSetTraceTaskMalformedPayload(t *testing.T) {
 	client := setupPlayerUpdateTest(t)
 	clearTable(t, &orm.IslandTaskProgress{})
 
-	payload := protobuf.CS_21034{}
-	buffer, err := proto.Marshal(&payload)
-	if err != nil {
-		t.Fatalf("marshal payload: %v", err)
-	}
-	if _, _, err := IslandSetTraceTask(&buffer, client); err != nil {
-		t.Fatalf("set trace task returned unexpected error: %v", err)
-	}
-
-	var response protobuf.SC_21035
-	decodeResponse(t, client, &response)
-	if response.GetResult() == 0 {
-		t.Fatalf("expected failure result for missing task_id")
+	buffer := []byte{}
+	if _, _, err := IslandSetTraceTask(&buffer, client); err == nil {
+		t.Fatalf("expected decode error for malformed payload")
 	}
 }
