@@ -14,6 +14,7 @@ func seedIslandTaskFlowConfig(t *testing.T) {
 	seedConfigEntry(t, islandTaskCategory, "7001", `{"id":7001,"type":8,"complete_type":3,"trigger_type":2,"unlock_time":"always","unlock_condition":[],"link_task":[],"target_id":[17001],"reward_show":[[41,2000,3]]}`)
 	seedConfigEntry(t, islandTaskCategory, "7002", `{"id":7002,"type":8,"complete_type":3,"trigger_type":2,"unlock_time":"always","unlock_condition":[[2,7001]],"link_task":[7001],"target_id":[17002],"reward_show":[[41,2000,2]]}`)
 	seedConfigEntry(t, islandTaskCategory, "7003", `{"id":7003,"type":8,"complete_type":3,"trigger_type":1,"unlock_time":"always","unlock_condition":[],"link_task":[],"target_id":[17003],"reward_show":[[41,2000,1]]}`)
+	seedConfigEntry(t, islandTaskCategory, "7004", `{"id":7004,"type":4,"complete_type":3,"trigger_type":2,"unlock_time":"always","unlock_condition":[],"link_task":[],"target_id":[17001],"reward_show":[[41,2000,4]]}`)
 	seedConfigEntry(t, islandTaskTargetCategory, "17001", `{"id":17001,"target_num":2}`)
 	seedConfigEntry(t, islandTaskTargetCategory, "17002", `{"id":17002,"target_num":1}`)
 	seedConfigEntry(t, islandTaskTargetCategory, "17003", `{"id":17003,"target_num":1}`)
@@ -26,7 +27,7 @@ func TestIslandAcceptTaskAcceptsEligibleAndDedupes(t *testing.T) {
 	clearTable(t, &orm.ConfigEntry{})
 	seedIslandTaskFlowConfig(t)
 
-	payload := protobuf.CS_21032{TaskIdList: []uint32{7001, 7001, 7003, 9999}}
+	payload := protobuf.CS_21032{TaskIdList: []uint32{7001, 7001, 7003, 7004, 9999}}
 	buffer, err := proto.Marshal(&payload)
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
@@ -42,6 +43,54 @@ func TestIslandAcceptTaskAcceptsEligibleAndDedupes(t *testing.T) {
 	}
 	if len(response.GetTaskList()[0].GetProcessList()) != 1 || response.GetTaskList()[0].GetProcessList()[0].GetTargetCount() != 0 {
 		t.Fatalf("expected initialized process list, got %+v", response.GetTaskList()[0].GetProcessList())
+	}
+}
+
+func TestIslandUpdateTaskProgressRejectsZeroTaskID(t *testing.T) {
+	client := setupPlayerUpdateTest(t)
+	clearTable(t, &orm.IslandTaskProgress{})
+	clearTable(t, &orm.ConfigEntry{})
+	seedIslandTaskFlowConfig(t)
+
+	seedStateErr := orm.WithIslandTaskProgressTx(client.Commander.CommanderID, nowUTC(), func(state *orm.IslandTaskProgress) error {
+		state.ActiveTasks = []orm.IslandTaskEntry{
+			{TaskID: 7001, Timestamp: 1, ProcessList: []orm.IslandTaskTargetProcess{{TargetID: 17001, TargetCount: 0}}},
+			{TaskID: 7002, Timestamp: 2, ProcessList: []orm.IslandTaskTargetProcess{{TargetID: 17002, TargetCount: 0}}},
+		}
+		return nil
+	})
+	if seedStateErr != nil {
+		t.Fatalf("seed island state: %v", seedStateErr)
+	}
+
+	payload := protobuf.CS_21036{TaskId: proto.Uint32(0), TargetId: proto.Uint32(17001), TargetCount: proto.Uint32(1)}
+	buffer, err := proto.Marshal(&payload)
+	if err != nil {
+		t.Fatalf("marshal update payload: %v", err)
+	}
+	if _, _, err := IslandUpdateTaskProgress(&buffer, client); err != nil {
+		t.Fatalf("update task failed unexpectedly: %v", err)
+	}
+
+	var response protobuf.SC_21037
+	decodeResponse(t, client, &response)
+	if response.GetResult() == 0 {
+		t.Fatalf("expected failure result for task_id=0")
+	}
+	if len(response.GetTaskList()) != 0 {
+		t.Fatalf("expected no updated tasks for task_id=0, got %+v", response.GetTaskList())
+	}
+
+	state, err := orm.LoadIslandTaskProgress(client.Commander.CommanderID, nowUTC())
+	if err != nil {
+		t.Fatalf("load island state: %v", err)
+	}
+	for _, entry := range state.ActiveTasks {
+		for _, process := range entry.ProcessList {
+			if process.TargetCount != 0 {
+				t.Fatalf("expected no progress mutation, task %d process %+v", entry.TaskID, process)
+			}
+		}
 	}
 }
 

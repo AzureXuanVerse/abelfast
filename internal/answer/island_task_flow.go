@@ -42,6 +42,10 @@ func IslandAcceptTask(buffer *[]byte, client *connection.Client) (int, int, erro
 	if err != nil {
 		return 0, 21033, err
 	}
+	seasonTaskSet, err := loadIslandSeasonTaskSet()
+	if err != nil {
+		return 0, 21033, err
+	}
 
 	now := uint32(time.Now().UTC().Unix())
 	err = db.DefaultStore.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
@@ -65,7 +69,7 @@ func IslandAcceptTask(buffer *[]byte, client *connection.Client) (int, int, erro
 			if !ok {
 				continue
 			}
-			if !canAcceptIslandTask(task, activeSet, finishedSet) {
+			if !canAcceptIslandTask(task, seasonTaskSet, activeSet, finishedSet) {
 				continue
 			}
 
@@ -109,6 +113,9 @@ func IslandUpdateTaskProgress(buffer *[]byte, client *connection.Client) (int, i
 	if payload.TaskId == nil || payload.TargetId == nil || payload.TargetCount == nil {
 		return client.SendMessage(21037, &response)
 	}
+	if payload.GetTaskId() == 0 {
+		return client.SendMessage(21037, &response)
+	}
 	if payload.GetTargetId() == 0 || payload.GetTargetCount() == 0 {
 		return client.SendMessage(21037, &response)
 	}
@@ -127,7 +134,7 @@ func IslandUpdateTaskProgress(buffer *[]byte, client *connection.Client) (int, i
 		updated := make([]*protobuf.PB_TASK, 0)
 		for idx := range state.ActiveTasks {
 			entry := &state.ActiveTasks[idx]
-			if payload.GetTaskId() != 0 && entry.TaskID != payload.GetTaskId() {
+			if entry.TaskID != payload.GetTaskId() {
 				continue
 			}
 			template, ok := tasksByID[entry.TaskID]
@@ -386,8 +393,11 @@ func loadIslandSeasonTaskSet() (map[uint32]bool, error) {
 	return set, nil
 }
 
-func canAcceptIslandTask(task islandTaskTemplate, activeSet map[uint32]struct{}, finishedSet map[uint32]struct{}) bool {
+func canAcceptIslandTask(task islandTaskTemplate, seasonTaskSet map[uint32]bool, activeSet map[uint32]struct{}, finishedSet map[uint32]struct{}) bool {
 	if task.ID == 0 {
+		return false
+	}
+	if !seasonTaskSet[task.ID] || task.Type != islandTaskTypeSeason {
 		return false
 	}
 	if _, exists := activeSet[task.ID]; exists {
