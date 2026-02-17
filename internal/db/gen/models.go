@@ -686,6 +686,11 @@ type IslandShipOrderSlot struct {
 	CommanderID int64
 	SlotID      int64
 	SlotData    []byte
+	State       int64
+	LoadTime    int64
+	GetTime     int64
+	FinishNum   int64
+	AutoTime    int64
 }
 
 type IslandShipOrderState struct {

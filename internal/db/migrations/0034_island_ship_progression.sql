@@ -45,3 +45,10 @@ CREATE TABLE IF NOT EXISTS island_ship_order_slots (
   CHECK (finish_num >= 0),
   CHECK (auto_time >= 0)
 );
+
+ALTER TABLE island_ship_order_slots
+  ADD COLUMN IF NOT EXISTS state bigint NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS load_time bigint NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS get_time bigint NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS finish_num bigint NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS auto_time bigint NOT NULL DEFAULT 0;
