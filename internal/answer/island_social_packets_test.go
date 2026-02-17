@@ -90,6 +90,29 @@ func TestIslandEnterAndQueuePoll(t *testing.T) {
 	}
 }
 
+func TestIslandRuntimeReassignClearsOldIslandVisitors(t *testing.T) {
+	state := newIslandRuntimeState()
+
+	result, _, _ := state.enter(1001, "leader", 9101, 0)
+	if result != 0 {
+		t.Fatalf("expected first island enter success, got %d", result)
+	}
+
+	result, _, _ = state.enter(1001, "leader", 9102, 0)
+	if result != 0 {
+		t.Fatalf("expected reassigned island enter success, got %d", result)
+	}
+
+	result, position, _ := state.enter(1002, "follower", 9101, 0)
+	if result != 0 {
+		t.Fatalf("expected old island to be available after reassignment, got result=%d position=%d", result, position)
+	}
+
+	if _, ok := state.visitors[9101][1001]; ok {
+		t.Fatalf("expected stale visitor membership removed from previous island")
+	}
+}
+
 func TestIslandHeartbeatVisitorFeed(t *testing.T) {
 	globalIslandRuntimeState.resetForTest()
 	client := setupHandlerCommander(t)

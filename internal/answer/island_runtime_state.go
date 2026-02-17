@@ -56,12 +56,7 @@ func (s *islandRuntimeState) clearSessionForTest(commanderID uint32) {
 func (s *islandRuntimeState) setSessionForTest(commanderID uint32, islandID uint32) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.clearSessionLocked(commanderID)
-	if s.visitors[islandID] == nil {
-		s.visitors[islandID] = make(map[uint32]struct{})
-	}
-	s.visitors[islandID][commanderID] = struct{}{}
-	s.sessions[commanderID] = islandID
+	s.assignSessionLocked(commanderID, islandID)
 }
 
 func (s *islandRuntimeState) hasMatchingSession(commanderID uint32, islandID uint32) bool {
@@ -103,8 +98,7 @@ func (s *islandRuntimeState) enter(commanderID uint32, commanderName string, isl
 	}
 
 	if len(visitors) < islandVisitCapacity && len(queue) > 0 && queue[0] == commanderID {
-		s.sessions[commanderID] = islandID
-		visitors[commanderID] = struct{}{}
+		s.assignSessionLocked(commanderID, islandID)
 		s.queues[islandID] = queue[1:]
 		s.enqueueVisitorEventLocked(islandID, commanderID, commanderName, 1)
 		return 0, 0, 0
@@ -141,8 +135,7 @@ func (s *islandRuntimeState) poll(commanderID uint32, commanderName string, isla
 	}
 
 	if len(visitors) < islandVisitCapacity && len(queue) > 0 && queue[0] == commanderID {
-		s.sessions[commanderID] = islandID
-		visitors[commanderID] = struct{}{}
+		s.assignSessionLocked(commanderID, islandID)
 		s.queues[islandID] = queue[1:]
 		s.enqueueVisitorEventLocked(islandID, commanderID, commanderName, 1)
 		return 0, 0, 0
@@ -195,6 +188,15 @@ func (s *islandRuntimeState) clearSessionLocked(commanderID uint32) {
 	if visitors := s.visitors[islandID]; visitors != nil {
 		delete(visitors, commanderID)
 	}
+}
+
+func (s *islandRuntimeState) assignSessionLocked(commanderID uint32, islandID uint32) {
+	s.clearSessionLocked(commanderID)
+	if s.visitors[islandID] == nil {
+		s.visitors[islandID] = make(map[uint32]struct{})
+	}
+	s.visitors[islandID][commanderID] = struct{}{}
+	s.sessions[commanderID] = islandID
 }
 
 func containsIslandRuntimeUint32(values []uint32, target uint32) bool {
