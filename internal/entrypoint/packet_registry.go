@@ -288,6 +288,13 @@ func registerPackets() {
 	packets.RegisterPacketHandler(12408, []packets.PacketHandler{answer.LoveLetterLevelUp})
 	packets.RegisterPacketHandler(12410, []packets.PacketHandler{answer.LoveLetterGetContent})
 	packets.RegisterPacketHandler(21505, []packets.PacketHandler{answer.IslandGetDelegationAward})
+	packets.RegisterPacketHandler(21503, []packets.PacketHandler{answer.IslandFinishDelegation})
+	packets.RegisterPacketHandler(21501, []packets.PacketHandler{answer.IslandStartDelegation})
+	packets.RegisterPacketHandler(21427, []packets.PacketHandler{answer.IslandUseDelegationTicket})
+	packets.RegisterPacketHandler(21425, []packets.PacketHandler{answer.IslandRemoveExpiredTicket})
+	packets.RegisterPacketHandler(21423, []packets.PacketHandler{answer.IslandUseTicket})
+	packets.RegisterPacketHandler(21416, []packets.PacketHandler{answer.IslandShipOrderLoadUp})
+	packets.RegisterPacketHandler(21006, []packets.PacketHandler{answer.IslandTransferOverflowItems})
 	packets.RegisterPacketHandler(12034, []packets.PacketHandler{answer.RenameProposedShip})
 	packets.RegisterPacketHandler(27000, []packets.PacketHandler{answer.EducateRequest})
 	packets.RegisterPacketHandler(27010, []packets.PacketHandler{func(b *[]byte, c *connection.Client) (int, int, error) {

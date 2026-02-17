@@ -38,3 +38,14 @@ func TestRegisterPacketsIncludesIslandAgoraThemeDelete(t *testing.T) {
 		t.Fatalf("expected handler for CS_21319 to be registered")
 	}
 }
+
+func TestRegisterPacketsIncludesIslandOpsBatch(t *testing.T) {
+	packets.PacketDecisionFn = make(map[int][]packets.PacketHandler)
+	registerPackets()
+	required := []int{21006, 21416, 21423, 21425, 21427, 21501, 21503}
+	for _, packetID := range required {
+		if _, ok := packets.PacketDecisionFn[packetID]; !ok {
+			t.Fatalf("expected handler for packet %d to be registered", packetID)
+		}
+	}
+}
