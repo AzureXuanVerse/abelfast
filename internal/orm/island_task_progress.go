@@ -14,8 +14,14 @@ import (
 )
 
 type IslandTaskEntry struct {
-	TaskID    uint32 `json:"task_id"`
-	Timestamp uint32 `json:"timestamp"`
+	TaskID      uint32                    `json:"task_id"`
+	Timestamp   uint32                    `json:"timestamp"`
+	ProcessList []IslandTaskTargetProcess `json:"process_list,omitempty"`
+}
+
+type IslandTaskTargetProcess struct {
+	TargetID    uint32 `json:"target_id"`
+	TargetCount uint32 `json:"target_count"`
 }
 
 type IslandTaskProgress struct {

@@ -22,6 +22,8 @@ const (
 	islandTaskCategoryLC       = "sharecfgdata/island_task.json"
 	islandTaskTargetCategory   = "ShareCfg/island_task_target.json"
 	islandTaskTargetCategoryLC = "sharecfgdata/island_task_target.json"
+	islandSeasonCategory       = "ShareCfg/island_season.json"
+	islandSeasonCategoryLC     = "sharecfgdata/island_season.json"
 
 	islandRandomTaskType        = uint32(4)
 	islandRandomWindowSeconds   = uint32(300)
@@ -31,14 +33,23 @@ const (
 type islandTaskTemplate struct {
 	ID              uint32     `json:"id"`
 	Type            uint32     `json:"type"`
+	CompleteType    uint32     `json:"complete_type"`
+	TriggerType     uint32     `json:"trigger_type"`
 	UnlockTime      string     `json:"unlock_time"`
 	UnlockCondition [][]uint32 `json:"unlock_condition"`
+	LinkTask        []uint32   `json:"link_task"`
 	TargetID        []uint32   `json:"target_id"`
+	RewardShow      [][]uint32 `json:"reward_show"`
+	RewardExp       uint32     `json:"reward_exp"`
 }
 
 type islandTaskTargetTemplate struct {
 	ID        uint32 `json:"id"`
 	TargetNum uint32 `json:"target_num"`
+}
+
+type islandSeasonTemplate struct {
+	TaskList []uint32 `json:"task_list"`
 }
 
 type islandTaskRefreshConfig struct {
