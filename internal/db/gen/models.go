@@ -289,6 +289,17 @@ type CommanderFurniture struct {
 	GetTime     int64
 }
 
+type CommanderIslandSocialState struct {
+	CommanderID          int64
+	InviteCode           string
+	InviteCodeRefreshDay int64
+	InvitedCommanderIds  []byte
+	GiftCount            int64
+	GiftTimestamp        int64
+	GiftVisitors         []byte
+	UpdatedAt            pgtype.Timestamptz
+}
+
 type CommanderItem struct {
 	CommanderID int64
 	ItemID      int64
@@ -744,6 +755,14 @@ type IslandTaskProgress struct {
 	RandomTaskWindows  []byte
 	CreatedAt          pgtype.Timestamptz
 	UpdatedAt          pgtype.Timestamptz
+}
+
+type IslandWildGatherSignState struct {
+	IslandID          int64
+	GatherID          int64
+	SignerCommanderID int64
+	Mark              int64
+	UpdatedAt         pgtype.Timestamptz
 }
 
 type Item struct {
