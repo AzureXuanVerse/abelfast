@@ -625,9 +625,53 @@ type IslandInventory struct {
 	Count       int64
 }
 
+type IslandOrderFavorClaim struct {
+	CommanderID int64
+	Level       int64
+}
+
+type IslandOrderSlot struct {
+	CommanderID int64
+	SlotID      int64
+	SlotData    []byte
+}
+
+type IslandOrderState struct {
+	CommanderID        int64
+	Favor              int64
+	DailySelect        int64
+	DailySlotNum       int64
+	TimeSlotNum        int64
+	UrgencyFinishCount int64
+	ShipRefresh        int64
+}
+
+type IslandProsperityState struct {
+	CommanderID   int64
+	Prosperity    int64
+	ClaimedLevels []byte
+}
+
 type IslandSeason struct {
 	CommanderID int64
 	Pt          int64
+}
+
+type IslandSeasonRewardClaim struct {
+	CommanderID int64
+	TargetPt    int64
+}
+
+type IslandShipOrderAppoint struct {
+	CommanderID int64
+	AppointID   int64
+	AppointData []byte
+}
+
+type IslandShipOrderSlot struct {
+	CommanderID int64
+	SlotID      int64
+	SlotData    []byte
 }
 
 type IslandTaskProgress struct {
