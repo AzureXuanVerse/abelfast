@@ -141,6 +141,10 @@ func refreshIslandRandomTasks(state *orm.IslandTaskProgress, config *islandTaskR
 			if containsIslandTaskID(finishedIDs, window.TaskID) {
 				continue
 			}
+			if len(activeMap) >= islandRandomImmediateMaxNum {
+				pendingWindows = append(pendingWindows, window)
+				continue
+			}
 			activeMap[window.TaskID] = orm.IslandTaskEntry{TaskID: window.TaskID, Timestamp: now}
 			if task := buildIslandTaskProto(config, window.TaskID, now); task != nil {
 				addedTasks = append(addedTasks, task)
@@ -267,20 +271,30 @@ func containsIslandTaskID(values []uint32, target uint32) bool {
 	return false
 }
 
-func loadIslandTaskRefreshConfig() (*islandTaskRefreshConfig, error) {
-	taskEntries, err := orm.ListConfigEntries(islandTaskCategory)
+func listConfigEntriesWithFallback(primaryCategory string, fallbackCategory string, lister func(string) ([]orm.ConfigEntry, error)) ([]orm.ConfigEntry, error) {
+	entries, err := lister(primaryCategory)
 	if err != nil {
-		taskEntries, err = orm.ListConfigEntries(islandTaskCategoryLC)
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
-	targetEntries, err := orm.ListConfigEntries(islandTaskTargetCategory)
+	if len(entries) > 0 {
+		return entries, nil
+	}
+
+	fallbackEntries, err := lister(fallbackCategory)
 	if err != nil {
-		targetEntries, err = orm.ListConfigEntries(islandTaskTargetCategoryLC)
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
+	}
+	return fallbackEntries, nil
+}
+
+func loadIslandTaskRefreshConfig() (*islandTaskRefreshConfig, error) {
+	taskEntries, err := listConfigEntriesWithFallback(islandTaskCategory, islandTaskCategoryLC, orm.ListConfigEntries)
+	if err != nil {
+		return nil, err
+	}
+	targetEntries, err := listConfigEntriesWithFallback(islandTaskTargetCategory, islandTaskTargetCategoryLC, orm.ListConfigEntries)
+	if err != nil {
+		return nil, err
 	}
 
 	tasksByID := make(map[uint32]islandTaskTemplate, len(taskEntries))

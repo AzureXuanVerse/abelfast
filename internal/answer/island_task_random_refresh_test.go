@@ -130,3 +130,84 @@ func TestIslandRandomTaskRefreshReturnsNoopForNonZeroType(t *testing.T) {
 		t.Fatalf("expected empty delta for non-zero type, got %+v", response)
 	}
 }
+
+func TestLoadIslandTaskRefreshConfigFallsBackToLowercaseCategory(t *testing.T) {
+	taskEntry := orm.ConfigEntry{Category: islandTaskCategoryLC, Key: "40101001", Data: []byte(`{"id":40101001,"type":4,"unlock_condition":[],"unlock_time":"always","target_id":[50101]}`)}
+	targetEntry := orm.ConfigEntry{Category: islandTaskTargetCategoryLC, Key: "50101", Data: []byte(`{"id":50101,"target_num":9}`)}
+
+	entriesByCategory := map[string][]orm.ConfigEntry{
+		islandTaskCategory:       {},
+		islandTaskCategoryLC:     {taskEntry},
+		islandTaskTargetCategory: {},
+		islandTaskTargetCategoryLC: {
+			targetEntry,
+		},
+	}
+
+	taskEntries, err := listConfigEntriesWithFallback(islandTaskCategory, islandTaskCategoryLC, func(category string) ([]orm.ConfigEntry, error) {
+		return entriesByCategory[category], nil
+	})
+	if err != nil {
+		t.Fatalf("load task config entries: %v", err)
+	}
+	if len(taskEntries) != 1 || taskEntries[0].Category != islandTaskCategoryLC {
+		t.Fatalf("expected lowercase task category fallback, got %+v", taskEntries)
+	}
+
+	targetEntries, err := listConfigEntriesWithFallback(islandTaskTargetCategory, islandTaskTargetCategoryLC, func(category string) ([]orm.ConfigEntry, error) {
+		return entriesByCategory[category], nil
+	})
+	if err != nil {
+		t.Fatalf("load target config entries: %v", err)
+	}
+	if len(targetEntries) != 1 || targetEntries[0].Category != islandTaskTargetCategoryLC {
+		t.Fatalf("expected lowercase target category fallback, got %+v", targetEntries)
+	}
+}
+
+func TestRefreshIslandRandomTasksRespectsActiveCapWhenPromotingExpiredWindows(t *testing.T) {
+	now := uint32(1000)
+	config := &islandTaskRefreshConfig{
+		tasksByID: map[uint32]islandTaskTemplate{
+			40101001: {ID: 40101001, Type: islandRandomTaskType, UnlockTime: "always", TargetID: []uint32{50101}},
+			40102001: {ID: 40102001, Type: islandRandomTaskType, UnlockTime: "always", TargetID: []uint32{50102}},
+			40103001: {ID: 40103001, Type: islandRandomTaskType, UnlockTime: "always", TargetID: []uint32{50103}},
+			40104001: {ID: 40104001, Type: islandRandomTaskType, UnlockTime: "always", TargetID: []uint32{50104}},
+			40105001: {ID: 40105001, Type: islandRandomTaskType, UnlockTime: "always", TargetID: []uint32{50105}},
+		},
+		randomTasks: []uint32{40101001, 40102001, 40103001, 40104001, 40105001},
+		targets: map[uint32]uint32{
+			50101: 1,
+			50102: 1,
+			50103: 1,
+			50104: 1,
+			50105: 1,
+		},
+	}
+	state := &orm.IslandTaskProgress{
+		ActiveTasks: []orm.IslandTaskEntry{
+			{TaskID: 40101001, Timestamp: now - 100},
+			{TaskID: 40102001, Timestamp: now - 100},
+		},
+		RandomTaskWindows: []orm.IslandTaskEntry{
+			{TaskID: 40103001, Timestamp: now - 10},
+			{TaskID: 40104001, Timestamp: now - 5},
+			{TaskID: 40105001, Timestamp: now - 1},
+		},
+		FutureTaskWindows: []orm.IslandTaskEntry{},
+	}
+
+	delta := refreshIslandRandomTasks(state, config, now)
+	if len(delta.GetTaskList()) != 1 || delta.GetTaskList()[0].GetId() != 40103001 {
+		t.Fatalf("expected only one expired window to promote, got %+v", delta.GetTaskList())
+	}
+	if len(state.ActiveTasks) != 3 {
+		t.Fatalf("expected active task cap of 3, got %d", len(state.ActiveTasks))
+	}
+	if len(state.RandomTaskWindows) != 2 {
+		t.Fatalf("expected remaining expired windows to stay queued, got %d", len(state.RandomTaskWindows))
+	}
+	if state.RandomTaskWindows[0].TaskID != 40104001 || state.RandomTaskWindows[1].TaskID != 40105001 {
+		t.Fatalf("unexpected queued tasks after capped promotion: %+v", state.RandomTaskWindows)
+	}
+}
