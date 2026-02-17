@@ -287,6 +287,7 @@ func registerPackets() {
 	packets.RegisterPacketHandler(12406, []packets.PacketHandler{answer.LoveLetterGetAllData})
 	packets.RegisterPacketHandler(12408, []packets.PacketHandler{answer.LoveLetterLevelUp})
 	packets.RegisterPacketHandler(12410, []packets.PacketHandler{answer.LoveLetterGetContent})
+	packets.RegisterPacketHandler(21505, []packets.PacketHandler{answer.IslandGetDelegationAward})
 	packets.RegisterPacketHandler(12034, []packets.PacketHandler{answer.RenameProposedShip})
 	packets.RegisterPacketHandler(27000, []packets.PacketHandler{answer.EducateRequest})
 	packets.RegisterPacketHandler(27010, []packets.PacketHandler{func(b *[]byte, c *connection.Client) (int, int, error) {

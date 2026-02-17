@@ -587,6 +587,32 @@ type GuildShopState struct {
 	NextRefreshTime int64
 }
 
+type IslandDelegation struct {
+	CommanderID   int64
+	BuildID       int64
+	AreaID        int64
+	HasRole       bool
+	RewardReady   bool
+	FormulaID     int64
+	MainNum       int64
+	OtherNum      int64
+	ExtraMainNum  int64
+	ExtraOtherNum int64
+	GetTimes      int64
+	PtAward       int64
+}
+
+type IslandInventory struct {
+	CommanderID int64
+	ItemID      int64
+	Count       int64
+}
+
+type IslandSeason struct {
+	CommanderID int64
+	Pt          int64
+}
+
 type IslandTaskProgress struct {
 	CommanderID        int64
 	WeekStartUnix      int64
