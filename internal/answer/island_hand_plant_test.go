@@ -109,6 +109,25 @@ func TestStartIslandHandPlantFailsOnInsufficientSeeds(t *testing.T) {
 	}
 }
 
+func TestLoadIslandHandPlantFormulaSupportsListRows(t *testing.T) {
+	clearTable(t, &orm.ConfigEntry{})
+	seedConfigEntry(t, islandFormulaCategory, "all", `[{"id":3001,"cost":[[17001,2]],"workload":240,"drop_display":[[99,8001,3]]}]`)
+
+	formula, exists, err := loadIslandHandPlantFormula(3001)
+	if err != nil {
+		t.Fatalf("load formula: %v", err)
+	}
+	if !exists {
+		t.Fatalf("expected formula to exist")
+	}
+	if formula.ID != 3001 {
+		t.Fatalf("expected formula id 3001, got %d", formula.ID)
+	}
+	if len(formula.Cost) != 1 || len(formula.Cost[0]) < 2 || formula.Cost[0][0] != 17001 || formula.Cost[0][1] != 2 {
+		t.Fatalf("unexpected formula cost %+v", formula.Cost)
+	}
+}
+
 func TestIslandClaimHandPlantAwardSuccess(t *testing.T) {
 	client := setupHandlerCommander(t)
 	clearTable(t, &orm.IslandHandPlant{})

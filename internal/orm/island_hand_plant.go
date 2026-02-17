@@ -22,6 +22,28 @@ func (IslandHandPlant) TableName() string {
 	return "island_hand_plants"
 }
 
+func EnsureIslandHandPlantRowsTx(ctx context.Context, tx pgx.Tx, commanderID uint32, slotIDs []uint32) error {
+	if len(slotIDs) == 0 {
+		return nil
+	}
+
+	slotIDList := make([]int64, 0, len(slotIDs))
+	for _, slotID := range slotIDs {
+		slotIDList = append(slotIDList, int64(slotID))
+	}
+
+	_, err := tx.Exec(ctx, `
+INSERT INTO island_hand_plants
+	(commander_id, build_id, slot_id, state, formula_id, start_time, end_time)
+SELECT
+	$1, 0, slot_id, 0, 0, 0, 0
+FROM unnest($2::bigint[]) AS slot_id
+ON CONFLICT (commander_id, slot_id)
+DO NOTHING
+`, int64(commanderID), slotIDList)
+	return err
+}
+
 func ListIslandHandPlantsBySlotIDsForUpdateTx(ctx context.Context, tx pgx.Tx, commanderID uint32, slotIDs []uint32) ([]IslandHandPlant, error) {
 	return listIslandHandPlantsBySlotIDsTx(ctx, tx, commanderID, slotIDs, true)
 }

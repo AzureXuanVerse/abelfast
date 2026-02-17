@@ -113,6 +113,11 @@ func StartIslandHandPlant(buffer *[]byte, client *connection.Client) (int, int, 
 			}
 		}
 
+		if err := orm.EnsureIslandHandPlantRowsTx(context.Background(), tx, client.Commander.CommanderID, slotIDs); err != nil {
+			response.Result = proto.Uint32(islandHandPlantResultFailure)
+			return err
+		}
+
 		stateBySlot, err := loadIslandHandPlantStateForSlotsTx(context.Background(), tx, client.Commander.CommanderID, slotIDs, true)
 		if err != nil {
 			response.Result = proto.Uint32(islandHandPlantResultFailure)
@@ -411,6 +416,14 @@ func loadIslandHandPlantFormula(formulaID uint32) (*islandFormulaConfigV2, bool,
 		if err := json.Unmarshal(entries[i].Data, &single); err == nil {
 			if single.ID == formulaID {
 				return &single, true, nil
+			}
+		}
+		var list []islandFormulaConfigV2
+		if err := json.Unmarshal(entries[i].Data, &list); err == nil {
+			for j := range list {
+				if list[j].ID == formulaID {
+					return &list[j], true, nil
+				}
 			}
 		}
 	}
