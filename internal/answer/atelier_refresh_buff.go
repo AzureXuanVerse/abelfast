@@ -38,6 +38,10 @@ func AtelierRefreshBuff(buffer *[]byte, client *connection.Client) (int, int, er
 		if err != nil {
 			return err
 		}
+		if !atelierHasBuffSlotItems(state.Items, nextSlots) {
+			response.Result = proto.Uint32(atelierResultInvalidRecipeOrItem)
+			return nil
+		}
 		state.Slots = nextSlots
 		if err := orm.SaveAtelierStateTx(ctx, tx, state); err != nil {
 			return err
@@ -95,4 +99,16 @@ func validateAtelierBuffSlots(slots []*protobuf.BUFF_SLOT) (map[uint32]orm.Ateli
 		nextSlots[pos] = orm.AtelierBuffSlotState{Pos: pos, ItemID: itemID, ItemNum: itemNum}
 	}
 	return nextSlots, atelierResultSuccess
+}
+
+func atelierHasBuffSlotItems(items map[uint32]uint32, slots map[uint32]orm.AtelierBuffSlotState) bool {
+	for _, slot := range slots {
+		if slot.ItemID == 0 {
+			continue
+		}
+		if items[slot.ItemID] == 0 {
+			return false
+		}
+	}
+	return true
 }

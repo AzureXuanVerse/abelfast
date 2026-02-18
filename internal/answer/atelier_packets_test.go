@@ -228,6 +228,15 @@ func TestAtelierRefreshBuffAndRequestReadback(t *testing.T) {
 	client := setupAtelierTestClient(t)
 	seedAtelierBuffItemConfig(t, 301, []uint32{11, 12, 13})
 	seedAtelierBuffItemConfig(t, 302, []uint32{21})
+	state, err := orm.GetOrCreateAtelierState(client.Commander.CommanderID, atelierTestActID)
+	if err != nil {
+		t.Fatalf("load atelier state: %v", err)
+	}
+	state.Items[301] = 1
+	state.Items[302] = 1
+	if err := orm.SaveAtelierState(state); err != nil {
+		t.Fatalf("save atelier state: %v", err)
+	}
 
 	payload := marshalPacketRequest(t, &protobuf.CS_26055{
 		ActId: proto.Uint32(atelierTestActID),
@@ -272,7 +281,17 @@ func TestAtelierRefreshBuffFailuresAndFullReplace(t *testing.T) {
 	client := setupAtelierTestClient(t)
 	seedAtelierBuffItemConfig(t, 401, []uint32{1, 2})
 	seedAtelierBuffItemConfig(t, 402, []uint32{1})
+	seedAtelierBuffItemConfig(t, 403, []uint32{1})
 	seedAtelierNonBuffItemConfig(t, 499)
+	state, err := orm.GetOrCreateAtelierState(client.Commander.CommanderID, atelierTestActID)
+	if err != nil {
+		t.Fatalf("load atelier state: %v", err)
+	}
+	state.Items[401] = 1
+	state.Items[402] = 1
+	if err := orm.SaveAtelierState(state); err != nil {
+		t.Fatalf("save atelier state: %v", err)
+	}
 
 	seedPayload := marshalPacketRequest(t, &protobuf.CS_26055{
 		ActId: proto.Uint32(atelierTestActID),
@@ -295,6 +314,7 @@ func TestAtelierRefreshBuffFailuresAndFullReplace(t *testing.T) {
 		{name: "invalid position", slots: []*protobuf.BUFF_SLOT{{Pos: proto.Uint32(6), Itemid: proto.Uint32(401), Itemnum: proto.Uint32(1)}}, result: atelierResultMalformedRequest},
 		{name: "invalid item", slots: []*protobuf.BUFF_SLOT{{Pos: proto.Uint32(1), Itemid: proto.Uint32(9999), Itemnum: proto.Uint32(1)}}, result: atelierResultInvalidRecipeOrItem},
 		{name: "non buff item", slots: []*protobuf.BUFF_SLOT{{Pos: proto.Uint32(1), Itemid: proto.Uint32(499), Itemnum: proto.Uint32(1)}}, result: atelierResultInvalidRecipeOrItem},
+		{name: "missing owned item", slots: []*protobuf.BUFF_SLOT{{Pos: proto.Uint32(1), Itemid: proto.Uint32(403), Itemnum: proto.Uint32(1)}}, result: atelierResultInvalidRecipeOrItem},
 		{name: "duplicate item", slots: []*protobuf.BUFF_SLOT{{Pos: proto.Uint32(1), Itemid: proto.Uint32(401), Itemnum: proto.Uint32(1)}, {Pos: proto.Uint32(3), Itemid: proto.Uint32(401), Itemnum: proto.Uint32(1)}}, result: atelierResultMalformedRequest},
 		{name: "out of range level", slots: []*protobuf.BUFF_SLOT{{Pos: proto.Uint32(1), Itemid: proto.Uint32(402), Itemnum: proto.Uint32(2)}}, result: atelierResultMalformedRequest},
 	}
@@ -326,7 +346,7 @@ func TestAtelierRefreshBuffFailuresAndFullReplace(t *testing.T) {
 		t.Fatalf("expected partial update success")
 	}
 
-	state, err := orm.GetOrCreateAtelierState(client.Commander.CommanderID, atelierTestActID)
+	state, err = orm.GetOrCreateAtelierState(client.Commander.CommanderID, atelierTestActID)
 	if err != nil {
 		t.Fatalf("reload atelier state: %v", err)
 	}
