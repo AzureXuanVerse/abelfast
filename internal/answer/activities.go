@@ -8,6 +8,7 @@ import (
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/orm"
 	"github.com/ggmolly/belfast/internal/protobuf"
+	"google.golang.org/protobuf/proto"
 )
 
 func Activities(buffer *[]byte, client *connection.Client) (int, int, error) {
@@ -68,6 +69,15 @@ func Activities(buffer *[]byte, client *connection.Client) (int, int, error) {
 		}
 		if found {
 			info.GroupList = activityFleetGroupsToProto(groups)
+		}
+		storeState, err := orm.GetActivityStoreState(client.Commander.CommanderID, template.ID)
+		if err != nil {
+			if !db.IsNotFound(err) {
+				return 0, 11200, err
+			}
+		} else {
+			info.Data1 = proto.Uint32(storeState.Data1)
+			info.StrData1 = proto.String(storeState.StrData1)
 		}
 		response.ActivityList = append(response.ActivityList, info)
 	}
