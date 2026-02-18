@@ -177,6 +177,11 @@ func FinishStage(buffer *[]byte, client *connection.Client) (int, int, error) {
 	if err := applyCommanderExpGain(client, playerExp); err != nil {
 		return 0, 40004, err
 	}
+	if session != nil {
+		if err := saveLimitChallengeClear(client, session.StageID, payload.GetTotalTime(), payload.GetScore()); err != nil {
+			return 0, 40004, err
+		}
+	}
 	if err := orm.DeleteBattleSession(client.Commander.CommanderID); err != nil {
 		return 0, 40004, err
 	}
