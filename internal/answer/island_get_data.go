@@ -84,6 +84,41 @@ func buildIslandPublicData(ownerID uint32, snapshot *orm.IslandSnapshot) *protob
 	}
 	sort.Slice(repeatFinish, func(i, j int) bool { return repeatFinish[i].GetId() < repeatFinish[j].GetId() })
 
+	inviteList, _ := orm.ListIslandShipInvites(ownerID)
+	ships, _ := orm.ListIslandShips(ownerID)
+	shipList := make([]*protobuf.PB_ISLAND_SHIP, 0, len(ships))
+	for i := range ships {
+		shipList = append(shipList, buildIslandShipProto(&ships[i]))
+	}
+	roleDresses, _ := orm.ListIslandRoleDressStates(ownerID)
+	hadRoleDress := make([]*protobuf.PB_ISLAND_DRESS_NUM, 0, len(roleDresses))
+	for i := range roleDresses {
+		hadRoleDress = append(hadRoleDress, &protobuf.PB_ISLAND_DRESS_NUM{
+			Id:   proto.Uint32(roleDresses[i].DressID),
+			Num:  proto.Uint32(roleDresses[i].Num),
+			Read: proto.Uint32(roleDresses[i].Read),
+			Time: proto.Uint32(roleDresses[i].Time),
+		})
+	}
+	wearStates, _ := orm.ListIslandShipDressStates(ownerID)
+	wearList := make([]*protobuf.PB_ISLAND_SHIP_WEAR, 0, len(wearStates))
+	for i := range wearStates {
+		wearList = append(wearList, &protobuf.PB_ISLAND_SHIP_WEAR{ShipId: proto.Uint32(wearStates[i].ShipID), DressId: proto.Uint32(wearStates[i].DressID)})
+	}
+	skinStates, _ := orm.ListIslandShipSkinStates(ownerID)
+	skinMap := make(map[uint32][]*protobuf.PB_ISLAND_SKIN)
+	for i := range skinStates {
+		skinMap[skinStates[i].ShipID] = append(skinMap[skinStates[i].ShipID], &protobuf.PB_ISLAND_SKIN{
+			Id:        proto.Uint32(skinStates[i].SkinID),
+			ColorId:   proto.Uint32(skinStates[i].ColorID),
+			ColorList: append([]uint32(nil), skinStates[i].ColorList...),
+		})
+	}
+	skinList := make([]*protobuf.PB_ISLAND_SHIP_SKIN, 0, len(skinMap))
+	for shipID, list := range skinMap {
+		skinList = append(skinList, &protobuf.PB_ISLAND_SHIP_SKIN{ShipId: proto.Uint32(shipID), SkinList: list})
+	}
+
 	return &protobuf.PB_ISLAND_PUBLIC{
 		Id:                 proto.Uint32(ownerID),
 		Level:              proto.Uint32(maxUint32(snapshot.Level, 1)),
@@ -94,7 +129,7 @@ func buildIslandPublicData(ownerID uint32, snapshot *orm.IslandSnapshot) *protob
 		Prosperity:         proto.Uint32(snapshot.Prosperity),
 		AbilityList:        techState.AbilityIDs,
 		ProsperityRewarded: []uint32{},
-		ShipSys:            &protobuf.PB_ISLAND_SHIP_SYS{InviteList: []uint32{}, ShipList: []*protobuf.PB_ISLAND_SHIP{}, HadDress: []*protobuf.PB_ISLAND_DRESS_NUM{}, WearList: []*protobuf.PB_ISLAND_SHIP_WEAR{}, SkinList: []*protobuf.PB_ISLAND_SHIP_SKIN{}},
+		ShipSys:            &protobuf.PB_ISLAND_SHIP_SYS{InviteList: inviteList, ShipList: shipList, HadDress: hadRoleDress, WearList: wearList, SkinList: skinList},
 		AgoraLevel:         proto.Uint32(maxUint32(snapshot.AgoraLevel, 1)),
 		PlacedData:         &protobuf.PB_PLACEMENT_DATA{PlacedList: []*protobuf.PB_FURNITURE_DATA{}, FloorData: []uint32{}, TileData: []uint32{}},
 		FlagList:           []uint32{},
@@ -138,6 +173,37 @@ func buildIslandPrivateData(ownerID uint32, snapshot *orm.IslandSnapshot) (*prot
 		achievementSys.FinishList = append([]uint32(nil), achievementState.FinishList...)
 	}
 
+	curDress := []*protobuf.PB_ISLAND_CUR_DRESS{}
+	capList := []*protobuf.PB_CAP_STATE{}
+	if profile, err := orm.GetIslandCommanderDressProfile(ownerID); err == nil {
+		curDress = make([]*protobuf.PB_ISLAND_CUR_DRESS, 0, len(profile.CurDress))
+		for i := range profile.CurDress {
+			curDress = append(curDress, &protobuf.PB_ISLAND_CUR_DRESS{Type: proto.Uint32(profile.CurDress[i].Type), Id: proto.Uint32(profile.CurDress[i].ID)})
+		}
+		capList = make([]*protobuf.PB_CAP_STATE, 0, len(profile.CapList))
+		for i := range profile.CapList {
+			capList = append(capList, &protobuf.PB_CAP_STATE{DressId: proto.Uint32(profile.CapList[i].DressID), CapId: proto.Uint32(profile.CapList[i].CapID)})
+		}
+	}
+
+	actionFeedbackNPC := []uint32{}
+	if feedbackState, err := orm.GetIslandNPCFeedbackState(ownerID); err == nil {
+		if feedbackState.DayStartUnix == currentDayStartUnix(time.Now().UTC()) {
+			actionFeedbackNPC = append(actionFeedbackNPC, feedbackState.ClaimedNPCIDs...)
+		}
+	}
+
+	viewBook := &protobuf.PB_VIEW_BOOK{CondList: []*protobuf.PB_BOOK_COND{}, BookList: []uint32{}, BookAwards: []uint32{}, BookCollects: []*protobuf.PB_BOOK_COLLECT{}, ItemList: []*protobuf.PB_ISLAND_ITEM{}}
+	bookState, err := orm.GetIslandBookState(ownerID)
+	if err != nil && !db.IsNotFound(err) {
+		return nil, err
+	}
+	if bookState != nil {
+		viewBook.BookList = append([]uint32(nil), bookState.BookList...)
+		viewBook.BookAwards = append([]uint32(nil), bookState.BookAwards...)
+		viewBook.BookCollects = buildIslandBookCollectProto(bookState.BookCollects)
+	}
+
 	return &protobuf.PB_ISLAND_PRIVATE{
 		OpenFlag:              proto.Uint32(snapshot.OpenFlag),
 		WhiteList:             []uint32{},
@@ -155,14 +221,14 @@ func buildIslandPrivateData(ownerID uint32, snapshot *orm.IslandSnapshot) (*prot
 		Season:                season,
 		CollectSys:            &protobuf.PB_ISLAND_COLLECT_SYS{CollectItem: []*protobuf.PB_ISLAND_COLLECT_ITEM{}, FinishList: []uint32{}},
 		FormulaNum:            []*protobuf.PB_USE_FORMULA{},
-		UserDress:             &protobuf.PB_ISLAND_USER_DRESS_SYS{CurDress: []*protobuf.PB_ISLAND_CUR_DRESS{}, HadDress: hadDress, CapList: []*protobuf.PB_CAP_STATE{}},
+		UserDress:             &protobuf.PB_ISLAND_USER_DRESS_SYS{CurDress: curDress, HadDress: hadDress, CapList: capList},
 		AchievementSys:        achievementSys,
 		GlobalBuff:            &protobuf.PB_ISLAND_GLOBAL_BUFF{ForeverList: []uint32{}, LimitList: []*protobuf.PB_ISLAND_BUFF{}},
 		SpeedTickets:          []*protobuf.PB_SPEEDUP_TICKET{},
 		ActionList:            []uint32{},
-		ActionFeedbackNpcList: []uint32{},
+		ActionFeedbackNpcList: actionFeedbackNPC,
 		FlagList:              []*protobuf.PB_SET_FLAG{},
-		ViewBook:              &protobuf.PB_VIEW_BOOK{CondList: []*protobuf.PB_BOOK_COND{}, BookList: []uint32{}, BookAwards: []uint32{}, BookCollects: []*protobuf.PB_BOOK_COLLECT{}, ItemList: []*protobuf.PB_ISLAND_ITEM{}},
+		ViewBook:              viewBook,
 		FollowShips:           snapshot.FollowShips,
 		ImageList:             []*protobuf.PB_CARD_IMAGE{},
 		FishSys:               buildIslandFishSys(ownerID),

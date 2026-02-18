@@ -18,6 +18,7 @@ import (
 const (
 	islandOrderFavorCategory   = "ShareCfg/island_order_favor.json"
 	islandOrderPriceCategory   = "ShareCfg/island_order_price.json"
+	islandOrderCategory        = "ShareCfg/island_order.json"
 	islandOrderRandomCategory  = "ShareCfg/island_order_publish_random.json"
 	islandRewardSetCategory    = "ShareCfg/island_set.json"
 	islandRewardSeasonCategory = "ShareCfg/island_season.json"
@@ -32,8 +33,21 @@ type islandOrderFavorConfig struct {
 }
 
 type islandOrderPriceConfig struct {
-	ID                uint32   `json:"id"`
-	OrderAwardSpecial []uint32 `json:"order_award_special"`
+	ID                  uint32   `json:"id"`
+	OrderAward          []uint32 `json:"order_award"`
+	OrderEasyAward      []uint32 `json:"order_easy_award"`
+	OrderAwardChallenge []uint32 `json:"order_award_challenge"`
+	OrderAwardSpecial   []uint32 `json:"order_award_special"`
+}
+
+type islandFirmOrderConfig struct {
+	ID          uint32   `json:"id"`
+	Type        uint32   `json:"type"`
+	Award       []uint32 `json:"award"`
+	SeasonPTNum uint32   `json:"season_pt_num"`
+	ActivityID  uint32   `json:"activity_id"`
+	GroupID     uint32   `json:"group_id"`
+	NextOrder   uint32   `json:"next_order"`
 }
 
 type islandOrderRandomConfig struct {
@@ -153,6 +167,43 @@ func loadIslandSetIntConfig(key string) (uint32, bool, error) {
 		}
 	}
 	return 0, false, nil
+}
+
+func loadIslandFirmOrderConfig(orderID uint32) (*islandFirmOrderConfig, bool, error) {
+	key := fmt.Sprintf("%d", orderID)
+	if entry, err := orm.GetConfigEntry(islandOrderCategory, key); err == nil {
+		var single islandFirmOrderConfig
+		if err := json.Unmarshal(entry.Data, &single); err == nil {
+			if single.ID == 0 {
+				single.ID = orderID
+			}
+			return &single, true, nil
+		}
+	}
+
+	entries, err := orm.ListConfigEntries(islandOrderCategory)
+	if err != nil {
+		return nil, false, err
+	}
+	for _, entry := range entries {
+		var single islandFirmOrderConfig
+		if err := json.Unmarshal(entry.Data, &single); err == nil {
+			if single.ID == orderID {
+				return &single, true, nil
+			}
+			continue
+		}
+		var list []islandFirmOrderConfig
+		if err := json.Unmarshal(entry.Data, &list); err != nil {
+			return nil, false, err
+		}
+		for i := range list {
+			if list[i].ID == orderID {
+				return &list[i], true, nil
+			}
+		}
+	}
+	return nil, false, nil
 }
 
 func loadIslandRandomDialogIDs() ([]uint32, error) {

@@ -613,6 +613,45 @@ type IslandAgoraTheme struct {
 	PlacedData  []byte
 }
 
+type IslandBookState struct {
+	CommanderID  int64
+	BookList     []byte
+	BookAwards   []byte
+	BookCollects []byte
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+}
+
+type IslandCardLabelGift struct {
+	FromCommanderID int64
+	ToCommanderID   int64
+	LabelID         int64
+	CreatedAt       pgtype.Timestamptz
+}
+
+type IslandCardLike struct {
+	FromCommanderID int64
+	ToCommanderID   int64
+	CreatedAt       pgtype.Timestamptz
+}
+
+type IslandCardState struct {
+	CommanderID       int64
+	Picture           string
+	VisitWord         string
+	SocialFlag        int64
+	LabelViewFlag     int64
+	LabelCounts       []byte
+	AchieveDisplayIds []byte
+	VisitNum          int64
+	GoodNum           int64
+	ShipNum           int64
+	BookNum           int64
+	AchieveNum        int64
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+}
+
 type IslandCollectFragmentSignState struct {
 	IslandID          int64
 	FragmentID        int64
@@ -642,6 +681,14 @@ type IslandCommanderDress struct {
 	Color       int64
 	ColorList   []byte
 	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
+type IslandCommanderDressProfile struct {
+	CommanderID int64
+	IslandID    int64
+	CurDress    []byte
+	CapList     []byte
 	UpdatedAt   pgtype.Timestamptz
 }
 
@@ -700,6 +747,27 @@ type IslandInventory struct {
 	Count       int64
 }
 
+type IslandManageTrade struct {
+	CommanderID int64
+	TradeID     int64
+	TradeData   []byte
+	PresellData []byte
+	TotalSales  int64
+}
+
+type IslandNpcFeedbackState struct {
+	CommanderID   int64
+	DayStartUnix  int64
+	ClaimedNpcIds []byte
+	UpdatedAt     pgtype.Timestamptz
+}
+
+type IslandOrderActGroup struct {
+	CommanderID int64
+	ActID       int64
+	GroupID     int64
+}
+
 type IslandOrderFavorClaim struct {
 	CommanderID int64
 	Level       int64
@@ -733,6 +801,15 @@ type IslandProsperityState struct {
 	ClaimedLevels []byte
 }
 
+type IslandRoleDress struct {
+	CommanderID int64
+	DressID     int64
+	Num         int64
+	Read        int64
+	Time        int64
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type IslandSeason struct {
 	CommanderID int64
 	Pt          int64
@@ -744,11 +821,30 @@ type IslandSeasonRewardClaim struct {
 }
 
 type IslandShip struct {
+	CommanderID  int64
+	ShipID       int64
+	Level        int64
+	BreakLv      int64
+	CanFollow    bool
+	Exp          int64
+	SkillLv      int64
+	Power        int64
+	RecoverTime  int64
+	UpLimitState int64
+	CurSkinID    int64
+	ExtraAttr    []byte
+	Buffs        []byte
+}
+
+type IslandShipDress struct {
 	CommanderID int64
 	ShipID      int64
-	Level       int64
-	BreakLv     int64
-	CanFollow   bool
+	DressID     int64
+}
+
+type IslandShipInvite struct {
+	CommanderID int64
+	ShipID      int64
 }
 
 type IslandShipOrderAppoint struct {
@@ -775,6 +871,15 @@ type IslandShipOrderState struct {
 	CommanderID int64
 	RefreshAt   int64
 	AppointList []byte
+}
+
+type IslandShipSkin struct {
+	CommanderID int64
+	ShipID      int64
+	SkinID      int64
+	ColorID     int64
+	ColorList   []byte
+	UpdatedAt   pgtype.Timestamptz
 }
 
 type IslandShopState struct {
