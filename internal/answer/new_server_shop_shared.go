@@ -83,7 +83,7 @@ func loadNewServerShopActivity(actID uint32, now time.Time) (*newServerShopActiv
 	goods := make([]newServerShopTemplateEntry, 0, len(goodsIDs))
 	goodsByID := make(map[uint32]newServerShopTemplateEntry, len(goodsIDs))
 	for _, goodsID := range goodsIDs {
-		entry, found, err := loadNewServerShopTemplateEntry(goodsID)
+		entry, found, err := loadNewServerShopTemplateEntry(goodsID, template.Type)
 		if err != nil {
 			return nil, false, err
 		}
@@ -103,39 +103,46 @@ func loadNewServerShopActivity(actID uint32, now time.Time) (*newServerShopActiv
 	}, true, nil
 }
 
-func loadNewServerShopTemplateEntry(id uint32) (*newServerShopTemplateEntry, bool, error) {
+func loadNewServerShopTemplateEntry(id uint32, activityType uint32) (*newServerShopTemplateEntry, bool, error) {
 	key := strconv.FormatUint(uint64(id), 10)
-	if entry, err := orm.GetConfigEntry("ShareCfg/newserver_shop_template.json", key); err == nil {
-		var out newServerShopTemplateEntry
-		if err := json.Unmarshal(entry.Data, &out); err != nil {
-			return nil, false, err
-		}
-		if out.ID == 0 {
-			out.ID = id
-		}
-		return &out, true, nil
-	} else if !db.IsNotFound(err) {
-		return nil, false, err
+	categories := []string{"ShareCfg/newserver_shop_template.json"}
+	if activityType == activityTypeBlackFridayShop {
+		categories = []string{"ShareCfg/blackfriday_shop_template.json", "ShareCfg/newserver_shop_template.json"}
 	}
 
-	entries, err := orm.ListConfigEntries("ShareCfg/newserver_shop_template.json")
-	if err != nil {
-		return nil, false, err
-	}
-	for i := range entries {
-		var single newServerShopTemplateEntry
-		if err := json.Unmarshal(entries[i].Data, &single); err == nil {
-			if single.ID == id {
-				return &single, true, nil
+	for _, category := range categories {
+		if entry, err := orm.GetConfigEntry(category, key); err == nil {
+			var out newServerShopTemplateEntry
+			if err := json.Unmarshal(entry.Data, &out); err != nil {
+				return nil, false, err
 			}
+			if out.ID == 0 {
+				out.ID = id
+			}
+			return &out, true, nil
+		} else if !db.IsNotFound(err) {
+			return nil, false, err
 		}
-		var list []newServerShopTemplateEntry
-		if err := json.Unmarshal(entries[i].Data, &list); err != nil {
-			continue
+
+		entries, err := orm.ListConfigEntries(category)
+		if err != nil {
+			return nil, false, err
 		}
-		for j := range list {
-			if list[j].ID == id {
-				return &list[j], true, nil
+		for i := range entries {
+			var single newServerShopTemplateEntry
+			if err := json.Unmarshal(entries[i].Data, &single); err == nil {
+				if single.ID == id {
+					return &single, true, nil
+				}
+			}
+			var list []newServerShopTemplateEntry
+			if err := json.Unmarshal(entries[i].Data, &list); err != nil {
+				continue
+			}
+			for j := range list {
+				if list[j].ID == id {
+					return &list[j], true, nil
+				}
 			}
 		}
 	}

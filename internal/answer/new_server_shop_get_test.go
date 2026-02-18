@@ -66,6 +66,21 @@ func seedNewServerShopEntry(t *testing.T, id uint32, goodsType uint32, purchaseL
 	seedConfigEntry(t, "ShareCfg/newserver_shop_template.json", fmt.Sprintf("%d", id), payload)
 }
 
+func seedBlackFridayShopEntry(t *testing.T, id uint32, goodsType uint32, purchaseLimit uint32, goods []uint32) {
+	t.Helper()
+	goodsJSON, err := json.Marshal(goods)
+	if err != nil {
+		t.Fatalf("marshal goods: %v", err)
+	}
+	payload := fmt.Sprintf(`{"id":%d,"goods":%s,"goods_purchase_limit":%d,"goods_type":%d,"num":1,"type":2,"resource_category":1,"resource_type":1,"resource_num":10}`,
+		id,
+		string(goodsJSON),
+		purchaseLimit,
+		goodsType,
+	)
+	seedConfigEntry(t, "ShareCfg/blackfriday_shop_template.json", fmt.Sprintf("%d", id), payload)
+}
+
 func TestGetNewServerShopSuccessAndReplayState(t *testing.T) {
 	client := setupNewServerShopTest(t)
 	seedNewServerShopActivity(t, 30862, activityTypeNewServerShop, []uint32{301, 303})
@@ -111,7 +126,7 @@ func TestGetNewServerShopSuccessAndReplayState(t *testing.T) {
 func TestGetNewServerShopSupportsBlackFridayActivityType(t *testing.T) {
 	client := setupNewServerShopTest(t)
 	seedNewServerShopActivity(t, 30892, activityTypeBlackFridayShop, []uint32{301})
-	seedNewServerShopEntry(t, 301, newServerShopGoodsTypeFixed, 5, []uint32{20001})
+	seedBlackFridayShopEntry(t, 301, newServerShopGoodsTypeFixed, 5, []uint32{20001})
 
 	request := &protobuf.CS_26041{ActId: proto.Uint32(30892)}
 	buf, err := proto.Marshal(request)
