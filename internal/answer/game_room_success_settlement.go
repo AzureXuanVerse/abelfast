@@ -52,6 +52,9 @@ func GameRoomSuccessSettlement(buffer *[]byte, client *connection.Client) (int, 
 			return insufficientCoin
 		}
 		if err := client.Commander.ConsumeResourceTx(context.Background(), tx, gameRoomCoinResourceID, payload.GetTimes()); err != nil {
+			if isNotEnoughResourcesError(err) {
+				return insufficientCoin
+			}
 			return err
 		}
 

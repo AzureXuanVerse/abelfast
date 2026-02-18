@@ -181,6 +181,21 @@ func TestGameRoomExchangeCoinValidationFailures(t *testing.T) {
 	}
 }
 
+func TestGameRoomExchangeCoinMapsTxUnderflowToFailureResponse(t *testing.T) {
+	client := setupGameRoomTestClient(t, 9817, 0, 0, 0)
+	client.Commander.OwnedResourcesMap[1].Amount = 1200
+
+	oneTime, _ := proto.Marshal(&protobuf.CS_26124{Times: proto.Uint32(1)})
+	if _, _, err := GameRoomExchangeCoin(&oneTime, client); err != nil {
+		t.Fatalf("tx underflow exchange should return failure response, got error: %v", err)
+	}
+	resp := &protobuf.SC_26125{}
+	decodePacketAt(t, client, 0, 26125, resp)
+	if resp.GetResult() == 0 {
+		t.Fatalf("expected tx underflow to map to insufficient response")
+	}
+}
+
 func TestGameRoomSuccessSettlementCapsAndScore(t *testing.T) {
 	client := setupGameRoomTestClient(t, 9814, 9999, 5, 49990)
 	now := time.Now().UTC()
@@ -307,5 +322,24 @@ func TestGameRoomSuccessSettlementInvalidRoomFails(t *testing.T) {
 	remainingCoin := queryAnswerTestInt64(t, "SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = $2", int64(client.Commander.CommanderID), int64(11))
 	if remainingCoin != 5 {
 		t.Fatalf("expected no coin spend on invalid room")
+	}
+}
+
+func TestGameRoomSuccessSettlementMapsTxUnderflowToFailureResponse(t *testing.T) {
+	client := setupGameRoomTestClient(t, 9818, 9999, 0, 0)
+	client.Commander.OwnedResourcesMap[11].Amount = 1
+
+	request := &protobuf.CS_26126{Roomid: proto.Uint32(1), Times: proto.Uint32(1), Score: proto.Uint32(10)}
+	buffer, _ := proto.Marshal(request)
+	if _, _, err := GameRoomSuccessSettlement(&buffer, client); err != nil {
+		t.Fatalf("tx underflow settlement should return failure response, got error: %v", err)
+	}
+	resp := &protobuf.SC_26127{}
+	decodePacketAt(t, client, 0, 26127, resp)
+	if resp.GetResult() == 0 {
+		t.Fatalf("expected tx underflow to map to insufficient response")
+	}
+	if len(resp.GetDropList()) != 0 {
+		t.Fatalf("expected empty drop list on failure")
 	}
 }

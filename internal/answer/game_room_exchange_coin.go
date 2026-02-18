@@ -63,6 +63,9 @@ func GameRoomExchangeCoin(buffer *[]byte, client *connection.Client) (int, int, 
 			return insufficientGold
 		}
 		if err := client.Commander.ConsumeResourceTx(context.Background(), tx, 1, totalGold); err != nil {
+			if isNotEnoughResourcesError(err) {
+				return insufficientGold
+			}
 			return err
 		}
 		if err := client.Commander.AddResourceTx(context.Background(), tx, gameRoomCoinResourceID, grantCount); err != nil {

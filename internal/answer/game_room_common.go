@@ -174,3 +174,7 @@ func gameRoomMultiplierForScore(thresholds [][]float64, score uint32) float64 {
 	}
 	return multiplier
 }
+
+func isNotEnoughResourcesError(err error) bool {
+	return err != nil && err.Error() == "not enough resources"
+}
