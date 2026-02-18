@@ -17,6 +17,7 @@ const (
 	miniGameDataStateCategory      = "Runtime/minigame_data_state"
 	miniGameTelemetryStateCategory = "Runtime/minigame_telemetry_state"
 	islandNodeStateCategory        = "Runtime/island_node_state"
+	miniGameFriendRankLimit        = 100
 )
 
 type MiniGameHubConfig struct {
@@ -333,11 +334,20 @@ func ListCommanderMiniGameScores(gameID uint32) ([]CommanderMiniGameScore, error
 			bestByCommander[state.CommanderID] = score
 		}
 	}
+	if len(bestByCommander) == 0 {
+		return []CommanderMiniGameScore{}, nil
+	}
+
+	commanderIDs := make([]int64, 0, len(bestByCommander))
+	for commanderID := range bestByCommander {
+		commanderIDs = append(commanderIDs, int64(commanderID))
+	}
 
 	rows, err := db.DefaultStore.Pool.Query(context.Background(), `
 SELECT commander_id, name, display_icon_id, display_skin_id, selected_icon_frame_id, selected_chat_frame_id, display_icon_theme_id
 FROM commanders
-`)
+WHERE commander_id = ANY($1)
+`, commanderIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -387,6 +397,9 @@ FROM commanders
 		}
 		return results[i].CommanderID < results[j].CommanderID
 	})
+	if len(results) > miniGameFriendRankLimit {
+		results = results[:miniGameFriendRankLimit]
+	}
 	return results, nil
 }
 

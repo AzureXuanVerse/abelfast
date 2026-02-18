@@ -108,9 +108,10 @@ func TestMiniGameOperationBatchSendsPerOperation(t *testing.T) {
 
 func TestActivityItemListReturnsScopedBalances(t *testing.T) {
 	client := setupHandlerCommander(t)
-	seedActivityTemplate(t, 9801, []any{93001, []any{93002}})
+	seedActivityTemplate(t, 9801, []any{93001, map[string]any{"nested": []any{93002, map[string]any{"deep": "93003"}}}})
 	seedCommanderItemCount(t, client.Commander.CommanderID, 93001, 4)
 	seedCommanderMiscItemCount(t, client.Commander.CommanderID, 93002, 6)
+	seedCommanderItemCount(t, client.Commander.CommanderID, 93003, 2)
 
 	req := &protobuf.CS_26106{ActId: proto.Uint32(9801)}
 	payload, _ := proto.Marshal(req)
@@ -122,8 +123,8 @@ func TestActivityItemListReturnsScopedBalances(t *testing.T) {
 	if resp.GetRet() != activityItemResultSuccess {
 		t.Fatalf("expected success ret, got %d", resp.GetRet())
 	}
-	if len(resp.GetItemList()) != 2 {
-		t.Fatalf("expected two scoped items, got %d", len(resp.GetItemList()))
+	if len(resp.GetItemList()) != 3 {
+		t.Fatalf("expected three scoped items, got %d", len(resp.GetItemList()))
 	}
 	client.Buffer.Reset()
 
@@ -229,6 +230,40 @@ func TestMiniGameFriendRankReturnsSortedScores(t *testing.T) {
 	}
 	if resp.GetRanks()[0].GetScore() < resp.GetRanks()[1].GetScore() {
 		t.Fatalf("expected ranks sorted descending")
+	}
+}
+
+func TestMiniGameFriendRankCapsResponseSize(t *testing.T) {
+	client := setupHandlerCommander(t)
+	seedMiniGameHubAndGameConfig(t, 8806, 7006, 2, 1, []uint32{})
+
+	hubConfig, err := orm.GetMiniGameHubConfig(8806)
+	if err != nil {
+		t.Fatalf("load hub config: %v", err)
+	}
+	for i := 0; i < 105; i++ {
+		commanderID := uint32(time.Now().UnixNano()) + uint32(i) + 1
+		if err := orm.CreateCommanderRoot(commanderID, commanderID, fmt.Sprintf("Cap Commander %d", commanderID), 0, 0); err != nil {
+			t.Fatalf("create commander %d: %v", commanderID, err)
+		}
+		state, err := orm.GetOrCreateMiniGameHubState(commanderID, hubConfig)
+		if err != nil {
+			t.Fatalf("load state %d: %v", commanderID, err)
+		}
+		state.MaxScores[7006] = orm.MiniGameScoreEntry{Score: uint32(1000 - i), Extra: uint32(i)}
+		if err := orm.SaveMiniGameHubState(state); err != nil {
+			t.Fatalf("save state %d: %v", commanderID, err)
+		}
+	}
+
+	payload, _ := proto.Marshal(&protobuf.CS_26111{Gameid: proto.Uint32(7006)})
+	if _, _, err := MiniGameFriendRank(&payload, client); err != nil {
+		t.Fatalf("MiniGameFriendRank failed: %v", err)
+	}
+	resp := &protobuf.SC_26112{}
+	decodePacketAt(t, client, 0, 26112, resp)
+	if len(resp.GetRanks()) != 100 {
+		t.Fatalf("expected rank list capped at 100, got %d", len(resp.GetRanks()))
 	}
 }
 
