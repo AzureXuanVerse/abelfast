@@ -3,7 +3,6 @@ package answer
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/ggmolly/belfast/internal/orm"
 	"github.com/ggmolly/belfast/internal/protobuf"
@@ -194,14 +193,15 @@ func TestCommanderCatteryAssignStyleOperationAndScene(t *testing.T) {
 
 func TestCommanderBoxesRefreshOrdering(t *testing.T) {
 	client := setupHandlerCommander(t)
-	now := time.Now().UTC()
-	seedShipTemplate(t, 900201, 2, 3, 1, "Box Ship A", 1)
-	seedShipTemplate(t, 900202, 3, 3, 1, "Box Ship B", 1)
-	execAnswerTestSQLT(t, "INSERT INTO builds (id, builder_id, ship_id, pool_id, finishes_at) VALUES ($1, $2, $3, $4, $5)", int64(20), int64(client.Commander.CommanderID), int64(900202), int64(3), now.Add(600*time.Second))
-	execAnswerTestSQLT(t, "INSERT INTO builds (id, builder_id, ship_id, pool_id, finishes_at) VALUES ($1, $2, $3, $4, $5)", int64(10), int64(client.Commander.CommanderID), int64(900201), int64(2), now.Add(300*time.Second))
-	if err := client.Commander.Load(); err != nil {
-		t.Fatalf("reload commander: %v", err)
+	boxes, err := orm.EnsureCommanderBoxes(client.Commander.CommanderID)
+	if err != nil {
+		t.Fatalf("ensure commander boxes: %v", err)
 	}
+	if len(boxes) < 2 {
+		t.Fatalf("expected at least two commander boxes")
+	}
+	execAnswerTestSQLT(t, "UPDATE commander_boxes SET pool_id = $3, begin_time = $4, finish_time = $5 WHERE commander_id = $1 AND box_id = $2", int64(client.Commander.CommanderID), int64(1), int64(2), int64(100), int64(300))
+	execAnswerTestSQLT(t, "UPDATE commander_boxes SET pool_id = $3, begin_time = $4, finish_time = $5 WHERE commander_id = $1 AND box_id = $2", int64(client.Commander.CommanderID), int64(2), int64(3), int64(200), int64(600))
 
 	payload := protobuf.CS_25034{Type: proto.Uint32(9)}
 	buffer, err := proto.Marshal(&payload)
@@ -215,13 +215,13 @@ func TestCommanderBoxesRefreshOrdering(t *testing.T) {
 
 	var response protobuf.SC_25035
 	decodeResponse(t, client, &response)
-	if len(response.GetBoxList()) != 2 {
-		t.Fatalf("expected two boxes")
+	if len(response.GetBoxList()) < 2 {
+		t.Fatalf("expected commander boxes in response")
 	}
-	if response.GetBoxList()[0].GetId() != 10 || response.GetBoxList()[1].GetId() != 20 {
+	if response.GetBoxList()[0].GetId() != 1 || response.GetBoxList()[1].GetId() != 2 {
 		t.Fatalf("expected deterministic id ordering")
 	}
-	if response.GetBoxList()[0].GetBeginTime() == 0 {
-		t.Fatalf("expected begin_time to be populated")
+	if response.GetBoxList()[0].GetBeginTime() != 100 {
+		t.Fatalf("expected begin_time to be populated from meow box state")
 	}
 }
