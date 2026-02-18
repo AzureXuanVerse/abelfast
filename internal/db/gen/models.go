@@ -156,6 +156,24 @@ type Build struct {
 	FinishesAt pgtype.Timestamptz
 }
 
+type ChallengeModeState struct {
+	CommanderID         int64
+	ActivityID          int64
+	Mode                int64
+	SeasonID            int64
+	Level               int64
+	CurrentScore        int64
+	Issl                int64
+	RegularGroupID      int64
+	SubmarineGroupID    int64
+	RegularShipIds      []byte
+	SubmarineShipIds    []byte
+	RegularCommanders   []byte
+	SubmarineCommanders []byte
+	CreatedAt           pgtype.Timestamptz
+	UpdatedAt           pgtype.Timestamptz
+}
+
 type ChapterDrop struct {
 	CommanderID int64
 	ChapterID   int64
@@ -1164,6 +1182,16 @@ type JuustagramTemplate struct {
 type Like struct {
 	GroupID int64
 	LikerID int64
+}
+
+type LimitChallengeState struct {
+	CommanderID int64
+	MonthBucket int64
+	BestTimes   []byte
+	Awarded     []byte
+	PassIds     []byte
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
 }
 
 type LocalAccount struct {
