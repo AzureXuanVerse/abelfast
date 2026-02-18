@@ -3,7 +3,6 @@ package answer
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strconv"
 	"time"
 
@@ -303,22 +302,13 @@ func CommanderBoxesRefresh(buffer *[]byte, client *connection.Client) (int, int,
 	if packet.GetType() != 0 {
 		logger.LogEvent("Commander/Boxes", "Refresh", fmt.Sprintf("unsupported type=%d commander=%d", packet.GetType(), client.Commander.CommanderID), logger.LOG_LEVEL_DEBUG)
 	}
-	ordered := orm.OrderedBuilds(client.Commander.Builds)
-	boxList := make([]*protobuf.COMMANDERBOXINFO, 0, len(ordered))
-	for _, build := range ordered {
-		beginTime := uint32(0)
-		ship := orm.Ship{TemplateID: build.ShipID}
-		if err := ship.Retrieve(false); err == nil {
-			begin := build.FinishesAt.Add(-time.Duration(ship.BuildTime) * time.Second)
-			beginTime = uint32(begin.Unix())
-		}
-		boxList = append(boxList, &protobuf.COMMANDERBOXINFO{
-			Id:         proto.Uint32(build.ID),
-			PoolId:     proto.Uint32(build.PoolID),
-			FinishTime: proto.Uint32(uint32(build.FinishesAt.Unix())),
-			BeginTime:  proto.Uint32(beginTime),
-		})
+	boxes, err := orm.EnsureCommanderBoxes(client.Commander.CommanderID)
+	if err != nil {
+		return 0, 25035, err
 	}
-	sort.Slice(boxList, func(i, j int) bool { return boxList[i].GetId() < boxList[j].GetId() })
+	boxList := make([]*protobuf.COMMANDERBOXINFO, len(boxes))
+	for i := range boxes {
+		boxList[i] = orm.ToProtoCommanderBox(boxes[i])
+	}
 	return client.SendMessage(25035, &protobuf.SC_25035{BoxList: boxList})
 }

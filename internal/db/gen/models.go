@@ -242,6 +242,14 @@ type CommanderAttire struct {
 	IsNew       bool
 }
 
+type CommanderBox struct {
+	CommanderID int64
+	BoxID       int64
+	PoolID      int64
+	BeginTime   int64
+	FinishTime  int64
+}
+
 type CommanderBuff struct {
 	CommanderID int64
 	BuffID      int64
@@ -348,6 +356,17 @@ type CommanderMedalDisplay struct {
 	CommanderID int64
 	Position    int64
 	MedalID     int64
+}
+
+type CommanderMeow struct {
+	ID          int64
+	CommanderID int64
+	TemplateID  int64
+	Level       int64
+	Exp         int64
+	IsLocked    int64
+	UsedPt      int64
+	CreatedAt   pgtype.Timestamptz
 }
 
 type CommanderMiscItem struct {
