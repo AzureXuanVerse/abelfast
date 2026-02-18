@@ -1,0 +1,24 @@
+package entrypoint
+
+import (
+	"testing"
+
+	"github.com/ggmolly/belfast/internal/packets"
+)
+
+func TestRegisterPacketsIncludesActivityBossHandlers(t *testing.T) {
+	original := packets.PacketDecisionFn
+	packets.PacketDecisionFn = map[int][]packets.PacketHandler{}
+	t.Cleanup(func() {
+		packets.PacketDecisionFn = original
+	})
+
+	registerPackets()
+
+	if len(packets.PacketDecisionFn[26031]) == 0 {
+		t.Fatalf("expected handler registration for 26031")
+	}
+	if len(packets.PacketDecisionFn[26081]) == 0 {
+		t.Fatalf("expected handler registration for 26081")
+	}
+}

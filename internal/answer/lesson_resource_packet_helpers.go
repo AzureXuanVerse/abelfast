@@ -162,6 +162,10 @@ func collectUint32Values(input any, out []uint32) []uint32 {
 		for _, nested := range value {
 			out = collectUint32Values(nested, out)
 		}
+	case map[string]any:
+		for _, nested := range value {
+			out = collectUint32Values(nested, out)
+		}
 	}
 	return out
 }

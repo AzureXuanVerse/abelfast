@@ -1,9 +1,8 @@
 package answer
 
 import (
-	"fmt"
-
 	"github.com/ggmolly/belfast/internal/connection"
+	"github.com/ggmolly/belfast/internal/orm"
 	"github.com/ggmolly/belfast/internal/protobuf"
 	"google.golang.org/protobuf/proto"
 )
@@ -14,20 +13,24 @@ func AtelierRequest(buffer *[]byte, client *connection.Client) (int, int, error)
 		return 0, 26052, err
 	}
 
-	activity, err := loadActivityTemplate(payload.GetActId())
-	if err != nil {
-		return 0, 26052, err
-	}
-	if activity.Type != activityTypeAtelierLink {
-		return 0, 26052, fmt.Errorf("unexpected atelier activity type: %d", activity.Type)
+	result := atelierResultSuccess
+	state := &orm.AtelierState{Items: map[uint32]uint32{}, RecipeUses: map[uint32]uint32{}, Slots: map[uint32]orm.AtelierBuffSlotState{}}
+	if err := ensureAtelierActivity(payload.GetActId()); err != nil {
+		result = atelierResultInvalidActivity
+	} else {
+		loadedState, err := orm.GetOrCreateAtelierState(client.Commander.CommanderID, payload.GetActId())
+		if err != nil {
+			result = atelierResultStorageFailure
+		} else {
+			state = loadedState
+		}
 	}
 
 	response := protobuf.SC_26052{
-		Result:  proto.Uint32(0),
-		Items:   []*protobuf.KVDATA{},
-		Recipes: []*protobuf.KVDATA{},
-		// TODO: Populate atelier buff slots once atelier state is stored.
-		Slots: []*protobuf.BUFF_SLOT{},
+		Result:  proto.Uint32(result),
+		Items:   sortedAtelierKVDATA(state.Items),
+		Recipes: sortedAtelierKVDATA(state.RecipeUses),
+		Slots:   sortedAtelierSlots(state.Slots),
 	}
 	return client.SendMessage(26052, &response)
 }

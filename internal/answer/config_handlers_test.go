@@ -348,8 +348,17 @@ func TestAtelierRequestBuildsResponse(t *testing.T) {
 	if response.GetResult() != 0 {
 		t.Fatalf("expected result 0")
 	}
-	if len(response.GetItems()) != 0 || len(response.GetRecipes()) != 0 || len(response.GetSlots()) != 0 {
-		t.Fatalf("expected empty atelier lists")
+	if len(response.GetItems()) != 0 || len(response.GetRecipes()) != 0 {
+		t.Fatalf("expected empty atelier item and recipe lists")
+	}
+	if len(response.GetSlots()) != 5 {
+		t.Fatalf("expected five atelier slots, got %d", len(response.GetSlots()))
+	}
+	for index, slot := range response.GetSlots() {
+		expectedPos := uint32(index + 1)
+		if slot.GetPos() != expectedPos || slot.GetItemid() != 0 || slot.GetItemnum() != 0 {
+			t.Fatalf("unexpected default slot at index %d: %+v", index, slot)
+		}
 	}
 }
 
