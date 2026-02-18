@@ -113,6 +113,7 @@ func registerPackets() {
 	packets.RegisterPacketHandler(24020, []packets.PacketHandler{answer.LimitChallengeInfo})
 	packets.RegisterPacketHandler(24004, []packets.PacketHandler{answer.ChallengeInfo})
 	packets.RegisterPacketHandler(26051, []packets.PacketHandler{answer.AtelierRequest})
+	packets.RegisterPacketHandler(26021, []packets.PacketHandler{answer.GetPlayerSummaryInfo})
 	packets.RegisterPacketHandler(26060, []packets.PacketHandler{answer.CityRebuildGetData})
 	packets.RegisterPacketHandler(26062, []packets.PacketHandler{answer.CityRebuildEndRecruit})
 	packets.RegisterPacketHandler(26064, []packets.PacketHandler{answer.CityRebuildBuildingAction})
