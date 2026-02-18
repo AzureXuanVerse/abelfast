@@ -172,18 +172,18 @@ func parseActivityTimeWindow(raw json.RawMessage, now time.Time) (uint32, uint32
 	if !ok || tag != "timer" {
 		return 0, 0, false, nil
 	}
-	start, ok := parseActivityTimerPoint(timer[1])
+	start, ok := parseNewServerShopTimerPoint(timer[1])
 	if !ok {
 		return 0, 0, false, nil
 	}
-	stop, ok := parseActivityTimerPoint(timer[2])
+	stop, ok := parseNewServerShopTimerPoint(timer[2])
 	if !ok {
 		return 0, 0, false, nil
 	}
 	return uint32(start.Unix()), uint32(stop.Unix()), !now.Before(start) && !now.After(stop), nil
 }
 
-func parseActivityTimerPoint(raw any) (time.Time, bool) {
+func parseNewServerShopTimerPoint(raw any) (time.Time, bool) {
 	point, ok := raw.([]any)
 	if !ok || len(point) != 2 {
 		return time.Time{}, false
