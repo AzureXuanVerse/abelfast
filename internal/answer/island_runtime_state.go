@@ -1,6 +1,7 @@
 package answer
 
 import (
+	"sort"
 	"sync"
 
 	"google.golang.org/protobuf/proto"
@@ -17,6 +18,26 @@ type islandRuntimeState struct {
 	queues      map[uint32][]uint32
 	cooldowns   map[uint32]uint32
 	visitorFeed map[uint32][]*protobuf.PB_VISITOR
+	objects     map[uint32]map[islandObjectKey]*islandObjectState
+}
+
+type islandObjectKey struct {
+	objectType uint32
+	objectID   uint32
+}
+
+type islandObjectState struct {
+	status uint32
+	slots  map[uint32]uint32
+}
+
+type islandObjectTemplate struct {
+	ID       uint32
+	Type     uint32
+	SlotIDs  []uint32
+	Status   uint32
+	MapID    uint32
+	KnownMap bool
 }
 
 var globalIslandRuntimeState = newIslandRuntimeState()
@@ -28,6 +49,7 @@ func newIslandRuntimeState() *islandRuntimeState {
 		queues:      make(map[uint32][]uint32),
 		cooldowns:   make(map[uint32]uint32),
 		visitorFeed: make(map[uint32][]*protobuf.PB_VISITOR),
+		objects:     make(map[uint32]map[islandObjectKey]*islandObjectState),
 	}
 }
 
@@ -39,6 +61,7 @@ func (s *islandRuntimeState) resetForTest() {
 	s.queues = make(map[uint32][]uint32)
 	s.cooldowns = make(map[uint32]uint32)
 	s.visitorFeed = make(map[uint32][]*protobuf.PB_VISITOR)
+	s.objects = make(map[uint32]map[islandObjectKey]*islandObjectState)
 }
 
 func (s *islandRuntimeState) setCooldownForTest(commanderID uint32, until uint32) {
@@ -64,6 +87,109 @@ func (s *islandRuntimeState) hasMatchingSession(commanderID uint32, islandID uin
 	defer s.mu.Unlock()
 	activeIslandID, ok := s.sessions[commanderID]
 	return ok && activeIslandID == islandID
+}
+
+func (s *islandRuntimeState) releaseSession(commanderID uint32, islandID uint32) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	activeIslandID, ok := s.sessions[commanderID]
+	if !ok || activeIslandID != islandID {
+		return false
+	}
+	s.releaseObjectOwnershipLocked(commanderID, islandID)
+	s.clearSessionLocked(commanderID)
+	return true
+}
+
+func (s *islandRuntimeState) seedIslandObjects(islandID uint32, templates []islandObjectTemplate) []*protobuf.PB_OBJECT {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	objects := s.objects[islandID]
+	if objects == nil {
+		objects = make(map[islandObjectKey]*islandObjectState)
+		s.objects[islandID] = objects
+	}
+
+	out := make([]*protobuf.PB_OBJECT, 0, len(templates))
+	for _, template := range templates {
+		if template.ID == 0 || template.Type == 0 {
+			continue
+		}
+		key := islandObjectKey{objectType: template.Type, objectID: template.ID}
+		state := objects[key]
+		if state == nil {
+			state = &islandObjectState{status: template.Status, slots: make(map[uint32]uint32)}
+			for _, slotID := range template.SlotIDs {
+				if slotID == 0 {
+					continue
+				}
+				state.slots[slotID] = 0
+			}
+			objects[key] = state
+		} else {
+			if template.Status != 0 {
+				state.status = template.Status
+			}
+			for _, slotID := range template.SlotIDs {
+				if slotID == 0 {
+					continue
+				}
+				if _, exists := state.slots[slotID]; !exists {
+					state.slots[slotID] = 0
+				}
+			}
+		}
+		out = append(out, buildIslandObjectMessage(template.ID, template.Type, state))
+	}
+
+	return out
+}
+
+func (s *islandRuntimeState) applyIslandControl(commanderID uint32, islandID uint32, objectType uint32, objectID uint32, slotID uint32, op uint32, status uint32) (*protobuf.PB_OBJECT, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if objectType != 1 && objectType != 2 {
+		return nil, false
+	}
+	if objectID == 0 || slotID == 0 {
+		return nil, false
+	}
+
+	objects := s.objects[islandID]
+	if objects == nil {
+		return nil, false
+	}
+
+	key := islandObjectKey{objectType: objectType, objectID: objectID}
+	state := objects[key]
+	if state == nil {
+		return nil, false
+	}
+
+	currentOwner, slotExists := state.slots[slotID]
+	if !slotExists {
+		return nil, false
+	}
+
+	switch op {
+	case 1:
+		if currentOwner != 0 && currentOwner != commanderID {
+			return nil, false
+		}
+		state.slots[slotID] = commanderID
+	case 0:
+		if currentOwner != commanderID {
+			return nil, false
+		}
+		state.slots[slotID] = 0
+	default:
+		return nil, false
+	}
+
+	state.status = status
+	return buildIslandObjectMessage(objectID, objectType, state), true
 }
 
 func (s *islandRuntimeState) islandIDByCommander(commanderID uint32) (uint32, bool) {
@@ -190,6 +316,20 @@ func (s *islandRuntimeState) clearSessionLocked(commanderID uint32) {
 	}
 }
 
+func (s *islandRuntimeState) releaseObjectOwnershipLocked(commanderID uint32, islandID uint32) {
+	objects := s.objects[islandID]
+	if objects == nil {
+		return
+	}
+	for _, state := range objects {
+		for slotID, ownerID := range state.slots {
+			if ownerID == commanderID {
+				state.slots[slotID] = 0
+			}
+		}
+	}
+}
+
 func (s *islandRuntimeState) assignSessionLocked(commanderID uint32, islandID uint32) {
 	s.clearSessionLocked(commanderID)
 	if s.visitors[islandID] == nil {
@@ -215,4 +355,27 @@ func indexOfUint32(values []uint32, target uint32) int {
 		}
 	}
 	return -1
+}
+
+func buildIslandObjectMessage(objectID uint32, objectType uint32, state *islandObjectState) *protobuf.PB_OBJECT {
+	slotIDs := make([]uint32, 0, len(state.slots))
+	for slotID := range state.slots {
+		slotIDs = append(slotIDs, slotID)
+	}
+	sort.Slice(slotIDs, func(i, j int) bool { return slotIDs[i] < slotIDs[j] })
+
+	slots := make([]*protobuf.PB_SLOT, 0, len(slotIDs))
+	for _, slotID := range slotIDs {
+		ownerID := state.slots[slotID]
+		slots = append(slots, &protobuf.PB_SLOT{
+			SlotId:  proto.Uint32(slotID),
+			OwnerId: proto.Uint32(ownerID),
+		})
+	}
+	return &protobuf.PB_OBJECT{
+		Id:     proto.Uint32(objectID),
+		Type:   proto.Uint32(objectType),
+		Slots:  slots,
+		Status: proto.Uint32(state.status),
+	}
 }

@@ -39,11 +39,18 @@ func IslandSendChat(buffer *[]byte, client *connection.Client) (int, int, error)
 }
 
 func broadcastIslandPacket(server *connection.Server, islandID uint32, packetID int, message proto.Message) {
+	broadcastIslandPacketExcludingCommander(server, islandID, packetID, message, 0)
+}
+
+func broadcastIslandPacketExcludingCommander(server *connection.Server, islandID uint32, packetID int, message proto.Message, excludedCommanderID uint32) {
 	if server == nil {
 		return
 	}
 	for _, candidate := range server.ListClients() {
 		if candidate == nil || candidate.Commander == nil {
+			continue
+		}
+		if excludedCommanderID != 0 && candidate.Commander.CommanderID == excludedCommanderID {
 			continue
 		}
 		if globalIslandRuntimeState.hasMatchingSession(candidate.Commander.CommanderID, islandID) {
