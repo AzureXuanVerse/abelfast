@@ -289,6 +289,24 @@ type CommanderFurniture struct {
 	GetTime     int64
 }
 
+type CommanderHome struct {
+	CommanderID int64
+	Level       int64
+	Exp         int64
+	Clean       int64
+	SceneOpen   bool
+}
+
+type CommanderHomeSlot struct {
+	CommanderID         int64
+	SlotID              int64
+	OpFlag              int64
+	ExpTime             int64
+	AssignedCommanderID int64
+	Style               int64
+	CacheExp            int64
+}
+
 type CommanderIslandSocialState struct {
 	CommanderID          int64
 	InviteCode           string
