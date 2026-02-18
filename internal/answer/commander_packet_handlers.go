@@ -33,11 +33,8 @@ func FetchCommanderCandidateTalents(buffer *[]byte, client *connection.Client) (
 	}
 	response := &protobuf.SC_25011{Result: proto.Uint32(commanderPacketResultFail)}
 
-	state, err := orm.GetCommanderPacketState(client.Commander.CommanderID, payload.GetCommanderid())
+	state, err := orm.GetOrCreateCommanderPacketState(client.Commander.CommanderID, payload.GetCommanderid())
 	if err != nil {
-		if errors.Is(err, db.ErrNotFound) {
-			return client.SendMessage(25011, response)
-		}
 		return 0, 25011, err
 	}
 
@@ -66,11 +63,8 @@ func LearnCommanderTalent(buffer *[]byte, client *connection.Client) (int, int, 
 	}
 	response := &protobuf.SC_25013{Result: proto.Uint32(commanderPacketResultFail)}
 
-	state, err := orm.GetCommanderPacketState(client.Commander.CommanderID, payload.GetCommanderid())
+	state, err := orm.GetOrCreateCommanderPacketState(client.Commander.CommanderID, payload.GetCommanderid())
 	if err != nil {
-		if errors.Is(err, db.ErrNotFound) {
-			return client.SendMessage(25013, response)
-		}
 		return 0, 25013, err
 	}
 
@@ -161,11 +155,8 @@ func ResetCommanderTalents(buffer *[]byte, client *connection.Client) (int, int,
 	}
 	response := &protobuf.SC_25015{Result: proto.Uint32(commanderPacketResultFail)}
 
-	state, err := orm.GetCommanderPacketState(client.Commander.CommanderID, payload.GetCommanderid())
+	state, err := orm.GetOrCreateCommanderPacketState(client.Commander.CommanderID, payload.GetCommanderid())
 	if err != nil {
-		if errors.Is(err, db.ErrNotFound) {
-			return client.SendMessage(25015, response)
-		}
 		return 0, 25015, err
 	}
 	if state.UsedPt == 0 && sameUint32Set(state.AbilityIDs, state.AbilityOriginIDs) {
@@ -216,11 +207,8 @@ func SetCommanderLockState(buffer *[]byte, client *connection.Client) (int, int,
 		return client.SendMessage(25017, response)
 	}
 
-	state, err := orm.GetCommanderPacketState(client.Commander.CommanderID, payload.GetCommanderid())
+	state, err := orm.GetOrCreateCommanderPacketState(client.Commander.CommanderID, payload.GetCommanderid())
 	if err != nil {
-		if errors.Is(err, db.ErrNotFound) {
-			return client.SendMessage(25017, response)
-		}
 		return 0, 25017, err
 	}
 
@@ -240,11 +228,8 @@ func RenameCommander(buffer *[]byte, client *connection.Client) (int, int, error
 	}
 	response := &protobuf.SC_25021{Result: proto.Uint32(commanderPacketResultFail)}
 
-	state, err := orm.GetCommanderPacketState(client.Commander.CommanderID, payload.GetCommanderid())
+	state, err := orm.GetOrCreateCommanderPacketState(client.Commander.CommanderID, payload.GetCommanderid())
 	if err != nil {
-		if errors.Is(err, db.ErrNotFound) {
-			return client.SendMessage(25021, response)
-		}
 		return 0, 25021, err
 	}
 

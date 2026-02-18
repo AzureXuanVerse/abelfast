@@ -136,6 +136,32 @@ WHERE owner_commander_id = $1
 	return entry, nil
 }
 
+func GetOrCreateCommanderPacketState(ownerCommanderID uint32, commanderID uint32) (*CommanderPacketState, error) {
+	state, err := GetCommanderPacketState(ownerCommanderID, commanderID)
+	if err == nil {
+		return state, nil
+	}
+	if !errors.Is(err, db.ErrNotFound) {
+		return nil, err
+	}
+
+	state = &CommanderPacketState{
+		OwnerCommanderID:  ownerCommanderID,
+		CommanderID:       commanderID,
+		Level:             1,
+		Name:              "Commander",
+		AbilityIDs:        []uint32{},
+		AbilityOriginIDs:  []uint32{},
+		PendingAbilityIDs: []uint32{},
+		AbilityResetAt:    time.Unix(0, 0).UTC(),
+		RenameCooldownAt:  time.Unix(0, 0).UTC(),
+	}
+	if err := SaveCommanderPacketState(state); err != nil {
+		return nil, err
+	}
+	return GetCommanderPacketState(ownerCommanderID, commanderID)
+}
+
 func SaveCommanderPacketState(entry *CommanderPacketState) error {
 	if entry == nil {
 		return errors.New("commander packet state is nil")

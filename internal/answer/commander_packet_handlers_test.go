@@ -337,6 +337,29 @@ func TestSetCommanderLockStateValidationAndPersistence(t *testing.T) {
 	}
 }
 
+func TestSetCommanderLockStateCreatesStateOnDemand(t *testing.T) {
+	client := setupCommanderPacketClient(t)
+
+	req := marshalPacket(t, &protobuf.CS_25016{Commanderid: proto.Uint32(12001), Flag: proto.Uint32(1)})
+	client.Buffer.Reset()
+	if _, _, err := SetCommanderLockState(&req, client); err != nil {
+		t.Fatalf("set commander lock: %v", err)
+	}
+	response := protobuf.SC_25017{}
+	decodeResponse(t, client, &response)
+	if response.GetResult() != commanderPacketResultOK {
+		t.Fatalf("expected lock update to succeed for new packet state")
+	}
+
+	stored, err := orm.GetCommanderPacketState(client.Commander.CommanderID, 12001)
+	if err != nil {
+		t.Fatalf("load commander packet state: %v", err)
+	}
+	if !stored.IsLocked {
+		t.Fatalf("expected newly created packet state to persist lock flag")
+	}
+}
+
 func TestRenameCommanderRespectsCooldown(t *testing.T) {
 	client := setupCommanderPacketClient(t)
 	seedCommanderPacketState(t, client.Commander.CommanderID, 10008, &orm.CommanderPacketState{Name: "Alpha"})
