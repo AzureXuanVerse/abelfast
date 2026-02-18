@@ -20,6 +20,8 @@ func TestCommanderIslandSocialStateRoundTrip(t *testing.T) {
 	}
 	state.InviteCode = "ABCD1234"
 	state.InviteCodeRefreshDay = 12345
+	state.WhiteList = []uint32{100, 101}
+	state.BlackList = []uint32{201}
 	state.InvitedCommanderIDs = []uint32{10, 11}
 	state.GiftCount = 2
 	state.GiftTimestamp = 999
@@ -37,6 +39,9 @@ func TestCommanderIslandSocialStateRoundTrip(t *testing.T) {
 	}
 	if loaded.GiftCount != 2 || loaded.GiftTimestamp != 999 {
 		t.Fatalf("unexpected gift state: count=%d timestamp=%d", loaded.GiftCount, loaded.GiftTimestamp)
+	}
+	if len(loaded.WhiteList) != 2 || loaded.WhiteList[0] != 100 || loaded.BlackList[0] != 201 {
+		t.Fatalf("unexpected access lists: white=%v black=%v", loaded.WhiteList, loaded.BlackList)
 	}
 	if len(loaded.InvitedCommanderIDs) != 2 {
 		t.Fatalf("expected 2 invited ids, got %d", len(loaded.InvitedCommanderIDs))
