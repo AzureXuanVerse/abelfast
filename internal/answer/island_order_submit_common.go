@@ -23,7 +23,10 @@ const (
 	islandCommonSubmitPersist      = uint32(4)
 )
 
-var errIslandCommonSubmitInsufficientRollback = errors.New("island common submit insufficient rollback")
+var (
+	errIslandCommonSubmitInsufficientRollback = errors.New("island common submit insufficient rollback")
+	errIslandCommonSubmitInvalidRollback      = errors.New("island common submit invalid rollback")
+)
 
 func IslandSubmitCommonOrder(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var payload protobuf.CS_21401
@@ -93,7 +96,7 @@ func IslandSubmitCommonOrder(buffer *[]byte, client *connection.Client) (int, in
 		drop, ok := buildCommonOrderAwardDrop(price, found, slot.GetCurSelect())
 		if !ok {
 			response.Result = proto.Uint32(islandCommonSubmitInvalid)
-			return nil
+			return errIslandCommonSubmitInvalidRollback
 		}
 		if err := applyIslandDropsTx(context.Background(), tx, client, []*protobuf.DROPINFO{drop}); err != nil {
 			response.Result = proto.Uint32(islandCommonSubmitPersist)
@@ -127,7 +130,7 @@ func IslandSubmitCommonOrder(buffer *[]byte, client *connection.Client) (int, in
 		return nil
 	})
 	if err != nil {
-		if errors.Is(err, errIslandCommonSubmitInsufficientRollback) {
+		if errors.Is(err, errIslandCommonSubmitInsufficientRollback) || errors.Is(err, errIslandCommonSubmitInvalidRollback) {
 			return client.SendMessage(21402, response)
 		}
 		return client.SendMessage(21402, response)

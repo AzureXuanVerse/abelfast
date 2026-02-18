@@ -23,7 +23,10 @@ const (
 	islandFirmSubmitPersist      = uint32(4)
 )
 
-var errIslandFirmSubmitInsufficientRollback = errors.New("island firm submit insufficient rollback")
+var (
+	errIslandFirmSubmitInsufficientRollback = errors.New("island firm submit insufficient rollback")
+	errIslandFirmSubmitInvalidRollback      = errors.New("island firm submit invalid rollback")
+)
 
 func IslandSubmitFirmOrder(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var payload protobuf.CS_21414
@@ -82,7 +85,7 @@ func IslandSubmitFirmOrder(buffer *[]byte, client *connection.Client) (int, int,
 		}
 		if !found {
 			response.Result = proto.Uint32(islandFirmSubmitInvalid)
-			return nil
+			return errIslandFirmSubmitInvalidRollback
 		}
 
 		drops := make([]*protobuf.DROPINFO, 0)
@@ -126,7 +129,7 @@ func IslandSubmitFirmOrder(buffer *[]byte, client *connection.Client) (int, int,
 		return nil
 	})
 	if err != nil {
-		if errors.Is(err, errIslandFirmSubmitInsufficientRollback) {
+		if errors.Is(err, errIslandFirmSubmitInsufficientRollback) || errors.Is(err, errIslandFirmSubmitInvalidRollback) {
 			return client.SendMessage(21415, response)
 		}
 		return client.SendMessage(21415, response)

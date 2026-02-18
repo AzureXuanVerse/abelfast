@@ -96,6 +96,79 @@ func TestIslandOpenRestaurantRejectsInvalidFood(t *testing.T) {
 	}
 }
 
+func TestIslandUseManageTicketUpdatesRestaurantEndTime(t *testing.T) {
+	client := setupHandlerCommander(t)
+	clearIslandEconomyTables(t)
+	clearTable(t, &orm.IslandSpeedupTarget{})
+	clearTable(t, &orm.IslandSpeedupTicket{})
+	seedConfigEntry(t, islandManageRestaurantCategory, "601", `{"id":601,"assistant_slot":[5,6],"item_id":[[3011,601001]],"opening_time":300}`)
+	seedConfigEntry(t, islandSpeedupTicketCategory, "1001", `{"id":1001,"speedup_time":30}`)
+
+	err := db.DefaultStore.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
+		return orm.AddIslandInventoryTx(context.Background(), tx, client.Commander.CommanderID, 3011, 10)
+	})
+	if err != nil {
+		t.Fatalf("seed inventory: %v", err)
+	}
+
+	openPayload := protobuf.CS_21418{
+		TradeId:  proto.Uint32(601),
+		PostList: []*protobuf.PB_TRADE_POST{{PostId: proto.Uint32(5), ShipId: proto.Uint32(11)}},
+		FoodList: []*protobuf.PB_TRADE_FOOD{{FoodId: proto.Uint32(3011), Num: proto.Uint32(3)}},
+		Presell:  &protobuf.PB_TRADE_PRESELL{TradeId: proto.Uint32(601), SellNumMin: proto.Uint32(1), SellNumMax: proto.Uint32(3), SellMoneyMin: proto.Uint32(1), SellMoneyMax: proto.Uint32(3)},
+	}
+	openBuffer, _ := proto.Marshal(&openPayload)
+	client.Buffer.Reset()
+	if _, _, err := IslandOpenRestaurant(&openBuffer, client); err != nil {
+		t.Fatalf("open restaurant: %v", err)
+	}
+	var openResponse protobuf.SC_21419
+	decodeResponse(t, client, &openResponse)
+	if openResponse.GetResult() != 0 {
+		t.Fatalf("unexpected open response: %+v", openResponse)
+	}
+	originalEnd := openResponse.GetTradeData().GetEndTime()
+
+	now := nowUnix()
+	if err := orm.UpsertIslandSpeedupTicket(client.Commander.CommanderID, 1001, now+3600, 1); err != nil {
+		t.Fatalf("seed speedup ticket: %v", err)
+	}
+
+	usePayload := protobuf.CS_21423{
+		Type:     proto.Uint32(islandTicketTypeManage),
+		TargetId: proto.Uint32(601),
+		Tickets: []*protobuf.PB_SPEEDUP_TICKET{{
+			Key: &protobuf.PB_SPEEDUP_KEY{SpeedId: proto.Uint32(1001), EndTime: proto.Uint32(now + 3600)},
+			Num: proto.Uint32(1),
+		}},
+	}
+	useBuffer, _ := proto.Marshal(&usePayload)
+	client.Buffer.Reset()
+	if _, _, err := IslandUseTicket(&useBuffer, client); err != nil {
+		t.Fatalf("use manage ticket: %v", err)
+	}
+
+	var useResponse protobuf.SC_21424
+	decodeResponse(t, client, &useResponse)
+	if useResponse.GetResult() != 0 {
+		t.Fatalf("unexpected use ticket response: %+v", useResponse)
+	}
+
+	err = db.DefaultStore.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
+		trade, _, _, err := orm.GetIslandManageTradeForUpdateTx(context.Background(), tx, client.Commander.CommanderID, 601)
+		if err != nil {
+			return err
+		}
+		if trade.GetEndTime() >= originalEnd {
+			t.Fatalf("expected reduced end time, original=%d new=%d", originalEnd, trade.GetEndTime())
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("verify reduced trade end time: %v", err)
+	}
+}
+
 func speedupTargetExists(t *testing.T, commanderID uint32, targetType uint32, targetID uint32) bool {
 	t.Helper()
 	var count int64

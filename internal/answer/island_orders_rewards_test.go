@@ -194,6 +194,45 @@ func TestIslandSubmitCommonOrderSuccess(t *testing.T) {
 	}
 }
 
+func TestIslandSubmitCommonOrderInvalidAwardRollsBackConsumption(t *testing.T) {
+	client := setupHandlerCommander(t)
+	clearIslandEconomyTables(t)
+	seedConfigEntry(t, islandSetCategory, "order_favor", `{"key":"order_favor","key_value_int":20,"key_value_varchar":""}`)
+	seedConfigEntry(t, islandSetCategory, "order_complete_refresh_time", `{"key":"order_complete_refresh_time","key_value_int":5,"key_value_varchar":""}`)
+	seedConfigEntry(t, islandOrderRandomCategory, "10", `{"id":10}`)
+
+	err := db.DefaultStore.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
+		if err := orm.AddIslandInventoryTx(context.Background(), tx, client.Commander.CommanderID, 9001, 10); err != nil {
+			return err
+		}
+		slot := &protobuf.PB_ISLAND_ORDER_SLOT{Id: proto.Uint32(212), Type: proto.Uint32(1), CurSelect: proto.Uint32(1), StartTime: proto.Uint32(1), SubmitTime: proto.Uint32(1), Position: proto.Uint32(1), DialogId: proto.Uint32(10), Cost: []*protobuf.PB_ISLAND_ITEM{{Id: proto.Uint32(9001), Num: proto.Uint32(4)}}, OrderLv: proto.Uint32(99), ViewFlag: proto.Uint32(0)}
+		return orm.UpsertIslandOrderSlotTx(context.Background(), tx, client.Commander.CommanderID, slot)
+	})
+	if err != nil {
+		t.Fatalf("seed common order invalid award: %v", err)
+	}
+
+	payload := protobuf.CS_21401{SlotId: proto.Uint32(212)}
+	buffer, _ := proto.Marshal(&payload)
+	client.Buffer.Reset()
+	if _, _, err := IslandSubmitCommonOrder(&buffer, client); err != nil {
+		t.Fatalf("submit common invalid award: %v", err)
+	}
+	var response protobuf.SC_21402
+	decodeResponse(t, client, &response)
+	if response.GetResult() != islandCommonSubmitInvalid {
+		t.Fatalf("expected invalid result, got %+v", response)
+	}
+
+	item, err := orm.GetIslandInventoryItem(client.Commander.CommanderID, 9001)
+	if err != nil {
+		t.Fatalf("load inventory after invalid award: %v", err)
+	}
+	if item.Count != 10 {
+		t.Fatalf("expected inventory rollback to preserve count 10, got %d", item.Count)
+	}
+}
+
 func TestIslandSubmitFirmOrderActivityTracksActGroup(t *testing.T) {
 	client := setupHandlerCommander(t)
 	clearIslandEconomyTables(t)
@@ -252,6 +291,43 @@ func TestIslandSubmitFirmOrderActivityTracksActGroup(t *testing.T) {
 	}
 	if len(orderSys.GetActGroup()) != 1 || orderSys.GetActGroup()[0].GetActId() != 88 || len(orderSys.GetActGroup()[0].GetGroups()) != 1 || orderSys.GetActGroup()[0].GetGroups()[0] != 99 {
 		t.Fatalf("unexpected act group state: %+v", orderSys.GetActGroup())
+	}
+}
+
+func TestIslandSubmitFirmOrderMissingConfigRollsBackConsumption(t *testing.T) {
+	client := setupHandlerCommander(t)
+	clearIslandEconomyTables(t)
+	seedConfigEntry(t, islandSetCategory, "order_favor", `{"key":"order_favor","key_value_int":20,"key_value_varchar":""}`)
+
+	err := db.DefaultStore.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
+		if err := orm.AddIslandInventoryTx(context.Background(), tx, client.Commander.CommanderID, 9011, 10); err != nil {
+			return err
+		}
+		slot := &protobuf.PB_ISLAND_ORDER_SLOT{Id: proto.Uint32(302), Type: proto.Uint32(4), CurSelect: proto.Uint32(1), StartTime: proto.Uint32(1), SubmitTime: proto.Uint32(1), Position: proto.Uint32(1), DialogId: proto.Uint32(2999), Cost: []*protobuf.PB_ISLAND_ITEM{{Id: proto.Uint32(9011), Num: proto.Uint32(2)}}, OrderLv: proto.Uint32(3), ViewFlag: proto.Uint32(0)}
+		return orm.UpsertIslandOrderSlotTx(context.Background(), tx, client.Commander.CommanderID, slot)
+	})
+	if err != nil {
+		t.Fatalf("seed firm order missing config: %v", err)
+	}
+
+	payload := protobuf.CS_21414{OrderId: proto.Uint32(302)}
+	buffer, _ := proto.Marshal(&payload)
+	client.Buffer.Reset()
+	if _, _, err := IslandSubmitFirmOrder(&buffer, client); err != nil {
+		t.Fatalf("submit firm missing config: %v", err)
+	}
+	var response protobuf.SC_21415
+	decodeResponse(t, client, &response)
+	if response.GetResult() != islandFirmSubmitInvalid {
+		t.Fatalf("expected invalid result, got %+v", response)
+	}
+
+	item, err := orm.GetIslandInventoryItem(client.Commander.CommanderID, 9011)
+	if err != nil {
+		t.Fatalf("load inventory after missing config: %v", err)
+	}
+	if item.Count != 10 {
+		t.Fatalf("expected inventory rollback to preserve count 10, got %d", item.Count)
 	}
 }
 

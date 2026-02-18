@@ -678,6 +678,20 @@ type IslandInventory struct {
 	Count       int64
 }
 
+type IslandManageTrade struct {
+	CommanderID int64
+	TradeID     int64
+	TradeData   []byte
+	PresellData []byte
+	TotalSales  int64
+}
+
+type IslandOrderActGroup struct {
+	CommanderID int64
+	ActID       int64
+	GroupID     int64
+}
+
 type IslandOrderFavorClaim struct {
 	CommanderID int64
 	Level       int64
