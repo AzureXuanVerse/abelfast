@@ -297,6 +297,24 @@ type CommanderFurniture struct {
 	GetTime     int64
 }
 
+type CommanderHome struct {
+	CommanderID int64
+	Level       int64
+	Exp         int64
+	Clean       int64
+	SceneOpen   bool
+}
+
+type CommanderHomeSlot struct {
+	CommanderID         int64
+	SlotID              int64
+	OpFlag              int64
+	ExpTime             int64
+	AssignedCommanderID int64
+	Style               int64
+	CacheExp            int64
+}
+
 type CommanderIslandSocialState struct {
 	CommanderID          int64
 	InviteCode           string
@@ -355,6 +373,32 @@ type CommanderMiscItem struct {
 	CommanderID int64
 	ItemID      int64
 	Data        int64
+}
+
+type CommanderPacketState struct {
+	OwnerCommanderID  int64
+	CommanderID       int64
+	Level             int64
+	Name              string
+	IsLocked          bool
+	UsedPt            int64
+	AbilityIds        []byte
+	AbilityOriginIds  []byte
+	PendingAbilityIds []byte
+	AbilityResetAt    pgtype.Timestamptz
+	RenameCooldownAt  pgtype.Timestamptz
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+}
+
+type CommanderPrefabFleet struct {
+	OwnerCommanderID int64
+	PrefabID         int64
+	Name             string
+	RenameCooldownAt pgtype.Timestamptz
+	CommanderSlots   []byte
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
 }
 
 type CommanderShipSkill struct {

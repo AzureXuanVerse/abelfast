@@ -1193,6 +1193,13 @@ func (c *Commander) IncrementDrawCount(count uint32) error {
 	return err
 }
 
+func (c *Commander) IncrementReserveUsage(count uint32) error {
+	c.DrawCount1 += count
+	ctx := context.Background()
+	_, err := db.DefaultStore.Pool.Exec(ctx, `UPDATE commanders SET draw_count1 = $2 WHERE commander_id = $1`, int64(c.CommanderID), int64(c.DrawCount1))
+	return err
+}
+
 func SupportRequisitionMonth(now time.Time) uint32 {
 	now = now.UTC()
 	return uint32(now.Year()*100 + int(now.Month()))

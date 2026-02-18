@@ -174,7 +174,7 @@ func TestCommanderQuickFinishAndRefresh(t *testing.T) {
 	client.Buffer.Reset()
 	refresh := protobuf.CS_25034{Type: proto.Uint32(0)}
 	refreshBuf, _ := proto.Marshal(&refresh)
-	if _, _, err := CommanderRefreshBoxes(&refreshBuf, client); err != nil {
+	if _, _, err := CommanderBoxesRefresh(&refreshBuf, client); err != nil {
 		t.Fatalf("refresh failed: %v", err)
 	}
 	var refreshResp protobuf.SC_25035

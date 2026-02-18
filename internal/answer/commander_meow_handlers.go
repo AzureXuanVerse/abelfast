@@ -3,7 +3,6 @@ package answer
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -18,8 +17,8 @@ import (
 )
 
 const (
-	commanderResultOK   = 0
-	commanderResultFail = 1
+	commanderMeowResultOK   = 0
+	commanderMeowResultFail = 1
 )
 
 func CommanderBuildBoxStart(buffer *[]byte, client *connection.Client) (int, int, error) {
@@ -33,15 +32,15 @@ func CommanderBuildBoxStart(buffer *[]byte, client *connection.Client) (int, int
 	}
 	box, err := orm.GetCommanderBox(client.Commander.CommanderID, packet.GetBoxid())
 	if err != nil {
-		return sendCommanderBuildBoxStartResult(client, commanderResultFail, orm.CommanderBox{BoxID: packet.GetBoxid()})
+		return sendCommanderBuildBoxStartResult(client, commanderMeowResultFail, orm.CommanderBox{BoxID: packet.GetBoxid()})
 	}
 	if box.PoolID != 0 {
-		return sendCommanderBuildBoxStartResult(client, commanderResultFail, *box)
+		return sendCommanderBuildBoxStartResult(client, commanderMeowResultFail, *box)
 	}
 
 	material, err := orm.GetCommanderCreateMaterialConfig(packet.GetBoxid())
 	if err != nil {
-		return sendCommanderBuildBoxStartResult(client, commanderResultFail, *box)
+		return sendCommanderBuildBoxStartResult(client, commanderMeowResultFail, *box)
 	}
 
 	now := uint32(time.Now().Unix())
@@ -61,9 +60,9 @@ func CommanderBuildBoxStart(buffer *[]byte, client *connection.Client) (int, int
 		return orm.UpsertCommanderBoxTx(ctx, tx, updatedBox)
 	})
 	if err != nil {
-		return sendCommanderBuildBoxStartResult(client, commanderResultFail, *box)
+		return sendCommanderBuildBoxStartResult(client, commanderMeowResultFail, *box)
 	}
-	return sendCommanderBuildBoxStartResult(client, commanderResultOK, updatedBox)
+	return sendCommanderBuildBoxStartResult(client, commanderMeowResultOK, updatedBox)
 }
 
 func sendCommanderBuildBoxStartResult(client *connection.Client, result uint32, box orm.CommanderBox) (int, int, error) {
@@ -84,23 +83,23 @@ func CommanderClaimBox(buffer *[]byte, client *connection.Client) (int, int, err
 	}
 	box, err := orm.GetCommanderBox(client.Commander.CommanderID, packet.GetBoxid())
 	if err != nil {
-		return sendCommanderClaimBoxResult(client, commanderResultFail, nil, 0)
+		return sendCommanderClaimBoxResult(client, commanderMeowResultFail, nil, 0)
 	}
 	now := uint32(time.Now().Unix())
 	if box.PoolID == 0 || box.FinishTime > now {
-		return sendCommanderClaimBoxResult(client, commanderResultFail, nil, box.FinishTime)
+		return sendCommanderClaimBoxResult(client, commanderMeowResultFail, nil, box.FinishTime)
 	}
 	current, err := orm.ListCommanderMeows(client.Commander.CommanderID)
 	if err != nil {
 		return 0, 25005, err
 	}
 	if len(current) >= 200 {
-		return sendCommanderClaimBoxResult(client, commanderResultFail, nil, box.FinishTime)
+		return sendCommanderClaimBoxResult(client, commanderMeowResultFail, nil, box.FinishTime)
 	}
 
 	templateID, err := orm.RollCommanderTemplateForPool(box.PoolID)
 	if err != nil {
-		return sendCommanderClaimBoxResult(client, commanderResultFail, nil, box.FinishTime)
+		return sendCommanderClaimBoxResult(client, commanderMeowResultFail, nil, box.FinishTime)
 	}
 
 	var meow *orm.CommanderMeow
@@ -116,9 +115,9 @@ func CommanderClaimBox(buffer *[]byte, client *connection.Client) (int, int, err
 		return orm.UpsertCommanderBoxTx(context.Background(), tx, *box)
 	})
 	if err != nil {
-		return sendCommanderClaimBoxResult(client, commanderResultFail, nil, box.FinishTime)
+		return sendCommanderClaimBoxResult(client, commanderMeowResultFail, nil, box.FinishTime)
 	}
-	return sendCommanderClaimBoxResult(client, commanderResultOK, meow, now)
+	return sendCommanderClaimBoxResult(client, commanderMeowResultOK, meow, now)
 }
 
 func sendCommanderClaimBoxResult(client *connection.Client, result uint32, meow *orm.CommanderMeow, finishTime uint32) (int, int, error) {
@@ -141,13 +140,13 @@ func CommanderFleetEquip(buffer *[]byte, client *connection.Client) (int, int, e
 	}
 	if packet.GetCommanderid() != 0 {
 		if _, err := orm.GetCommanderMeow(client.Commander.CommanderID, packet.GetCommanderid()); err != nil {
-			return sendCommanderSimpleResult(client, 25007, commanderResultFail)
+			return sendCommanderSimpleResult(client, 25007, commanderMeowResultFail)
 		}
 	}
 	if err := orm.UpdateFleetMeowfficerSlot(client.Commander, packet.GetGroupid(), packet.GetPos(), packet.GetCommanderid()); err != nil {
-		return sendCommanderSimpleResult(client, 25007, commanderResultFail)
+		return sendCommanderSimpleResult(client, 25007, commanderMeowResultFail)
 	}
-	return sendCommanderSimpleResult(client, 25007, commanderResultOK)
+	return sendCommanderSimpleResult(client, 25007, commanderMeowResultOK)
 }
 
 func CommanderUpgrade(buffer *[]byte, client *connection.Client) (int, int, error) {
@@ -157,13 +156,13 @@ func CommanderUpgrade(buffer *[]byte, client *connection.Client) (int, int, erro
 	}
 	target, err := orm.GetCommanderMeow(client.Commander.CommanderID, packet.GetTargetid())
 	if err != nil {
-		return sendCommanderSimpleResult(client, 25009, commanderResultFail)
+		return sendCommanderSimpleResult(client, 25009, commanderMeowResultFail)
 	}
 	if len(packet.GetMaterialid()) == 0 {
-		return sendCommanderSimpleResult(client, 25009, commanderResultFail)
+		return sendCommanderSimpleResult(client, 25009, commanderMeowResultFail)
 	}
 	if slices.Contains(packet.GetMaterialid(), packet.GetTargetid()) {
-		return sendCommanderSimpleResult(client, 25009, commanderResultFail)
+		return sendCommanderSimpleResult(client, 25009, commanderMeowResultFail)
 	}
 
 	seen := make(map[uint32]struct{}, len(packet.GetMaterialid()))
@@ -172,24 +171,24 @@ func CommanderUpgrade(buffer *[]byte, client *connection.Client) (int, int, erro
 	totalExp := uint32(0)
 	targetTpl, err := orm.GetCommanderDataTemplateConfig(target.TemplateID)
 	if err != nil {
-		return sendCommanderSimpleResult(client, 25009, commanderResultFail)
+		return sendCommanderSimpleResult(client, 25009, commanderMeowResultFail)
 	}
 	sameRate, _, _ := orm.GetCommanderUpgradeRates()
 	for _, materialID := range packet.GetMaterialid() {
 		if _, ok := seen[materialID]; ok {
-			return sendCommanderSimpleResult(client, 25009, commanderResultFail)
+			return sendCommanderSimpleResult(client, 25009, commanderMeowResultFail)
 		}
 		seen[materialID] = struct{}{}
 		if orm.IsCommanderInAnyFleet(client.Commander, materialID) {
-			return sendCommanderSimpleResult(client, 25009, commanderResultFail)
+			return sendCommanderSimpleResult(client, 25009, commanderMeowResultFail)
 		}
 		material, err := orm.GetCommanderMeow(client.Commander.CommanderID, materialID)
 		if err != nil {
-			return sendCommanderSimpleResult(client, 25009, commanderResultFail)
+			return sendCommanderSimpleResult(client, 25009, commanderMeowResultFail)
 		}
 		materialTpl, err := orm.GetCommanderDataTemplateConfig(material.TemplateID)
 		if err != nil {
-			return sendCommanderSimpleResult(client, 25009, commanderResultFail)
+			return sendCommanderSimpleResult(client, 25009, commanderMeowResultFail)
 		}
 		totalGold += materialTpl.ExpCost
 		gain := materialTpl.Exp
@@ -200,7 +199,7 @@ func CommanderUpgrade(buffer *[]byte, client *connection.Client) (int, int, erro
 		materials = append(materials, material)
 	}
 	if !client.Commander.HasEnoughGold(totalGold) {
-		return sendCommanderSimpleResult(client, 25009, commanderResultFail)
+		return sendCommanderSimpleResult(client, 25009, commanderMeowResultFail)
 	}
 
 	err = db.DefaultStore.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
@@ -245,27 +244,9 @@ WHERE id = $1
 		return nil
 	})
 	if err != nil {
-		return sendCommanderSimpleResult(client, 25009, commanderResultFail)
+		return sendCommanderSimpleResult(client, 25009, commanderMeowResultFail)
 	}
-	return sendCommanderSimpleResult(client, 25009, commanderResultOK)
-}
-
-func CommanderRefreshBoxes(buffer *[]byte, client *connection.Client) (int, int, error) {
-	var packet protobuf.CS_25034
-	if err := proto.Unmarshal(*buffer, &packet); err != nil {
-		return 0, 25035, err
-	}
-	_ = packet
-	boxes, err := orm.EnsureCommanderBoxes(client.Commander.CommanderID)
-	if err != nil {
-		return 0, 25035, err
-	}
-	out := make([]*protobuf.COMMANDERBOXINFO, len(boxes))
-	for i := range boxes {
-		out[i] = orm.ToProtoCommanderBox(boxes[i])
-	}
-	response := protobuf.SC_25035{BoxList: out}
-	return client.SendMessage(25035, &response)
+	return sendCommanderSimpleResult(client, 25009, commanderMeowResultOK)
 }
 
 func CommanderQuicklyFinishBoxes(buffer *[]byte, client *connection.Client) (int, int, error) {
@@ -281,10 +262,10 @@ func CommanderQuicklyFinishBoxes(buffer *[]byte, client *connection.Client) (int
 	balance := client.Commander.GetItemCount(20010)
 	expected := orm.ComputeCommanderQuickFinishCounts(boxes, now, balance)
 	if expected.ItemCnt == 0 {
-		return sendCommanderSimpleResult(client, 25038, commanderResultFail)
+		return sendCommanderSimpleResult(client, 25038, commanderMeowResultFail)
 	}
 	if packet.GetItemCnt() != expected.ItemCnt || packet.GetFinishCnt() != expected.FinishCnt || packet.GetAffectCnt() != expected.AffectCnt {
-		return sendCommanderSimpleResult(client, 25038, commanderResultFail)
+		return sendCommanderSimpleResult(client, 25038, commanderMeowResultFail)
 	}
 
 	err = db.DefaultStore.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
@@ -296,9 +277,9 @@ func CommanderQuicklyFinishBoxes(buffer *[]byte, client *connection.Client) (int
 		return applyErr
 	})
 	if err != nil {
-		return sendCommanderSimpleResult(client, 25038, commanderResultFail)
+		return sendCommanderSimpleResult(client, 25038, commanderMeowResultFail)
 	}
-	return sendCommanderSimpleResult(client, 25038, commanderResultOK)
+	return sendCommanderSimpleResult(client, 25038, commanderMeowResultOK)
 }
 
 func sendCommanderSimpleResult(client *connection.Client, packetID int, result uint32) (int, int, error) {
@@ -315,8 +296,4 @@ func sendCommanderSimpleResult(client *connection.Client, packetID int, result u
 	default:
 		return 0, packetID, fmt.Errorf("unsupported packet result %d", packetID)
 	}
-}
-
-func isNotFoundError(err error) bool {
-	return errors.Is(err, db.ErrNotFound)
 }
