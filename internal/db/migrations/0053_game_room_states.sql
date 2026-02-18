@@ -1,3 +1,4 @@
+-- Renumbered to avoid migration version collision.
 CREATE TABLE IF NOT EXISTS game_room_states (
   commander_id bigint PRIMARY KEY REFERENCES commanders(commander_id) ON DELETE CASCADE,
   week_start_unix bigint NOT NULL DEFAULT 0,
