@@ -6,6 +6,7 @@ const (
 	activityTypeNpcCollection   = 15
 	activityTypeTasks           = 13
 	activityTypeAtelierLink     = 88
+	activityTypeColoringAlpha   = 43
 	activityTypePuzzle          = 21
 	activityTypeNewServerTask   = 82
 	activityTypeSurvey          = 101
