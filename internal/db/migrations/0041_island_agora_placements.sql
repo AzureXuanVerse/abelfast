@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS island_agora_placements (
+  commander_id BIGINT PRIMARY KEY REFERENCES commanders(commander_id) ON DELETE CASCADE,
+  placed_data BYTEA NOT NULL DEFAULT '\x'::bytea,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
