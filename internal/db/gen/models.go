@@ -256,6 +256,16 @@ type CommanderBuff struct {
 	ExpiresAt   pgtype.Timestamptz
 }
 
+type CommanderColoringState struct {
+	CommanderID int64
+	ActivityID  int64
+	StartTime   int64
+	Cells       []byte
+	Awards      []byte
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type CommanderCommonFlag struct {
 	CommanderID int64
 	FlagID      int64
