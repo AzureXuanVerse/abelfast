@@ -53,6 +53,15 @@ type ActivityPermanentState struct {
 	FinishedActivityIds []byte
 }
 
+type ActivityStoreState struct {
+	CommanderID int64
+	ActivityID  int64
+	Data1       int64
+	StrData1    string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type ArenaShopState struct {
 	CommanderID     int64
 	FlashCount      int64
@@ -1299,6 +1308,14 @@ type MonthShopPurchase struct {
 	GoodsID     int64
 	Month       int64
 	BuyCount    int64
+	UpdatedAt   pgtype.Timestamptz
+}
+
+type NewServerShopState struct {
+	CommanderID int64
+	ActivityID  int64
+	Goods       []byte
+	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
 }
 
