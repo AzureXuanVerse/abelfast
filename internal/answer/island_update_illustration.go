@@ -12,11 +12,6 @@ import (
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
-const (
-	islandIllustratedGuideCategory   = "ShareCfg/island_illustrated_guide.json"
-	islandIllustratedGuideCategoryLC = "sharecfgdata/island_illustrated_guide.json"
-)
-
 type islandIllustratedGuideEntry struct {
 	Type     uint32 `json:"type"`
 	UnlockID uint32 `json:"unlock_id"`

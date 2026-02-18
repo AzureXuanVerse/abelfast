@@ -1,10 +1,15 @@
 package answer
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
+	"github.com/ggmolly/belfast/internal/connection"
+	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/orm"
 	"github.com/ggmolly/belfast/internal/protobuf"
 	"google.golang.org/protobuf/proto"
@@ -269,6 +274,245 @@ func TestIslandWildGatherSign(t *testing.T) {
 	}
 	if len(stored) != 1 {
 		t.Fatalf("expected one stored gather sign, got %d", len(stored))
+	}
+}
+
+func TestIslandWildGatherCollect(t *testing.T) {
+	globalIslandRuntimeState.resetForTest()
+	client := setupHandlerCommander(t)
+	islandID := client.Commander.CommanderID + 200
+	globalIslandRuntimeState.setSessionForTest(client.Commander.CommanderID, islandID)
+
+	data, err := json.Marshal(map[string]any{"show": 1, "drop_display": [][]uint32{{41, 9101, 3}}})
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+	if err := orm.UpsertConfigEntry("ShareCfg/island_wild_gather.json", "88", data); err != nil {
+		t.Fatalf("seed gather config: %v", err)
+	}
+
+	payload, _ := proto.Marshal(&protobuf.CS_21524{IslandId: proto.Uint32(islandID), GatherId: proto.Uint32(88)})
+	if _, _, err := HandleIslandWildGatherCollect(&payload, client); err != nil {
+		t.Fatalf("wild gather collect failed: %v", err)
+	}
+
+	var ack protobuf.SC_21525
+	offset := decodePacketAt(t, client, 0, 21525, &ack)
+	if ack.GetResult() != 0 || len(ack.GetDropList()) != 1 {
+		t.Fatalf("expected gather collect success drop, got %+v", ack)
+	}
+	var push protobuf.SC_21528
+	offset = decodePacketAt(t, client, offset, 21528, &push)
+	if len(push.GetGatherList()) != 1 || push.GetGatherList()[0].GetId() != 88 {
+		t.Fatalf("expected gather removal push")
+	}
+	if offset != len(client.Buffer.Bytes()) {
+		t.Fatalf("expected exactly one gather push packet")
+	}
+
+	item, err := orm.GetIslandInventoryItem(client.Commander.CommanderID, 9101)
+	if err != nil || item.Count != 3 {
+		t.Fatalf("expected inventory drop applied, err=%v item=%+v", err, item)
+	}
+
+	client.Buffer.Reset()
+	if _, _, err := HandleIslandWildGatherCollect(&payload, client); err != nil {
+		t.Fatalf("duplicate gather collect failed: %v", err)
+	}
+	var duplicateAck protobuf.SC_21525
+	decodePacketAt(t, client, 0, 21525, &duplicateAck)
+	if duplicateAck.GetResult() == 0 {
+		t.Fatalf("expected duplicate gather collect to fail")
+	}
+}
+
+func TestIslandWildGatherCollectFailures(t *testing.T) {
+	globalIslandRuntimeState.resetForTest()
+	client := setupHandlerCommander(t)
+
+	invalidPayload, _ := proto.Marshal(&protobuf.CS_21524{IslandId: proto.Uint32(0), GatherId: proto.Uint32(0)})
+	if _, _, err := HandleIslandWildGatherCollect(&invalidPayload, client); err != nil {
+		t.Fatalf("invalid gather collect failed: %v", err)
+	}
+	var invalidAck protobuf.SC_21525
+	decodePacketAt(t, client, 0, 21525, &invalidAck)
+	if invalidAck.GetResult() == 0 {
+		t.Fatalf("expected invalid payload failure")
+	}
+
+	client.Buffer.Reset()
+	islandID := client.Commander.CommanderID + 300
+	payload, _ := proto.Marshal(&protobuf.CS_21524{IslandId: proto.Uint32(islandID), GatherId: proto.Uint32(99)})
+	if _, _, err := HandleIslandWildGatherCollect(&payload, client); err != nil {
+		t.Fatalf("session mismatch gather collect failed: %v", err)
+	}
+	var mismatchAck protobuf.SC_21525
+	decodePacketAt(t, client, 0, 21525, &mismatchAck)
+	if mismatchAck.GetResult() == 0 {
+		t.Fatalf("expected session mismatch failure")
+	}
+
+	bad := []byte{0xff, 0x00}
+	if _, responseID, err := HandleIslandWildGatherCollect(&bad, client); err == nil || responseID != 21525 {
+		t.Fatalf("expected decode error with response id 21525")
+	}
+}
+
+func TestIslandWildGatherCollectBroadcastsSinglePushPerClient(t *testing.T) {
+	globalIslandRuntimeState.resetForTest()
+	collector := setupHandlerCommander(t)
+	peer := setupHandlerCommander(t)
+	server := connection.NewServer("127.0.0.1", 0, nil)
+	server.AddClient(collector)
+	server.AddClient(peer)
+
+	islandID := collector.Commander.CommanderID + 350
+	globalIslandRuntimeState.setSessionForTest(collector.Commander.CommanderID, islandID)
+	globalIslandRuntimeState.setSessionForTest(peer.Commander.CommanderID, islandID)
+
+	data, err := json.Marshal(map[string]any{"show": 1, "drop_display": [][]uint32{{41, 9111, 1}}})
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+	if err := orm.UpsertConfigEntry("ShareCfg/island_wild_gather.json", "90", data); err != nil {
+		t.Fatalf("seed gather config: %v", err)
+	}
+
+	payload, _ := proto.Marshal(&protobuf.CS_21524{IslandId: proto.Uint32(islandID), GatherId: proto.Uint32(90)})
+	if _, _, err := HandleIslandWildGatherCollect(&payload, collector); err != nil {
+		t.Fatalf("wild gather collect failed: %v", err)
+	}
+
+	var ack protobuf.SC_21525
+	offset := decodePacketAt(t, collector, 0, 21525, &ack)
+	if ack.GetResult() != 0 {
+		t.Fatalf("expected gather collect success")
+	}
+	var collectorPush protobuf.SC_21528
+	offset = decodePacketAt(t, collector, offset, 21528, &collectorPush)
+	if offset != len(collector.Buffer.Bytes()) {
+		t.Fatalf("expected one gather push for collector")
+	}
+
+	var peerPush protobuf.SC_21528
+	peerOffset := decodePacketAt(t, peer, 0, 21528, &peerPush)
+	if peerOffset != len(peer.Buffer.Bytes()) {
+		t.Fatalf("expected one gather push for peer")
+	}
+}
+
+func TestIslandWildCollectFragmentAndSignFlow(t *testing.T) {
+	globalIslandRuntimeState.resetForTest()
+	client := setupHandlerCommander(t)
+	islandID := client.Commander.CommanderID + 400
+	globalIslandRuntimeState.setSessionForTest(client.Commander.CommanderID, islandID)
+
+	if err := orm.UpsertConfigEntry("ShareCfg/island_collect_fragment.json", "501", []byte(`{"id":501,"collection_id":601,"show":3}`)); err != nil {
+		t.Fatalf("seed fragment config: %v", err)
+	}
+	if err := orm.UpsertConfigEntry("ShareCfg/island_collection.json", "601", []byte(`{"id":601,"fragment_list":[501]}`)); err != nil {
+		t.Fatalf("seed collection config: %v", err)
+	}
+
+	pickPayload, _ := proto.Marshal(&protobuf.CS_21529{IslandId: proto.Uint32(islandID), FragmentId: proto.Uint32(501)})
+	if _, _, err := HandleIslandWildCollectFragment(&pickPayload, client); err != nil {
+		t.Fatalf("fragment pickup failed: %v", err)
+	}
+	var pickupAck protobuf.SC_21530
+	offset := decodePacketAt(t, client, 0, 21530, &pickupAck)
+	if pickupAck.GetResult() != 0 {
+		t.Fatalf("expected fragment pickup success, got %d", pickupAck.GetResult())
+	}
+	var pickupPush protobuf.SC_21535
+	decodePacketAt(t, client, offset, 21535, &pickupPush)
+	if len(pickupPush.GetFragmentData()) != 1 || pickupPush.GetFragmentData()[0].GetId() != 501 {
+		t.Fatalf("expected fragment pickup push")
+	}
+
+	client.Buffer.Reset()
+	if _, _, err := HandleIslandWildCollectFragment(&pickPayload, client); err != nil {
+		t.Fatalf("duplicate fragment pickup failed: %v", err)
+	}
+	var duplicatePickupAck protobuf.SC_21530
+	decodePacketAt(t, client, 0, 21530, &duplicatePickupAck)
+	if duplicatePickupAck.GetResult() == 0 {
+		t.Fatalf("expected duplicate fragment pickup failure")
+	}
+
+	client.Buffer.Reset()
+	signPayload, _ := proto.Marshal(&protobuf.CS_21531{IslandId: proto.Uint32(client.Commander.CommanderID), FragmentId: proto.Uint32(501)})
+	if _, _, err := HandleIslandWildCollectFragmentSign(&signPayload, client); err != nil {
+		t.Fatalf("fragment sign failed: %v", err)
+	}
+	var signAck protobuf.SC_21532
+	decodePacketAt(t, client, 0, 21532, &signAck)
+	if signAck.GetResult() == 0 {
+		t.Fatalf("expected self-island sign rejection")
+	}
+
+	foreignIsland := islandID + 1
+	client.Buffer.Reset()
+	foreignSignPayload, _ := proto.Marshal(&protobuf.CS_21531{IslandId: proto.Uint32(foreignIsland), FragmentId: proto.Uint32(501)})
+	if _, _, err := HandleIslandWildCollectFragmentSign(&foreignSignPayload, client); err != nil {
+		t.Fatalf("foreign fragment sign failed: %v", err)
+	}
+	var foreignSignAck protobuf.SC_21532
+	offset = decodePacketAt(t, client, 0, 21532, &foreignSignAck)
+	if foreignSignAck.GetResult() != 0 {
+		t.Fatalf("expected foreign sign success")
+	}
+	var signPush protobuf.SC_21535
+	decodePacketAt(t, client, offset, 21535, &signPush)
+	if len(signPush.GetFragmentData()) != 1 || signPush.GetFragmentData()[0].GetMark() != client.Commander.CommanderID {
+		t.Fatalf("expected sign push mark")
+	}
+}
+
+func TestIslandCollectionComplete(t *testing.T) {
+	globalIslandRuntimeState.resetForTest()
+	client := setupHandlerCommander(t)
+
+	if err := orm.UpsertConfigEntry("ShareCfg/island_collect_fragment.json", "7001", []byte(`{"id":7001,"collection_id":8001,"show":1}`)); err != nil {
+		t.Fatalf("seed fragment config: %v", err)
+	}
+	if err := orm.UpsertConfigEntry("ShareCfg/island_collect_fragment.json", "7002", []byte(`{"id":7002,"collection_id":8001,"show":1}`)); err != nil {
+		t.Fatalf("seed fragment config: %v", err)
+	}
+	if err := orm.UpsertConfigEntry("ShareCfg/island_collection.json", "8001", []byte(`{"id":8001,"fragment_list":[7001,7002]}`)); err != nil {
+		t.Fatalf("seed collection config: %v", err)
+	}
+
+	err := db.DefaultStore.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
+		if _, err := orm.CreateIslandCollectFragmentStateTx(context.Background(), tx, client.Commander.CommanderID, 7001, client.Commander.CommanderID, client.Commander.CommanderID); err != nil {
+			return err
+		}
+		if _, err := orm.CreateIslandCollectFragmentStateTx(context.Background(), tx, client.Commander.CommanderID, 7002, client.Commander.CommanderID, client.Commander.CommanderID); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed fragment states: %v", err)
+	}
+
+	payload, _ := proto.Marshal(&protobuf.CS_21533{CollectId: proto.Uint32(8001)})
+	if _, _, err := HandleIslandCollectionComplete(&payload, client); err != nil {
+		t.Fatalf("collection complete failed: %v", err)
+	}
+	var ack protobuf.SC_21534
+	decodePacketAt(t, client, 0, 21534, &ack)
+	if ack.GetResult() != 0 {
+		t.Fatalf("expected collection complete success")
+	}
+
+	client.Buffer.Reset()
+	if _, _, err := HandleIslandCollectionComplete(&payload, client); err != nil {
+		t.Fatalf("duplicate collection complete failed: %v", err)
+	}
+	var duplicateAck protobuf.SC_21534
+	decodePacketAt(t, client, 0, 21534, &duplicateAck)
+	if duplicateAck.GetResult() == 0 {
+		t.Fatalf("expected duplicate collection complete failure")
 	}
 }
 

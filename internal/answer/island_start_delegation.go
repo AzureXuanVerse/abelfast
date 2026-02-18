@@ -15,10 +15,12 @@ import (
 )
 
 type islandStartDelegationFormula struct {
-	ID             uint32     `json:"id"`
-	StaminaCost    uint32     `json:"stamina_cost"`
-	CommissionCost [][]uint32 `json:"commission_cost"`
-	Duration       uint32     `json:"duration"`
+	ID              uint32     `json:"id"`
+	StaminaCost     uint32     `json:"stamina_cost"`
+	CommissionCost  [][]uint32 `json:"commission_cost"`
+	Duration        uint32     `json:"duration"`
+	Workload        uint32     `json:"workload"`
+	ProductionLimit uint32     `json:"production_limit"`
 }
 
 func IslandStartDelegation(buffer *[]byte, client *connection.Client) (int, int, error) {
@@ -104,6 +106,9 @@ func IslandStartDelegation(buffer *[]byte, client *connection.Client) (int, int,
 
 		now := nowUnix()
 		duration := formula.Duration
+		if duration == 0 {
+			duration = formula.Workload
+		}
 		if duration == 0 {
 			duration = 60
 		}

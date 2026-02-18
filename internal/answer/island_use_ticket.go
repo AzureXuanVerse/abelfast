@@ -68,7 +68,8 @@ func IslandUseTicket(buffer *[]byte, client *connection.Client) (int, int, error
 	}
 
 	err := db.DefaultStore.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
-		if _, err := orm.ReduceIslandSpeedupTargetTx(context.Background(), tx, client.Commander.CommanderID, ticketType, targetID, now, totalSpeed); err != nil {
+		newEndTime, err := orm.ReduceIslandSpeedupTargetTx(context.Background(), tx, client.Commander.CommanderID, ticketType, targetID, now, totalSpeed)
+		if err != nil {
 			if db.IsNotFound(err) {
 				response.Result = proto.Uint32(4)
 				return nil
@@ -80,13 +81,23 @@ func IslandUseTicket(buffer *[]byte, client *connection.Client) (int, int, error
 			slot, err := orm.GetIslandRuntimeShipOrderSlotForUpdateTx(context.Background(), tx, client.Commander.CommanderID, targetID)
 			if err == nil {
 				if slot.EndTime > now {
-					if totalSpeed >= slot.EndTime-now {
-						slot.EndTime = now
-					} else {
-						slot.EndTime -= totalSpeed
-					}
+					slot.EndTime = newEndTime
 				}
 				if err := orm.UpsertIslandRuntimeShipOrderSlotTx(context.Background(), tx, slot); err != nil {
+					response.Result = proto.Uint32(5)
+					return err
+				}
+			}
+		}
+		if ticketType == islandTicketTypeManage {
+			trade, presell, totalSales, err := orm.GetIslandManageTradeForUpdateTx(context.Background(), tx, client.Commander.CommanderID, targetID)
+			if err != nil {
+				response.Result = proto.Uint32(5)
+				return err
+			}
+			if trade.GetEndTime() > now {
+				trade.EndTime = proto.Uint32(newEndTime)
+				if err := orm.UpsertIslandManageTradeTx(context.Background(), tx, client.Commander.CommanderID, trade, presell, totalSales); err != nil {
 					response.Result = proto.Uint32(5)
 					return err
 				}
