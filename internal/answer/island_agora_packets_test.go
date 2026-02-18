@@ -1,8 +1,10 @@
 package answer
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/ggmolly/belfast/internal/consts"
 	"github.com/ggmolly/belfast/internal/orm"
 	"github.com/ggmolly/belfast/internal/protobuf"
 	"google.golang.org/protobuf/proto"
@@ -104,6 +106,74 @@ func TestIslandUpgradeAgoraInsufficientItems(t *testing.T) {
 	}
 	if snapshot.AgoraLevel != 1 {
 		t.Fatalf("expected unchanged agora level, got %d", snapshot.AgoraLevel)
+	}
+}
+
+func TestIslandUpgradeAgoraKeepsLevelAlignmentWithSparseConfig(t *testing.T) {
+	client := setupHandlerCommander(t)
+	clearTable(t, &orm.ConfigEntry{})
+	clearTable(t, &orm.IslandSnapshot{})
+	clearTable(t, &orm.IslandInventory{})
+
+	seedConfigEntry(t, islandSetCategory, "island_build_expansion", `{"key":"island_build_expansion","key_value_varchar":[[1,[41,2001,2],700],[3,[41,2001,9],1000]]}`)
+	if err := orm.UpsertIslandSnapshot(&orm.IslandSnapshot{CommanderID: client.Commander.CommanderID, AgoraLevel: 2}); err != nil {
+		t.Fatalf("seed snapshot: %v", err)
+	}
+	execAnswerTestSQLT(t, "INSERT INTO island_inventories (commander_id, item_id, count) VALUES ($1, $2, $3)", int64(client.Commander.CommanderID), int64(2001), int64(20))
+
+	payload := protobuf.CS_21305{Type: proto.Uint32(0)}
+	buffer, _ := proto.Marshal(&payload)
+	if _, _, err := IslandUpgradeAgora(&buffer, client); err != nil {
+		t.Fatalf("IslandUpgradeAgora failed unexpectedly: %v", err)
+	}
+
+	var response protobuf.SC_21306
+	decodePacketAt(t, client, 0, 21306, &response)
+	if response.GetResult() == 0 {
+		t.Fatalf("expected sparse level config to fail at missing level 2")
+	}
+
+	snapshot, err := orm.GetIslandSnapshot(client.Commander.CommanderID)
+	if err != nil {
+		t.Fatalf("load snapshot: %v", err)
+	}
+	if snapshot.AgoraLevel != 2 {
+		t.Fatalf("expected unchanged agora level, got %d", snapshot.AgoraLevel)
+	}
+	remaining := queryAnswerTestInt64(t, "SELECT count FROM island_inventories WHERE commander_id = $1 AND item_id = $2", int64(client.Commander.CommanderID), int64(2001))
+	if remaining != 20 {
+		t.Fatalf("expected no item consumption for missing level cost, got %d", remaining)
+	}
+}
+
+func TestIslandUpgradeAgoraResourceCostLoadsCommanderState(t *testing.T) {
+	client := setupHandlerCommander(t)
+	clearTable(t, &orm.ConfigEntry{})
+	clearTable(t, &orm.IslandSnapshot{})
+	resourceID := uint32(90001)
+	execAnswerTestSQLT(t, `
+INSERT INTO resources (id, item_id, name)
+VALUES ($1, $2, $3)
+ON CONFLICT (id) DO UPDATE SET item_id = EXCLUDED.item_id, name = EXCLUDED.name
+`, int64(resourceID), int64(resourceID), "Agora Test Resource")
+
+	seedConfigEntry(t, islandSetCategory, "island_build_expansion", fmt.Sprintf(`{"key":"island_build_expansion","key_value_varchar":[[1,[%d,%d,5],700]]}`, consts.DROP_TYPE_RESOURCE, resourceID))
+	if err := orm.UpsertIslandSnapshot(&orm.IslandSnapshot{CommanderID: client.Commander.CommanderID, AgoraLevel: 1}); err != nil {
+		t.Fatalf("seed snapshot: %v", err)
+	}
+	seedHandlerCommanderResource(t, client, resourceID, 20)
+	client.Commander.OwnedResourcesMap = nil
+
+	payload := protobuf.CS_21305{Type: proto.Uint32(0)}
+	buffer, _ := proto.Marshal(&payload)
+	if _, _, err := IslandUpgradeAgora(&buffer, client); err != nil {
+		t.Fatalf("IslandUpgradeAgora failed unexpectedly: %v", err)
+	}
+
+	var response protobuf.SC_21306
+	decodePacketAt(t, client, 0, 21306, &response)
+	if response.GetResult() != 0 {
+		t.Fatalf("expected resource-cost upgrade success, got %d", response.GetResult())
 	}
 }
 

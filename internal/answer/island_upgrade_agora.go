@@ -31,6 +31,9 @@ func IslandUpgradeAgora(buffer *[]byte, client *connection.Client) (int, int, er
 	if payload.GetType() != 0 {
 		return client.SendMessage(21306, response)
 	}
+	if err := ensureCommanderLoaded(client, "Island/UpgradeAgora"); err != nil {
+		return client.SendMessage(21306, response)
+	}
 
 	expansionCosts, err := loadIslandAgoraExpansionCosts()
 	if err != nil || len(expansionCosts) == 0 {
@@ -129,7 +132,7 @@ func parseIslandAgoraExpansionCosts(raw json.RawMessage) ([]islandAgoraExpansion
 		return nil, err
 	}
 
-	costs := make([]islandAgoraExpansionCost, len(rows))
+	costs := make([]islandAgoraExpansionCost, 0, len(rows))
 	for i := range rows {
 		var row []json.RawMessage
 		if err := json.Unmarshal(rows[i], &row); err != nil || len(row) < 2 {
@@ -148,17 +151,9 @@ func parseIslandAgoraExpansionCosts(raw json.RawMessage) ([]islandAgoraExpansion
 
 		idx := level - 1
 		if int(idx) >= len(costs) {
-			continue
+			costs = append(costs, make([]islandAgoraExpansionCost, int(idx)-len(costs)+1)...)
 		}
 		costs[idx] = islandAgoraExpansionCost{DropType: costParts[0], DropID: costParts[1], Count: costParts[2]}
 	}
-
-	trimmed := make([]islandAgoraExpansionCost, 0, len(costs))
-	for i := range costs {
-		if costs[i].DropType == 0 || costs[i].DropID == 0 || costs[i].Count == 0 {
-			continue
-		}
-		trimmed = append(trimmed, costs[i])
-	}
-	return trimmed, nil
+	return costs, nil
 }

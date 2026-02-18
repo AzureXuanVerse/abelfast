@@ -298,6 +298,8 @@ type CommanderIslandSocialState struct {
 	GiftTimestamp        int64
 	GiftVisitors         []byte
 	UpdatedAt            pgtype.Timestamptz
+	WhiteList            []byte
+	BlackList            []byte
 }
 
 type CommanderItem struct {
@@ -606,11 +608,25 @@ type IslandAchievementState struct {
 	UpdatedAt    pgtype.Timestamptz
 }
 
+type IslandAgoraPlacement struct {
+	CommanderID int64
+	PlacedData  []byte
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type IslandAgoraTheme struct {
 	CommanderID int64
 	ThemeSlotID int64
 	Name        string
 	PlacedData  []byte
+}
+
+type IslandBookCond struct {
+	CommanderID int64
+	Type        int64
+	UnlockID    int64
+	CreatedAt   pgtype.Timestamptz
 }
 
 type IslandCommanderDress struct {
