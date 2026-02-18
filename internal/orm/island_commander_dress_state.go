@@ -62,6 +62,37 @@ ORDER BY dress_id
 	return states, nil
 }
 
+func GetIslandCommanderDressState(commanderID uint32, dressID uint32) (*IslandCommanderDressState, error) {
+	var (
+		commanderIDRaw int64
+		dressIDRaw     int64
+		stateRaw       int64
+		colorRaw       int64
+		colorListJSON  []byte
+		entry          IslandCommanderDressState
+	)
+	err := db.DefaultStore.Pool.QueryRow(context.Background(), `
+SELECT commander_id, dress_id, state, color, color_list
+FROM island_commander_dresses
+WHERE commander_id = $1 AND dress_id = $2
+`, int64(commanderID), int64(dressID)).Scan(&commanderIDRaw, &dressIDRaw, &stateRaw, &colorRaw, &colorListJSON)
+	err = db.MapNotFound(err)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(colorListJSON, &entry.ColorList); err != nil {
+		return nil, err
+	}
+	if entry.ColorList == nil {
+		entry.ColorList = []uint32{}
+	}
+	entry.CommanderID = uint32(commanderIDRaw)
+	entry.DressID = uint32(dressIDRaw)
+	entry.State = uint32(stateRaw)
+	entry.Color = uint32(colorRaw)
+	return &entry, nil
+}
+
 func UpsertIslandCommanderDressState(entry *IslandCommanderDressState) error {
 	colorList := entry.ColorList
 	if colorList == nil {
