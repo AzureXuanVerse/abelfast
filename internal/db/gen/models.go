@@ -613,6 +613,45 @@ type IslandAgoraTheme struct {
 	PlacedData  []byte
 }
 
+type IslandBookState struct {
+	CommanderID  int64
+	BookList     []byte
+	BookAwards   []byte
+	BookCollects []byte
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+}
+
+type IslandCardLabelGift struct {
+	FromCommanderID int64
+	ToCommanderID   int64
+	LabelID         int64
+	CreatedAt       pgtype.Timestamptz
+}
+
+type IslandCardLike struct {
+	FromCommanderID int64
+	ToCommanderID   int64
+	CreatedAt       pgtype.Timestamptz
+}
+
+type IslandCardState struct {
+	CommanderID       int64
+	Picture           string
+	VisitWord         string
+	SocialFlag        int64
+	LabelViewFlag     int64
+	LabelCounts       []byte
+	AchieveDisplayIds []byte
+	VisitNum          int64
+	GoodNum           int64
+	ShipNum           int64
+	BookNum           int64
+	AchieveNum        int64
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+}
+
 type IslandCommanderDress struct {
 	CommanderID int64
 	DressID     int64
