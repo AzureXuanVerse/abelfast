@@ -667,6 +667,24 @@ type Fleet struct {
 	MeowfficerList []byte
 }
 
+type GameRoomScore struct {
+	CommanderID int64
+	RoomID      int64
+	MaxScore    int64
+	UpdatedAt   pgtype.Timestamptz
+}
+
+type GameRoomState struct {
+	CommanderID       int64
+	WeekStartUnix     int64
+	WeeklyClaimed     bool
+	PayCoinCount      int64
+	FirstEnterClaimed bool
+	MonthKey          int64
+	MonthlyTicket     int64
+	UpdatedAt         pgtype.Timestamptz
+}
+
 type GlobalSkinRestriction struct {
 	SkinID int64
 	Type   int64

@@ -1,7 +1,7 @@
 package answer
 
 import (
-	"encoding/json"
+	"time"
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/orm"
@@ -9,30 +9,35 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type gameRoomTemplate struct {
-	ID uint32 `json:"id"`
-}
-
 func EventData(buffer *[]byte, client *connection.Client) (int, int, error) {
-	entries, err := orm.ListConfigEntries("ShareCfg/game_room_template.json")
+	templates, err := loadGameRoomTemplates()
 	if err != nil {
 		return 0, 26120, err
 	}
-	response := protobuf.SC_26120{
-		WeeklyFree:    proto.Uint32(0),
-		MonthlyTicket: proto.Uint32(0),
-		PayCoinCount:  proto.Uint32(0),
-		FirstEnter:    proto.Uint32(0),
-		Rooms:         make([]*protobuf.GAMEROOM, 0, len(entries)),
+	state, err := orm.LoadGameRoomState(client.Commander.CommanderID, time.Now().UTC())
+	if err != nil {
+		return 0, 26120, err
 	}
-	for _, entry := range entries {
-		var room gameRoomTemplate
-		if err := json.Unmarshal(entry.Data, &room); err != nil {
-			return 0, 26120, err
-		}
+	scores, err := orm.ListGameRoomScores(client.Commander.CommanderID)
+	if err != nil {
+		return 0, 26120, err
+	}
+	scoreByRoom := make(map[uint32]uint32, len(scores))
+	for _, score := range scores {
+		scoreByRoom[score.RoomID] = score.MaxScore
+	}
+
+	response := protobuf.SC_26120{
+		WeeklyFree:    proto.Uint32(boolToUint32(state.WeeklyClaimed)),
+		MonthlyTicket: proto.Uint32(state.MonthlyTicket),
+		PayCoinCount:  proto.Uint32(state.PayCoinCount),
+		FirstEnter:    proto.Uint32(boolToUint32(state.FirstEnterClaimed)),
+		Rooms:         make([]*protobuf.GAMEROOM, 0, len(templates)),
+	}
+	for _, room := range templates {
 		response.Rooms = append(response.Rooms, &protobuf.GAMEROOM{
 			Roomid:   proto.Uint32(room.ID),
-			MaxScore: proto.Uint32(0),
+			MaxScore: proto.Uint32(scoreByRoom[room.ID]),
 		})
 	}
 	return client.SendMessage(26120, &response)
