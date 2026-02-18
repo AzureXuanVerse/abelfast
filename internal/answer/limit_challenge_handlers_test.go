@@ -92,7 +92,7 @@ func TestLimitChallengeAwardHappyPathAndReplay(t *testing.T) {
 		t.Fatalf("seed limit challenge state failed: %v", err)
 	}
 
-	before := queryAnswerTestInt64(t, "SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = 1", int64(client.Commander.CommanderID))
+	before := queryAnswerTestInt64(t, "SELECT COALESCE((SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = 1), 0)", int64(client.Commander.CommanderID))
 
 	request := protobuf.CS_24022{Challengeids: []uint32{1001}}
 	data, _ := proto.Marshal(&request)
@@ -114,6 +114,7 @@ func TestLimitChallengeAwardHappyPathAndReplay(t *testing.T) {
 		t.Fatalf("expected resource increase")
 	}
 
+	client.Buffer.Reset()
 	buffer = data
 	if _, _, err := LimitChallengeAward(&buffer, client); err != nil {
 		t.Fatalf("limit challenge replay award failed: %v", err)
@@ -142,6 +143,7 @@ func TestLimitChallengeAwardRejectsInvalidAndNotPassed(t *testing.T) {
 	}
 
 	notPassedReq := protobuf.CS_24022{Challengeids: []uint32{1001}}
+	client.Buffer.Reset()
 	data, _ = proto.Marshal(&notPassedReq)
 	buffer = data
 	if _, _, err := LimitChallengeAward(&buffer, client); err != nil {

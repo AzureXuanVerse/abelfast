@@ -41,6 +41,7 @@ func TestChallengeInitialAndInfoFlow(t *testing.T) {
 	if initial.GetResult() != 0 {
 		t.Fatalf("expected challenge initial success")
 	}
+	client.Buffer.Reset()
 
 	infoRequest := protobuf.CS_24004{ActivityId: proto.Uint32(1)}
 	data, err = proto.Marshal(&infoRequest)

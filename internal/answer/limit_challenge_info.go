@@ -43,7 +43,8 @@ type constellationChallengeTemplate struct {
 func LimitChallengeInfo(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var payload protobuf.CS_24020
 	if err := proto.Unmarshal(*buffer, &payload); err != nil {
-		return 0, 24021, err
+		response := protobuf.SC_24021{Result: proto.Uint32(limitChallengeFailureResult), Times: []*protobuf.KVDATA{}, Awards: []*protobuf.KVDATA{}, PassIds: []uint32{}}
+		return client.SendMessage(24021, &response)
 	}
 	if payload.GetType() != limitChallengeInfoTypeMonthly {
 		response := protobuf.SC_24021{Result: proto.Uint32(limitChallengeFailureResult), Times: []*protobuf.KVDATA{}, Awards: []*protobuf.KVDATA{}, PassIds: []uint32{}}
