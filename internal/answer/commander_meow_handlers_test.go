@@ -45,6 +45,18 @@ func TestCommanderBuildBoxStartAndClaim(t *testing.T) {
 	execAnswerTestSQLT(t, "UPDATE commander_boxes SET finish_time = $3 WHERE commander_id = $1 AND box_id = $2", int64(client.Commander.CommanderID), int64(1), int64(time.Now().Unix()-1))
 	client.Buffer.Reset()
 
+	restart := protobuf.CS_25002{Boxid: proto.Uint32(1)}
+	restartBuf, _ := proto.Marshal(&restart)
+	if _, _, err := CommanderBuildBoxStart(&restartBuf, client); err != nil {
+		t.Fatalf("restart completed box failed: %v", err)
+	}
+	var restartResp protobuf.SC_25003
+	decodePacketAt(t, client, 0, 25003, &restartResp)
+	if restartResp.GetResult() == 0 {
+		t.Fatalf("expected restart to fail until completed box is claimed")
+	}
+	client.Buffer.Reset()
+
 	claim := protobuf.CS_25004{Boxid: proto.Uint32(1)}
 	claimBuf, _ := proto.Marshal(&claim)
 	if _, _, err := CommanderClaimBox(&claimBuf, client); err != nil {

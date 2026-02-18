@@ -35,7 +35,7 @@ func CommanderBuildBoxStart(buffer *[]byte, client *connection.Client) (int, int
 	if err != nil {
 		return sendCommanderBuildBoxStartResult(client, commanderResultFail, orm.CommanderBox{BoxID: packet.GetBoxid()})
 	}
-	if box.PoolID != 0 && box.FinishTime > uint32(time.Now().Unix()) {
+	if box.PoolID != 0 {
 		return sendCommanderBuildBoxStartResult(client, commanderResultFail, *box)
 	}
 

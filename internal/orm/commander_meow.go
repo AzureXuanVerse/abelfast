@@ -12,6 +12,7 @@ import (
 
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/protobuf"
+	"github.com/ggmolly/belfast/internal/rng"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -24,6 +25,8 @@ const (
 	defaultCommanderBoxCount        = 3
 	maxCommanderCount               = 200
 )
+
+var commanderMeowRng = rng.NewLockedRand()
 
 type CommanderMeow struct {
 	ID          uint32
@@ -344,10 +347,14 @@ func RollCommanderTemplateForPool(poolID uint32) (uint32, error) {
 	case 3:
 		targetRarity = 3
 	}
+	matches := make([]uint32, 0, len(templates))
 	for _, tpl := range templates {
 		if tpl.Rarity == targetRarity {
-			return tpl.ID, nil
+			matches = append(matches, tpl.ID)
 		}
+	}
+	if len(matches) > 0 {
+		return matches[commanderMeowRng.IntN(len(matches))], nil
 	}
 	return templates[0].ID, nil
 }
