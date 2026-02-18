@@ -42,6 +42,12 @@ func setupHandlerCommander(t *testing.T) *connection.Client {
 	clearTable(t, &orm.SecondaryPasswordState{})
 	clearTable(t, &orm.ActivityPermanentState{})
 	clearTable(t, &orm.EscortState{})
+	clearTable(t, &orm.IslandWildGatherSignState{})
+	clearTable(t, &orm.IslandWildGatherCollectState{})
+	clearTable(t, &orm.IslandCollectFragmentState{})
+	clearTable(t, &orm.IslandCollectFragmentSignState{})
+	clearTable(t, &orm.IslandCollectionCompleteState{})
+	clearTable(t, &orm.IslandSlotCollectState{})
 	commanderID := uint32(time.Now().UnixNano())
 	if err := orm.CreateCommanderRoot(commanderID, commanderID, fmt.Sprintf("Handler Commander %d", commanderID), 0, 0); err != nil {
 		t.Fatalf("create commander: %v", err)
