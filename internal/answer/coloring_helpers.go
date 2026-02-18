@@ -174,7 +174,7 @@ func coloringClearPage(state *orm.CommanderColoringState, pageID uint32) {
 
 func coloringIsPageComplete(template coloringTemplate, fills map[string]orm.ColoringCellState) bool {
 	if template.Blank == 1 {
-		return false
+		return true
 	}
 	lookup := buildColoringCellTemplateLookup(template)
 	for key := range lookup {

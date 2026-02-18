@@ -45,8 +45,10 @@ func ColoringCell(buffer *[]byte, client *connection.Client) (int, int, error) {
 	}
 
 	itemConsume := make(map[uint32]uint32)
+	appliedCells := make(map[string]*protobuf.CELLSINFO, len(payload.GetCellList()))
 	for _, cell := range payload.GetCellList() {
-		tplCell, ok := cellTemplateLookup[coloringCellKey(cell.GetRow(), cell.GetColumn())]
+		key := coloringCellKey(cell.GetRow(), cell.GetColumn())
+		tplCell, ok := cellTemplateLookup[key]
 		if !ok {
 			return connection.SendProtoMessage(26005, client, response)
 		}
@@ -59,7 +61,14 @@ func ColoringCell(buffer *[]byte, client *connection.Client) (int, int, error) {
 			if color == 0 || tplCell.Required == 0 || color != tplCell.Required {
 				return connection.SendProtoMessage(26005, client, response)
 			}
-			itemID := template.ColorIDList[color-1]
+		}
+
+		appliedCells[key] = cell
+	}
+
+	if template.Blank == 0 {
+		for _, cell := range appliedCells {
+			itemID := template.ColorIDList[cell.GetColor()-1]
 			if itemID == 0 {
 				return connection.SendProtoMessage(26005, client, response)
 			}
@@ -83,7 +92,7 @@ func ColoringCell(buffer *[]byte, client *connection.Client) (int, int, error) {
 			}
 		}
 
-		for _, cell := range payload.GetCellList() {
+		for _, cell := range appliedCells {
 			coloringSetCell(state, payload.GetId(), cell.GetRow(), cell.GetColumn(), cell.GetColor())
 		}
 		return orm.SaveCommanderColoringStateTx(context.Background(), tx, state)

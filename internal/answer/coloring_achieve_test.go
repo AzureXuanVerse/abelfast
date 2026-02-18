@@ -76,6 +76,26 @@ func TestColoringAchieveRejectsUnfinishedOrWrongActivity(t *testing.T) {
 	}
 }
 
+func TestColoringAchieveAllowsBlankPageClaim(t *testing.T) {
+	client := setupColoringTestClient(t)
+	payload := marshalPacketRequest(t, &protobuf.CS_26002{ActId: proto.Uint32(4890), Id: proto.Uint32(93)})
+	if _, _, err := ColoringAchieve(&payload, client); err != nil {
+		t.Fatalf("ColoringAchieve blank page failed: %v", err)
+	}
+	response := &protobuf.SC_26003{}
+	decodeLoveLetterPacketMessage(t, client, 26003, response)
+	if response.GetResult() != 0 {
+		t.Fatalf("expected blank page claim success")
+	}
+	state, err := orm.GetCommanderColoringState(client.Commander.CommanderID, 4890)
+	if err != nil {
+		t.Fatalf("reload state: %v", err)
+	}
+	if !coloringIsPageClaimed(state, 93) {
+		t.Fatalf("expected blank page claim marker to persist")
+	}
+}
+
 func TestColoringAchieveRollsBackOnDropFailure(t *testing.T) {
 	client := setupColoringTestClient(t)
 	seedConfigEntry(t, "ShareCfg/activity_template.json", "4890", `{"id":4890,"type":43,"config_data":[[92,999,1,1]],"time":"always"}`)

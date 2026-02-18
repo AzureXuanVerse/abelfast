@@ -127,3 +127,34 @@ func TestColoringCellDuplicateEntriesUseLastWrite(t *testing.T) {
 		t.Fatalf("expected last write color=2, got %+v", cell)
 	}
 }
+
+func TestColoringCellDuplicateCoordinatesChargeOnce(t *testing.T) {
+	client := setupColoringTestClient(t)
+	if err := client.Commander.SetItem(3001, 1); err != nil {
+		t.Fatalf("set paint count: %v", err)
+	}
+	payload := marshalPacketRequest(t, &protobuf.CS_26004{
+		ActId: proto.Uint32(4890),
+		Id:    proto.Uint32(92),
+		CellList: []*protobuf.CELLSINFO{
+			{Row: proto.Uint32(1), Column: proto.Uint32(1), Color: proto.Uint32(1)},
+			{Row: proto.Uint32(1), Column: proto.Uint32(1), Color: proto.Uint32(1)},
+		},
+	})
+	if _, _, err := ColoringCell(&payload, client); err != nil {
+		t.Fatalf("ColoringCell duplicate non-blank failed: %v", err)
+	}
+	response := &protobuf.SC_26005{}
+	decodeLoveLetterPacketMessage(t, client, 26005, response)
+	if response.GetResult() != 0 {
+		t.Fatalf("expected duplicate coordinates to consume once and succeed")
+	}
+	state, err := orm.GetCommanderColoringState(client.Commander.CommanderID, 4890)
+	if err != nil {
+		t.Fatalf("reload state: %v", err)
+	}
+	fills := coloringGetPageFills(state, 92)
+	if len(fills) != 1 {
+		t.Fatalf("expected one persisted fill entry, got %d", len(fills))
+	}
+}
