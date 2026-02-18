@@ -32,7 +32,7 @@ func IslandCollectSlot(buffer *[]byte, client *connection.Client) (int, int, err
 		return client.SendMessage(21508, response)
 	}
 	slotCfg, ok := slotsCfg[payload.GetAreaId()]
-	if !ok || slotCfg.Place != payload.GetBuildId() {
+	if !ok || slotCfg.Place != payload.GetBuildId() || slotCfg.Type != slotType {
 		return client.SendMessage(21508, response)
 	}
 	if len(slotCfg.Formula) == 0 || slotCfg.Formula[0] == 0 {

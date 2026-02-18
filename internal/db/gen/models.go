@@ -613,6 +613,28 @@ type IslandAgoraTheme struct {
 	PlacedData  []byte
 }
 
+type IslandCollectFragmentSignState struct {
+	IslandID          int64
+	FragmentID        int64
+	SignerCommanderID int64
+	Mark              int64
+	UpdatedAt         pgtype.Timestamptz
+}
+
+type IslandCollectFragmentState struct {
+	IslandID             int64
+	FragmentID           int64
+	CollectorCommanderID int64
+	Mark                 int64
+	CollectedAt          pgtype.Timestamptz
+}
+
+type IslandCollectionCompleteState struct {
+	CommanderID int64
+	CollectID   int64
+	CompletedAt pgtype.Timestamptz
+}
+
 type IslandCommanderDress struct {
 	CommanderID int64
 	DressID     int64
@@ -776,6 +798,17 @@ type IslandSigninState struct {
 	UpdatedAt          pgtype.Timestamptz
 }
 
+type IslandSlotCollectState struct {
+	CommanderID     int64
+	BuildID         int64
+	AreaID          int64
+	SlotType        int64
+	NextRefreshTime int64
+	CollectedCount  int64
+	Consumed        bool
+	UpdatedAt       pgtype.Timestamptz
+}
+
 type IslandSnapshot struct {
 	CommanderID    int64
 	Name           string
@@ -835,6 +868,13 @@ type IslandTechnologyState struct {
 	FinishCounts    []byte
 	CreatedAt       pgtype.Timestamptz
 	UpdatedAt       pgtype.Timestamptz
+}
+
+type IslandWildGatherCollectState struct {
+	IslandID             int64
+	GatherID             int64
+	CollectorCommanderID int64
+	CollectedAt          pgtype.Timestamptz
 }
 
 type IslandWildGatherSignState struct {

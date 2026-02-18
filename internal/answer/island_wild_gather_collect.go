@@ -69,7 +69,11 @@ func HandleIslandWildGatherCollect(buffer *[]byte, client *connection.Client) (i
 			}},
 		}
 		broadcastIslandPacket(client.Server, request.GetIslandId(), 21528, push)
-		client.SendMessage(21528, push)
+		if client.Server == nil {
+			client.SendMessage(21528, push)
+		} else if existing, ok := client.Server.FindClient(client.Hash); !ok || existing != client {
+			client.SendMessage(21528, push)
+		}
 	}
 
 	return 0, 21525, nil

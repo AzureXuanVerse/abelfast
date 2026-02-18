@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/orm"
 	"github.com/ggmolly/belfast/internal/protobuf"
@@ -301,9 +302,12 @@ func TestIslandWildGatherCollect(t *testing.T) {
 		t.Fatalf("expected gather collect success drop, got %+v", ack)
 	}
 	var push protobuf.SC_21528
-	decodePacketAt(t, client, offset, 21528, &push)
+	offset = decodePacketAt(t, client, offset, 21528, &push)
 	if len(push.GetGatherList()) != 1 || push.GetGatherList()[0].GetId() != 88 {
 		t.Fatalf("expected gather removal push")
+	}
+	if offset != len(client.Buffer.Bytes()) {
+		t.Fatalf("expected exactly one gather push packet")
 	}
 
 	item, err := orm.GetIslandInventoryItem(client.Commander.CommanderID, 9101)
@@ -351,6 +355,49 @@ func TestIslandWildGatherCollectFailures(t *testing.T) {
 	bad := []byte{0xff, 0x00}
 	if _, responseID, err := HandleIslandWildGatherCollect(&bad, client); err == nil || responseID != 21525 {
 		t.Fatalf("expected decode error with response id 21525")
+	}
+}
+
+func TestIslandWildGatherCollectBroadcastsSinglePushPerClient(t *testing.T) {
+	globalIslandRuntimeState.resetForTest()
+	collector := setupHandlerCommander(t)
+	peer := setupHandlerCommander(t)
+	server := connection.NewServer("127.0.0.1", 0, nil)
+	server.AddClient(collector)
+	server.AddClient(peer)
+
+	islandID := collector.Commander.CommanderID + 350
+	globalIslandRuntimeState.setSessionForTest(collector.Commander.CommanderID, islandID)
+	globalIslandRuntimeState.setSessionForTest(peer.Commander.CommanderID, islandID)
+
+	data, err := json.Marshal(map[string]any{"show": 1, "drop_display": [][]uint32{{41, 9111, 1}}})
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+	if err := orm.UpsertConfigEntry("ShareCfg/island_wild_gather.json", "90", data); err != nil {
+		t.Fatalf("seed gather config: %v", err)
+	}
+
+	payload, _ := proto.Marshal(&protobuf.CS_21524{IslandId: proto.Uint32(islandID), GatherId: proto.Uint32(90)})
+	if _, _, err := HandleIslandWildGatherCollect(&payload, collector); err != nil {
+		t.Fatalf("wild gather collect failed: %v", err)
+	}
+
+	var ack protobuf.SC_21525
+	offset := decodePacketAt(t, collector, 0, 21525, &ack)
+	if ack.GetResult() != 0 {
+		t.Fatalf("expected gather collect success")
+	}
+	var collectorPush protobuf.SC_21528
+	offset = decodePacketAt(t, collector, offset, 21528, &collectorPush)
+	if offset != len(collector.Buffer.Bytes()) {
+		t.Fatalf("expected one gather push for collector")
+	}
+
+	var peerPush protobuf.SC_21528
+	peerOffset := decodePacketAt(t, peer, 0, 21528, &peerPush)
+	if peerOffset != len(peer.Buffer.Bytes()) {
+		t.Fatalf("expected one gather push for peer")
 	}
 }
 

@@ -45,28 +45,14 @@ func IslandAddDelegation(buffer *[]byte, client *connection.Client) (int, int, e
 			return nil
 		}
 
-		formula, exists, err := loadIslandHandPlantFormula(slot.FormulaID)
-		if err != nil || !exists {
-			return err
-		}
-
-		if formula.Workload == 0 {
-			formula.Workload = 60
-		}
-		maxAllowed := uint32(0)
-		if startFormula, startExists, startErr := loadIslandStartDelegationFormula(slot.FormulaID); startErr == nil && startExists {
-			maxAllowed = startFormula.ProductionLimit
-			if startFormula.StaminaCost > 0 {
-				formula.Cost = startFormula.CommissionCost
-			}
-		}
-		if maxAllowed > 0 && slot.MaxTimes+payload.GetAddNum() > maxAllowed {
-			return nil
-		}
-
 		startFormula, startExists, startErr := loadIslandStartDelegationFormula(slot.FormulaID)
 		if startErr != nil || !startExists {
 			return startErr
+		}
+
+		maxAllowed := startFormula.ProductionLimit
+		if maxAllowed > 0 && slot.MaxTimes+payload.GetAddNum() > maxAllowed {
+			return nil
 		}
 
 		energyCost := startFormula.StaminaCost * payload.GetAddNum()
@@ -88,7 +74,10 @@ func IslandAddDelegation(buffer *[]byte, client *connection.Client) (int, int, e
 		if len(slot.CostTimeList) > 0 {
 			lastFinish = slot.CostTimeList[len(slot.CostTimeList)-1]
 		}
-		duration := formula.Workload
+		duration := startFormula.Duration
+		if duration == 0 {
+			duration = startFormula.Workload
+		}
 		if duration == 0 {
 			duration = 60
 		}

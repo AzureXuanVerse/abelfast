@@ -427,6 +427,68 @@ func TestIslandOpsCollectSlotSuccessAndFailures(t *testing.T) {
 	if invalidResponse.GetResult() == 0 {
 		t.Fatalf("expected invalid slot mismatch failure")
 	}
+
+	typeMismatchPayload := protobuf.CS_21507{Type: proto.Uint32(2), BuildId: proto.Uint32(401), AreaId: proto.Uint32(2001)}
+	typeMismatchBuffer, _ := proto.Marshal(&typeMismatchPayload)
+	client.Buffer.Reset()
+	if _, _, err := IslandCollectSlot(&typeMismatchBuffer, client); err != nil {
+		t.Fatalf("type mismatch collect slot failed: %v", err)
+	}
+	var typeMismatchResponse protobuf.SC_21508
+	decodeResponse(t, client, &typeMismatchResponse)
+	if typeMismatchResponse.GetResult() == 0 {
+		t.Fatalf("expected slot type mismatch failure")
+	}
+}
+
+func TestIslandOpsAddDelegationUsesDurationFallback(t *testing.T) {
+	client := setupHandlerCommander(t)
+	clearTable(t, &orm.ConfigEntry{})
+	clearTable(t, &orm.IslandDelegation{})
+	clearTable(t, &orm.IslandInventory{})
+
+	templateID := uint32(202132)
+	seedShipTemplate(t, templateID, 1, 5, 2, "Belfast", 6)
+	ownedShip := seedOwnedShip(t, client, templateID)
+
+	seedConfigEntry(t, islandFormulaCategory, "559", `{"id":559,"stamina_cost":10,"commission_cost":[[8005,1]],"duration":7,"production_limit":5}`)
+	if err := db.DefaultStore.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
+		return orm.AddIslandInventoryTx(context.Background(), tx, client.Commander.CommanderID, 8005, 20)
+	}); err != nil {
+		t.Fatalf("seed island inventory: %v", err)
+	}
+
+	start := nowUnix()
+	seedIslandDelegation(t, client.Commander.CommanderID, orm.IslandDelegation{
+		BuildID:      132,
+		AreaID:       15,
+		ShipID:       ownedShip.ID,
+		HasRole:      true,
+		FormulaID:    559,
+		MaxTimes:     1,
+		StartTime:    start,
+		CostTimeList: []uint32{start + 3},
+		RecoverTime:  start + 3,
+		ReturnNum:    1,
+	})
+
+	payload := protobuf.CS_21537{BuildId: proto.Uint32(132), AreaId: proto.Uint32(15), AddNum: proto.Uint32(2)}
+	buffer, err := proto.Marshal(&payload)
+	if err != nil {
+		t.Fatalf("marshal add payload: %v", err)
+	}
+	client.Buffer.Reset()
+	if _, _, err := IslandAddDelegation(&buffer, client); err != nil {
+		t.Fatalf("add delegation failed: %v", err)
+	}
+	var response protobuf.SC_21538
+	decodeResponse(t, client, &response)
+	if response.GetResult() != 0 {
+		t.Fatalf("unexpected add delegation response: %+v", response)
+	}
+	if len(response.GetCostTimeList()) != 2 || response.GetCostTimeList()[0] != start+10 || response.GetCostTimeList()[1] != start+17 {
+		t.Fatalf("expected duration-based extension timeline, got %v", response.GetCostTimeList())
+	}
 }
 
 func TestIslandOpsAddDelegationSuccessAndLimitFailure(t *testing.T) {
