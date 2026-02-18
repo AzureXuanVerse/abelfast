@@ -2,6 +2,7 @@ package orm
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -17,9 +18,26 @@ func TestGetPlayerSummaryStatsDefaults(t *testing.T) {
 	clearTable(t, &OwnedShip{})
 	clearTable(t, &Ship{})
 	clearTable(t, &Commander{})
+	clearTable(t, &Account{})
 
 	if err := CreateCommanderRoot(9001, 9001, "Summary Default", 0, 0); err != nil {
 		t.Fatalf("create commander root: %v", err)
+	}
+	registerAt := time.Unix(1700000100, 0).UTC()
+	commanderID := uint32(9001)
+	if err := CreateAccount(&Account{
+		ID:                fmt.Sprintf("summary-%d", commanderID),
+		CommanderID:       &commanderID,
+		PasswordHash:      "hash",
+		PasswordAlgo:      "argon2id",
+		PasswordUpdatedAt: registerAt,
+		CreatedAt:         registerAt,
+		UpdatedAt:         registerAt,
+	}); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	if _, err := db.DefaultStore.Pool.Exec(context.Background(), `UPDATE commanders SET last_login = $2 WHERE commander_id = $1`, int64(9001), registerAt.Add(48*time.Hour)); err != nil {
+		t.Fatalf("update commander last_login: %v", err)
 	}
 
 	stats, err := GetPlayerSummaryStats(9001)
@@ -37,6 +55,9 @@ func TestGetPlayerSummaryStatsDefaults(t *testing.T) {
 	}
 	if stats.RegisterDate == 0 || stats.FirstOnline == 0 {
 		t.Fatalf("expected non-zero register/first online")
+	}
+	if stats.RegisterDate != uint32(registerAt.Unix()) {
+		t.Fatalf("expected register date from immutable account creation time, got %d", stats.RegisterDate)
 	}
 	if stats.FirstOnline != stats.RegisterDate {
 		t.Fatalf("expected first online to match register date")

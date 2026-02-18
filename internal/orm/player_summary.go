@@ -39,9 +39,14 @@ func GetPlayerSummaryStats(commanderID uint32) (*PlayerSummaryStats, error) {
 
 	var registerDate int64
 	if err := db.DefaultStore.Pool.QueryRow(ctx, `
-SELECT COALESCE(EXTRACT(EPOCH FROM MAX(last_login))::bigint, EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::bigint)
+SELECT COALESCE(
+	EXTRACT(EPOCH FROM accounts.created_at)::bigint,
+	EXTRACT(EPOCH FROM commanders.last_login)::bigint,
+	EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)::bigint
+)
 FROM commanders
-WHERE commander_id = $1
+LEFT JOIN accounts ON accounts.commander_id = commanders.commander_id
+WHERE commanders.commander_id = $1
 `, int64(commanderID)).Scan(&registerDate); err != nil {
 		return nil, err
 	}
