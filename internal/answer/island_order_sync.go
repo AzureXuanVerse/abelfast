@@ -35,6 +35,10 @@ func IslandOrderSync(buffer *[]byte, client *connection.Client) (int, int, error
 		if err != nil {
 			return err
 		}
+		actGroups, err := orm.ListIslandOrderActGroupsTx(context.Background(), tx, client.Commander.CommanderID)
+		if err != nil {
+			return err
+		}
 		shipSlots, err := orm.ListIslandShipOrderSlotsTx(context.Background(), tx, client.Commander.CommanderID)
 		if err != nil {
 			return err
@@ -56,7 +60,7 @@ func IslandOrderSync(buffer *[]byte, client *connection.Client) (int, int, error
 			SpeedList:    []*protobuf.PB_SPEED_USE{},
 			ShipRefresh:  proto.Uint32(state.ShipRefresh),
 			AppointList:  appoints,
-			ActGroup:     []*protobuf.PB_FINISH_ACT_GROUP{},
+			ActGroup:     actGroups,
 		}
 		return nil
 	})

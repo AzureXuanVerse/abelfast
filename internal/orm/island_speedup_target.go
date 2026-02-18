@@ -29,6 +29,24 @@ DO UPDATE SET end_time = EXCLUDED.end_time
 	return err
 }
 
+func UpsertIslandSpeedupTargetTx(ctx context.Context, tx pgx.Tx, commanderID uint32, targetType uint32, targetID uint32, endTime uint32) error {
+	_, err := tx.Exec(ctx, `
+INSERT INTO island_speedup_targets (commander_id, target_type, target_id, end_time)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (commander_id, target_type, target_id)
+DO UPDATE SET end_time = EXCLUDED.end_time
+`, int64(commanderID), int64(targetType), int64(targetID), int64(endTime))
+	return err
+}
+
+func DeleteIslandSpeedupTargetTx(ctx context.Context, tx pgx.Tx, commanderID uint32, targetType uint32, targetID uint32) error {
+	_, err := tx.Exec(ctx, `
+DELETE FROM island_speedup_targets
+WHERE commander_id = $1 AND target_type = $2 AND target_id = $3
+`, int64(commanderID), int64(targetType), int64(targetID))
+	return err
+}
+
 func ReduceIslandSpeedupTargetTx(ctx context.Context, tx pgx.Tx, commanderID uint32, targetType uint32, targetID uint32, now uint32, reduceBy uint32) (uint32, error) {
 	var endTimeRaw int64
 	err := tx.QueryRow(ctx, `

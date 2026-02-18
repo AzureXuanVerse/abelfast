@@ -118,6 +118,58 @@ ORDER BY level ASC
 	return levels, nil
 }
 
+func AddIslandOrderActGroupTx(ctx context.Context, tx pgx.Tx, commanderID uint32, actID uint32, groupID uint32) (bool, error) {
+	res, err := tx.Exec(ctx, `
+INSERT INTO island_order_act_groups (commander_id, act_id, group_id)
+VALUES ($1, $2, $3)
+ON CONFLICT (commander_id, act_id, group_id) DO NOTHING
+`, int64(commanderID), int64(actID), int64(groupID))
+	if err != nil {
+		return false, err
+	}
+	return res.RowsAffected() == 1, nil
+}
+
+func ListIslandOrderActGroupsTx(ctx context.Context, tx pgx.Tx, commanderID uint32) ([]*protobuf.PB_FINISH_ACT_GROUP, error) {
+	rows, err := tx.Query(ctx, `
+SELECT act_id, group_id
+FROM island_order_act_groups
+WHERE commander_id = $1
+ORDER BY act_id ASC, group_id ASC
+`, int64(commanderID))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	groupsByAct := make(map[uint32][]uint32)
+	orderedActs := make([]uint32, 0)
+	for rows.Next() {
+		var actIDRaw int64
+		var groupIDRaw int64
+		if err := rows.Scan(&actIDRaw, &groupIDRaw); err != nil {
+			return nil, err
+		}
+		actID := uint32(actIDRaw)
+		if _, exists := groupsByAct[actID]; !exists {
+			orderedActs = append(orderedActs, actID)
+		}
+		groupsByAct[actID] = append(groupsByAct[actID], uint32(groupIDRaw))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	result := make([]*protobuf.PB_FINISH_ACT_GROUP, 0, len(orderedActs))
+	for _, actID := range orderedActs {
+		result = append(result, &protobuf.PB_FINISH_ACT_GROUP{
+			ActId:  proto.Uint32(actID),
+			Groups: groupsByAct[actID],
+		})
+	}
+	return result, nil
+}
+
 func AddIslandOrderFavorClaimTx(ctx context.Context, tx pgx.Tx, commanderID uint32, level uint32) (bool, error) {
 	res, err := tx.Exec(ctx, `
 INSERT INTO island_order_favor_claims (commander_id, level)

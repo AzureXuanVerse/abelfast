@@ -121,6 +121,140 @@ func TestIslandSubmitUrgencyOrderMissingCostRollsBackConsumption(t *testing.T) {
 	}
 }
 
+func TestIslandSetOrderTendencyPersistsAndSyncs(t *testing.T) {
+	client := setupHandlerCommander(t)
+	clearIslandEconomyTables(t)
+
+	payload := protobuf.CS_21410{Type: proto.Uint32(2)}
+	buffer, _ := proto.Marshal(&payload)
+	client.Buffer.Reset()
+	if _, _, err := IslandSetOrderTendency(&buffer, client); err != nil {
+		t.Fatalf("set tendency: %v", err)
+	}
+	var setResponse protobuf.SC_21411
+	decodeResponse(t, client, &setResponse)
+	if setResponse.GetResult() != 0 {
+		t.Fatalf("unexpected set tendency response: %+v", setResponse)
+	}
+
+	syncPayload := protobuf.CS_21024{Type: proto.Uint32(1)}
+	syncBuffer, _ := proto.Marshal(&syncPayload)
+	client.Buffer.Reset()
+	if _, _, err := IslandOrderSync(&syncBuffer, client); err != nil {
+		t.Fatalf("order sync: %v", err)
+	}
+	var syncResponse protobuf.SC_21025
+	decodeResponse(t, client, &syncResponse)
+	if syncResponse.GetResult() != 0 || syncResponse.GetOrderSys().GetDailySelect() != 2 {
+		t.Fatalf("unexpected sync response: %+v", syncResponse)
+	}
+
+	invalidPayload := protobuf.CS_21410{Type: proto.Uint32(9)}
+	invalidBuffer, _ := proto.Marshal(&invalidPayload)
+	client.Buffer.Reset()
+	if _, _, err := IslandSetOrderTendency(&invalidBuffer, client); err != nil {
+		t.Fatalf("set invalid tendency: %v", err)
+	}
+	decodeResponse(t, client, &setResponse)
+	if setResponse.GetResult() == 0 {
+		t.Fatalf("expected invalid tendency failure")
+	}
+}
+
+func TestIslandSubmitCommonOrderSuccess(t *testing.T) {
+	client := setupHandlerCommander(t)
+	clearIslandEconomyTables(t)
+	seedConfigEntry(t, islandSetCategory, "order_favor", `{"key":"order_favor","key_value_int":20,"key_value_varchar":""}`)
+	seedConfigEntry(t, islandSetCategory, "order_complete_refresh_time", `{"key":"order_complete_refresh_time","key_value_int":5,"key_value_varchar":""}`)
+	seedConfigEntry(t, islandOrderRandomCategory, "10", `{"id":10}`)
+	seedConfigEntry(t, islandOrderRandomCategory, "11", `{"id":11}`)
+	seedConfigEntry(t, islandOrderPriceCategory, "3", `{"id":3,"order_award":[7001,6],"order_easy_award":[7002,3],"order_award_challenge":[7003,2]}`)
+
+	err := db.DefaultStore.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
+		if err := orm.AddIslandInventoryTx(context.Background(), tx, client.Commander.CommanderID, 9001, 10); err != nil {
+			return err
+		}
+		slot := &protobuf.PB_ISLAND_ORDER_SLOT{Id: proto.Uint32(211), Type: proto.Uint32(1), CurSelect: proto.Uint32(1), StartTime: proto.Uint32(1), SubmitTime: proto.Uint32(1), Position: proto.Uint32(1), DialogId: proto.Uint32(10), Cost: []*protobuf.PB_ISLAND_ITEM{{Id: proto.Uint32(9001), Num: proto.Uint32(4)}}, OrderLv: proto.Uint32(3), ViewFlag: proto.Uint32(0)}
+		return orm.UpsertIslandOrderSlotTx(context.Background(), tx, client.Commander.CommanderID, slot)
+	})
+	if err != nil {
+		t.Fatalf("seed common order: %v", err)
+	}
+
+	payload := protobuf.CS_21401{SlotId: proto.Uint32(211)}
+	buffer, _ := proto.Marshal(&payload)
+	client.Buffer.Reset()
+	if _, _, err := IslandSubmitCommonOrder(&buffer, client); err != nil {
+		t.Fatalf("submit common: %v", err)
+	}
+	var response protobuf.SC_21402
+	decodeResponse(t, client, &response)
+	if response.GetResult() != 0 || len(response.GetDropList()) != 1 || response.GetDropList()[0].GetId() != 7001 {
+		t.Fatalf("unexpected common response: %+v", response)
+	}
+}
+
+func TestIslandSubmitFirmOrderActivityTracksActGroup(t *testing.T) {
+	client := setupHandlerCommander(t)
+	clearIslandEconomyTables(t)
+	seedConfigEntry(t, islandSetCategory, "order_favor", `{"key":"order_favor","key_value_int":20,"key_value_varchar":""}`)
+	seedConfigEntry(t, islandOrderCategory, "2001", `{"id":2001,"type":3,"award":[7101,5],"season_pt_num":12,"activity_id":88,"group_id":99,"next_order":0}`)
+
+	err := db.DefaultStore.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
+		if err := orm.AddIslandInventoryTx(context.Background(), tx, client.Commander.CommanderID, 9011, 10); err != nil {
+			return err
+		}
+		state, err := orm.GetIslandOrderStateForUpdateTx(context.Background(), tx, client.Commander.CommanderID)
+		if err != nil {
+			return err
+		}
+		state.Favor = 30
+		if err := orm.SaveIslandOrderStateTx(context.Background(), tx, state); err != nil {
+			return err
+		}
+		slot := &protobuf.PB_ISLAND_ORDER_SLOT{Id: proto.Uint32(301), Type: proto.Uint32(4), CurSelect: proto.Uint32(1), StartTime: proto.Uint32(1), SubmitTime: proto.Uint32(1), Position: proto.Uint32(1), DialogId: proto.Uint32(2001), Cost: []*protobuf.PB_ISLAND_ITEM{{Id: proto.Uint32(9011), Num: proto.Uint32(2)}}, OrderLv: proto.Uint32(3), ViewFlag: proto.Uint32(0)}
+		return orm.UpsertIslandOrderSlotTx(context.Background(), tx, client.Commander.CommanderID, slot)
+	})
+	if err != nil {
+		t.Fatalf("seed firm order: %v", err)
+	}
+
+	payload := protobuf.CS_21414{OrderId: proto.Uint32(301)}
+	buffer, _ := proto.Marshal(&payload)
+	client.Buffer.Reset()
+	if _, _, err := IslandSubmitFirmOrder(&buffer, client); err != nil {
+		t.Fatalf("submit firm: %v", err)
+	}
+	var response protobuf.SC_21415
+	decodeResponse(t, client, &response)
+	if response.GetResult() != 0 || len(response.GetDropList()) != 1 || response.GetDropList()[0].GetId() != 7101 {
+		t.Fatalf("unexpected firm response: %+v", response)
+	}
+
+	var orderSys *protobuf.PB_ISLAND_ORDER_SYSTEM
+	err = db.DefaultStore.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
+		state, err := orm.GetIslandOrderStateForUpdateTx(context.Background(), tx, client.Commander.CommanderID)
+		if err != nil {
+			return err
+		}
+		if state.Favor != 30 {
+			t.Fatalf("expected favor unchanged for activity firm, got %d", state.Favor)
+		}
+		groups, err := orm.ListIslandOrderActGroupsTx(context.Background(), tx, client.Commander.CommanderID)
+		if err != nil {
+			return err
+		}
+		orderSys = &protobuf.PB_ISLAND_ORDER_SYSTEM{ActGroup: groups}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("verify act group: %v", err)
+	}
+	if len(orderSys.GetActGroup()) != 1 || orderSys.GetActGroup()[0].GetActId() != 88 || len(orderSys.GetActGroup()[0].GetGroups()) != 1 || orderSys.GetActGroup()[0].GetGroups()[0] != 99 {
+		t.Fatalf("unexpected act group state: %+v", orderSys.GetActGroup())
+	}
+}
+
 func TestIslandReplaceOrderSuccess(t *testing.T) {
 	client := setupHandlerCommander(t)
 	clearIslandEconomyTables(t)
@@ -308,13 +442,15 @@ TRUNCATE TABLE
 	config_entries,
 	island_inventories,
 	island_seasons,
-	island_order_states,
-	island_prosperity_states,
-	island_order_favor_claims,
-	island_order_slots,
-	island_ship_order_slots,
-	island_ship_order_appoints,
-	island_season_reward_claims
+		island_order_states,
+		island_prosperity_states,
+		island_order_favor_claims,
+		island_order_act_groups,
+		island_order_slots,
+		island_manage_trades,
+		island_ship_order_slots,
+		island_ship_order_appoints,
+		island_season_reward_claims
 RESTART IDENTITY CASCADE
 `)
 }
