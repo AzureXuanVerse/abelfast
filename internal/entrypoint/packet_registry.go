@@ -126,6 +126,7 @@ func registerPackets() {
 	packets.RegisterPacketHandler(26004, []packets.PacketHandler{answer.ColoringCell})
 	packets.RegisterPacketHandler(26006, []packets.PacketHandler{answer.ColoringClear})
 	packets.RegisterPacketHandler(26008, []packets.PacketHandler{answer.ColoringFetch})
+  packets.RegisterPacketHandler(26021, []packets.PacketHandler{answer.GetPlayerSummaryInfo})
   packets.RegisterPacketHandler(26031, []packets.PacketHandler{answer.ActivityBossPageUpdate})
 	packets.RegisterPacketHandler(26051, []packets.PacketHandler{answer.AtelierRequest})
 	packets.RegisterPacketHandler(26053, []packets.PacketHandler{answer.AtelierComposite})
