@@ -40,7 +40,8 @@ SET
   manifesto = $25,
   dorm_name = $26,
   random_ship_mode = $27,
-  random_flag_ship_enabled = $28
+  child_display = $28,
+  random_flag_ship_enabled = $29
 WHERE commander_id = $1
 `
 
@@ -72,6 +73,7 @@ type UpdateCommanderCoreParams struct {
 	Manifesto               string
 	DormName                string
 	RandomShipMode          int64
+	ChildDisplay            int64
 	RandomFlagShipEnabled   bool
 }
 
@@ -104,6 +106,7 @@ func (q *Queries) UpdateCommanderCore(ctx context.Context, arg UpdateCommanderCo
 		arg.Manifesto,
 		arg.DormName,
 		arg.RandomShipMode,
+		arg.ChildDisplay,
 		arg.RandomFlagShipEnabled,
 	)
 	return err

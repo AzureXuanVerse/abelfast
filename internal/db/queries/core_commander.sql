@@ -29,10 +29,11 @@ INSERT INTO commanders (
   manifesto,
   dorm_name,
   random_ship_mode,
+  child_display,
   random_flag_ship_enabled
 ) VALUES (
   $1, $2, 1, 0, $3, now(), $4, $5, '1970-01-01 00:00:00+00',
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '', '', 0, false
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '', '', 0, 1004, false
 );
 
 -- name: GetCommanderByAccountID :one
@@ -64,6 +65,7 @@ SELECT
   manifesto,
   dorm_name,
   random_ship_mode,
+  child_display,
   random_flag_ship_enabled
 FROM commanders
 WHERE account_id = $1
@@ -105,6 +107,7 @@ SELECT
   manifesto,
   dorm_name,
   random_ship_mode,
+  child_display,
   random_flag_ship_enabled
 FROM commanders
 WHERE commander_id = $1

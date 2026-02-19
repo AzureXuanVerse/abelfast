@@ -239,6 +239,7 @@ type Commander struct {
 	RandomShipMode          int64
 	RandomFlagShipEnabled   bool
 	DeletedAt               pgtype.Timestamptz
+	ChildDisplay            int64
 }
 
 type CommanderActivityTask struct {

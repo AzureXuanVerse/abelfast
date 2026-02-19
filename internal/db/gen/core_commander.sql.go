@@ -55,10 +55,11 @@ INSERT INTO commanders (
   manifesto,
   dorm_name,
   random_ship_mode,
+  child_display,
   random_flag_ship_enabled
 ) VALUES (
   $1, $2, 1, 0, $3, now(), $4, $5, '1970-01-01 00:00:00+00',
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '', '', 0, false
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '', '', 0, 1004, false
 )
 `
 
@@ -111,6 +112,7 @@ SELECT
   manifesto,
   dorm_name,
   random_ship_mode,
+  child_display,
   random_flag_ship_enabled
 FROM commanders
 WHERE account_id = $1
@@ -146,6 +148,7 @@ type GetCommanderByAccountIDRow struct {
 	Manifesto               string
 	DormName                string
 	RandomShipMode          int64
+	ChildDisplay            int64
 	RandomFlagShipEnabled   bool
 }
 
@@ -180,6 +183,7 @@ func (q *Queries) GetCommanderByAccountID(ctx context.Context, accountID int64) 
 		&i.Manifesto,
 		&i.DormName,
 		&i.RandomShipMode,
+		&i.ChildDisplay,
 		&i.RandomFlagShipEnabled,
 	)
 	return i, err
@@ -214,6 +218,7 @@ SELECT
   manifesto,
   dorm_name,
   random_ship_mode,
+  child_display,
   random_flag_ship_enabled
 FROM commanders
 WHERE commander_id = $1
@@ -248,6 +253,7 @@ type GetCommanderByIDRow struct {
 	Manifesto               string
 	DormName                string
 	RandomShipMode          int64
+	ChildDisplay            int64
 	RandomFlagShipEnabled   bool
 }
 
@@ -282,6 +288,7 @@ func (q *Queries) GetCommanderByID(ctx context.Context, commanderID int64) (GetC
 		&i.Manifesto,
 		&i.DormName,
 		&i.RandomShipMode,
+		&i.ChildDisplay,
 		&i.RandomFlagShipEnabled,
 	)
 	return i, err

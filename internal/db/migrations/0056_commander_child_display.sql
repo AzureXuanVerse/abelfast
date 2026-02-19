@@ -1,0 +1,2 @@
+ALTER TABLE commanders
+ADD COLUMN IF NOT EXISTS child_display bigint NOT NULL DEFAULT 1004;
