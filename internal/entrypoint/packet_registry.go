@@ -72,6 +72,9 @@ func registerPackets() {
 		answer.SendPlayerShipCount,
 	})
 	packets.RegisterPacketHandler(25026, []packets.PacketHandler{answer.GetCommanderHome})
+	packets.RegisterPacketHandler(50003, []packets.PacketHandler{answer.SendFriendRequest})
+	packets.RegisterPacketHandler(50006, []packets.PacketHandler{answer.AcceptFriendRequest})
+	packets.RegisterPacketHandler(50009, []packets.PacketHandler{answer.RejectFriendRequest})
 	packets.RegisterPacketHandler(25002, []packets.PacketHandler{answer.CommanderBuildBoxStart})
 	packets.RegisterPacketHandler(25004, []packets.PacketHandler{answer.CommanderClaimBox})
 	packets.RegisterPacketHandler(25006, []packets.PacketHandler{answer.CommanderFleetEquip})

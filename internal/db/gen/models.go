@@ -710,10 +710,24 @@ type FriendDirectMessage struct {
 	CreatedAt  int64
 }
 
+type FriendLink struct {
+	CommanderID int64
+	FriendID    int64
+	CreatedAt   pgtype.Timestamp
+}
+
 type FriendRelationship struct {
 	CommanderID int64
 	FriendID    int64
 	CreatedAt   int64
+}
+
+type FriendRequest struct {
+	ID          int64
+	RequesterID int64
+	TargetID    int64
+	Content     string
+	CreatedAt   pgtype.Timestamp
 }
 
 type GameRoomScore struct {
