@@ -214,6 +214,13 @@ func TestApplyDorm3dTriggerEventsUnlockAndDedupe(t *testing.T) {
 	if len(unlocks) != 1 || unlocks[0].ActID != 4001 || unlocks[0].Type != 1 {
 		t.Fatalf("unexpected unlocks: %+v", unlocks)
 	}
+	unlocks, err = ApplyDorm3dTriggerEvents(5, []Dorm3dEventInfo{{EventType: 152, Value: 99, ShipGroup: 999}}, 90)
+	if err != nil {
+		t.Fatalf("apply trigger events unknown ship: %v", err)
+	}
+	if len(unlocks) != 0 {
+		t.Fatalf("expected unknown ship to be ignored, got %+v", unlocks)
+	}
 	unlocks, err = ApplyDorm3dTriggerEvents(5, []Dorm3dEventInfo{{EventType: 152, Value: 3, ShipGroup: 100}}, 99)
 	if err != nil {
 		t.Fatalf("apply trigger events second pass: %v", err)
@@ -228,5 +235,8 @@ func TestApplyDorm3dTriggerEventsUnlockAndDedupe(t *testing.T) {
 	}
 	if len(updated.Ins) != 1 || len(updated.Ins[0].CommList) != 1 || updated.Ins[0].CommList[0].ID != 4001 {
 		t.Fatalf("unexpected unlocked state: %+v", updated.Ins)
+	}
+	if updated.Ins[0].ShipGroup != 100 {
+		t.Fatalf("unexpected ship group in ins state: %+v", updated.Ins)
 	}
 }

@@ -591,12 +591,22 @@ func ApplyDorm3dTriggerEvents(commanderID uint32, events []Dorm3dEventInfo, now 
 	if err != nil {
 		return nil, err
 	}
+	ownedShips := make(map[uint32]struct{}, len(apartment.Ships))
+	for _, ship := range apartment.Ships {
+		if ship.ShipGroup == 0 {
+			continue
+		}
+		ownedShips[ship.ShipGroup] = struct{}{}
+	}
 	state, err := loadDorm3dTriggerState(commanderID)
 	if err != nil {
 		return nil, err
 	}
 	for _, event := range events {
 		if event.ShipGroup == 0 || event.EventType == 0 {
+			continue
+		}
+		if _, ok := ownedShips[event.ShipGroup]; !ok {
 			continue
 		}
 		state.Counters[dorm3dTriggerCounterKey(event.ShipGroup, event.EventType)] = maxDorm3dCounter(
@@ -616,6 +626,9 @@ func ApplyDorm3dTriggerEvents(commanderID uint32, events []Dorm3dEventInfo, now 
 		}
 		shipGroup, err := dorm3dResolveUnlockShipGroup(unlock)
 		if err != nil {
+			continue
+		}
+		if _, ok := ownedShips[shipGroup]; !ok {
 			continue
 		}
 		counter := state.Counters[dorm3dTriggerCounterKey(shipGroup, unlock.TriggerTyp)]
