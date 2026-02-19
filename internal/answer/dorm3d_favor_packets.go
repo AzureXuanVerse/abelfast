@@ -1,0 +1,417 @@
+package answer
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strconv"
+
+	"github.com/ggmolly/belfast/internal/connection"
+	"github.com/ggmolly/belfast/internal/db"
+	"github.com/ggmolly/belfast/internal/orm"
+	"github.com/ggmolly/belfast/internal/protobuf"
+	"google.golang.org/protobuf/proto"
+)
+
+const (
+	dorm3dSetCategory          = "ShareCfg/dorm3d_set.json"
+	dorm3dGiftCategory         = "ShareCfg/dorm3d_gift.json"
+	dorm3dFavorTriggerCategory = "ShareCfg/dorm3d_favor_trigger.json"
+	dorm3dFavorCategory        = "ShareCfg/dorm3d_favor.json"
+	dorm3dDormTemplateCategory = "ShareCfg/dorm3d_dorm_template.json"
+
+	dorm3dResultSuccess = uint32(0)
+	dorm3dResultFailure = uint32(1)
+)
+
+type dorm3dGiftConfig struct {
+	ID             uint32 `json:"id"`
+	ShipGroupID    uint32 `json:"ship_group_id"`
+	FavorTriggerID uint32 `json:"favor_trigger_id"`
+}
+
+type dorm3dFavorTriggerConfig struct {
+	ID         uint32 `json:"id"`
+	IsDailyMax uint32 `json:"is_daily_max"`
+	IsRepeat   uint32 `json:"is_repeat"`
+	Num        uint32 `json:"num"`
+}
+
+type dorm3dSetConfig struct {
+	Key         string `json:"key"`
+	KeyValueInt uint32 `json:"key_value_int"`
+}
+
+type dorm3dFavorLevelConfig struct {
+	ID          uint32     `json:"id"`
+	CharID      uint32     `json:"char_id"`
+	Level       uint32     `json:"level"`
+	FavorExp    uint32     `json:"favor_exp"`
+	LevelupItem [][]uint32 `json:"levelup_item"`
+}
+
+type dorm3dDormTemplateConfig struct {
+	ID uint32 `json:"id"`
+}
+
+type dorm3dTriggerRuntime struct {
+	vigorUsed   uint32
+	favorExp    uint32
+	dailyFavor  uint32
+	shipAtMaxLv bool
+	maxFavorExp uint32
+	counts      map[uint32]uint32
+	newTriggers []uint32
+}
+
+func Dorm3dTriggerFavor(buffer *[]byte, client *connection.Client) (int, int, error) {
+	var payload protobuf.CS_28003
+	if err := proto.Unmarshal(*buffer, &payload); err != nil {
+		return 0, 28004, err
+	}
+	if client.Commander == nil {
+		return 0, 28004, errors.New("missing commander")
+	}
+	shipGroup := payload.GetShipGroup()
+	triggerID := payload.GetTriggerId()
+	if shipGroup == 0 || triggerID == 0 {
+		return sendDorm3dTriggerFavorResult(client, dorm3dResultFailure)
+	}
+	apartment, err := orm.GetOrCreateDorm3dApartment(client.Commander.CommanderID)
+	if err != nil {
+		return 0, 28004, err
+	}
+	ship := apartment.FindShip(shipGroup)
+	if ship == nil {
+		return sendDorm3dTriggerFavorResult(client, dorm3dResultFailure)
+	}
+	triggerCfg, err := loadDorm3dFavorTriggerConfig(triggerID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return sendDorm3dTriggerFavorResult(client, dorm3dResultFailure)
+		}
+		return 0, 28004, err
+	}
+	dailyVigorMax, err := loadDorm3dSetInt("daily_vigor_max")
+	if err != nil {
+		return 0, 28004, err
+	}
+	maxLevel, err := loadDorm3dSetInt("favor_level")
+	if err != nil {
+		return 0, 28004, err
+	}
+	charID, err := resolveDorm3dCharID(shipGroup)
+	if err != nil {
+		return 0, 28004, err
+	}
+	maxFavorExp, err := loadDorm3dMaxFavorExp(charID, maxLevel)
+	if err != nil {
+		return 0, 28004, err
+	}
+	runtime := newDorm3dTriggerRuntime(apartment, ship, ship.FavorLv >= maxLevel, maxFavorExp)
+	if err := runtime.apply(triggerCfg, dailyVigorMax); err != nil {
+		return sendDorm3dTriggerFavorResult(client, dorm3dResultFailure)
+	}
+	runtime.commit(apartment, ship)
+	if err := orm.SaveDorm3dApartment(apartment); err != nil {
+		return 0, 28004, err
+	}
+	return sendDorm3dTriggerFavorResult(client, dorm3dResultSuccess)
+}
+
+func Dorm3dApartmentLevelUp(buffer *[]byte, client *connection.Client) (int, int, error) {
+	var payload protobuf.CS_28005
+	if err := proto.Unmarshal(*buffer, &payload); err != nil {
+		return 0, 28006, err
+	}
+	if client.Commander == nil {
+		return 0, 28006, errors.New("missing commander")
+	}
+	shipGroup := payload.GetShipGroup()
+	if shipGroup == 0 {
+		return sendDorm3dApartmentLevelUpResult(client, dorm3dResultFailure, []*protobuf.DROPINFO{})
+	}
+	apartment, err := orm.GetOrCreateDorm3dApartment(client.Commander.CommanderID)
+	if err != nil {
+		return 0, 28006, err
+	}
+	ship := apartment.FindShip(shipGroup)
+	if ship == nil {
+		return sendDorm3dApartmentLevelUpResult(client, dorm3dResultFailure, []*protobuf.DROPINFO{})
+	}
+	maxLevel, err := loadDorm3dSetInt("favor_level")
+	if err != nil {
+		return 0, 28006, err
+	}
+	if ship.FavorLv >= maxLevel {
+		return sendDorm3dApartmentLevelUpResult(client, dorm3dResultFailure, []*protobuf.DROPINFO{})
+	}
+	charID, err := resolveDorm3dCharID(shipGroup)
+	if err != nil {
+		return 0, 28006, err
+	}
+	nextLevel := ship.FavorLv + 1
+	nextFavorCfg, err := loadDorm3dFavorLevelConfig(charID, nextLevel)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return sendDorm3dApartmentLevelUpResult(client, dorm3dResultFailure, []*protobuf.DROPINFO{})
+		}
+		return 0, 28006, err
+	}
+	if ship.FavorExp < nextFavorCfg.FavorExp {
+		return sendDorm3dApartmentLevelUpResult(client, dorm3dResultFailure, []*protobuf.DROPINFO{})
+	}
+	ship.FavorLv = nextLevel
+	ship.FavorExp -= nextFavorCfg.FavorExp
+	if err := orm.SaveDorm3dApartment(apartment); err != nil {
+		return 0, 28006, err
+	}
+	drops := make([]*protobuf.DROPINFO, 0, len(nextFavorCfg.LevelupItem))
+	for _, tuple := range nextFavorCfg.LevelupItem {
+		if len(tuple) < 3 || tuple[2] == 0 {
+			continue
+		}
+		drops = append(drops, newDropInfo(tuple[0], tuple[1], tuple[2]))
+	}
+	return sendDorm3dApartmentLevelUpResult(client, dorm3dResultSuccess, drops)
+}
+
+func HandleDorm3dGiveGift(buffer *[]byte, client *connection.Client) (int, int, error) {
+	var payload protobuf.CS_28009
+	if err := proto.Unmarshal(*buffer, &payload); err != nil {
+		return 0, 28010, err
+	}
+	if client.Commander == nil {
+		return 0, 28010, errors.New("missing commander")
+	}
+	shipGroup := payload.GetShipGroup()
+	giftPayloads := payload.GetGifts()
+	if shipGroup == 0 || len(giftPayloads) == 0 {
+		return sendDorm3dGiveGiftResult(client, dorm3dResultFailure)
+	}
+	apartment, err := orm.GetOrCreateDorm3dApartment(client.Commander.CommanderID)
+	if err != nil {
+		return 0, 28010, err
+	}
+	ship := apartment.FindShip(shipGroup)
+	if ship == nil {
+		return sendDorm3dGiveGiftResult(client, dorm3dResultFailure)
+	}
+	dailyVigorMax, err := loadDorm3dSetInt("daily_vigor_max")
+	if err != nil {
+		return 0, 28010, err
+	}
+	maxLevel, err := loadDorm3dSetInt("favor_level")
+	if err != nil {
+		return 0, 28010, err
+	}
+	charID, err := resolveDorm3dCharID(shipGroup)
+	if err != nil {
+		return 0, 28010, err
+	}
+	maxFavorExp, err := loadDorm3dMaxFavorExp(charID, maxLevel)
+	if err != nil {
+		return 0, 28010, err
+	}
+
+	requestedByGiftID := make(map[uint32]uint32)
+	for _, giftPayload := range giftPayloads {
+		if giftPayload == nil || giftPayload.GetGiftId() == 0 || giftPayload.GetNumber() == 0 {
+			return sendDorm3dGiveGiftResult(client, dorm3dResultFailure)
+		}
+		requestedByGiftID[giftPayload.GetGiftId()] += giftPayload.GetNumber()
+	}
+
+	runtime := newDorm3dTriggerRuntime(apartment, ship, ship.FavorLv >= maxLevel, maxFavorExp)
+	for giftID, requested := range requestedByGiftID {
+		giftState := apartment.FindGift(giftID)
+		if giftState == nil || requested > giftState.Number {
+			return sendDorm3dGiveGiftResult(client, dorm3dResultFailure)
+		}
+		giftCfg, err := loadDorm3dGiftConfig(giftID)
+		if err != nil {
+			if errors.Is(err, db.ErrNotFound) {
+				return sendDorm3dGiveGiftResult(client, dorm3dResultFailure)
+			}
+			return 0, 28010, err
+		}
+		if giftCfg.ShipGroupID != 0 && giftCfg.ShipGroupID != shipGroup {
+			return sendDorm3dGiveGiftResult(client, dorm3dResultFailure)
+		}
+		if giftCfg.ShipGroupID != 0 && giftState.UsedNumber > 0 {
+			return sendDorm3dGiveGiftResult(client, dorm3dResultFailure)
+		}
+		if giftCfg.FavorTriggerID == 0 {
+			continue
+		}
+		triggerCfg, err := loadDorm3dFavorTriggerConfig(giftCfg.FavorTriggerID)
+		if err != nil {
+			if errors.Is(err, db.ErrNotFound) {
+				return sendDorm3dGiveGiftResult(client, dorm3dResultFailure)
+			}
+			return 0, 28010, err
+		}
+		for i := uint32(0); i < requested; i++ {
+			if err := runtime.apply(triggerCfg, dailyVigorMax); err != nil {
+				return sendDorm3dGiveGiftResult(client, dorm3dResultFailure)
+			}
+		}
+	}
+
+	for giftID, requested := range requestedByGiftID {
+		giftState := apartment.FindGift(giftID)
+		giftState.Number -= requested
+		giftState.UsedNumber += requested
+	}
+	runtime.commit(apartment, ship)
+	if err := orm.SaveDorm3dApartment(apartment); err != nil {
+		return 0, 28010, err
+	}
+	return sendDorm3dGiveGiftResult(client, dorm3dResultSuccess)
+}
+
+func sendDorm3dTriggerFavorResult(client *connection.Client, result uint32) (int, int, error) {
+	return client.SendMessage(28004, &protobuf.SC_28004{Result: proto.Uint32(result)})
+}
+
+func sendDorm3dApartmentLevelUpResult(client *connection.Client, result uint32, drops []*protobuf.DROPINFO) (int, int, error) {
+	return client.SendMessage(28006, &protobuf.SC_28006{
+		Result:   proto.Uint32(result),
+		DropList: drops,
+	})
+}
+
+func sendDorm3dGiveGiftResult(client *connection.Client, result uint32) (int, int, error) {
+	return client.SendMessage(28010, &protobuf.SC_28010{Result: proto.Uint32(result)})
+}
+
+func loadDorm3dGiftConfig(giftID uint32) (*dorm3dGiftConfig, error) {
+	entry, err := orm.GetConfigEntry(dorm3dGiftCategory, strconv.FormatUint(uint64(giftID), 10))
+	if err != nil {
+		return nil, err
+	}
+	var cfg dorm3dGiftConfig
+	if err := json.Unmarshal(entry.Data, &cfg); err != nil {
+		return nil, err
+	}
+	if cfg.ID == 0 {
+		return nil, fmt.Errorf("invalid dorm3d gift config id %d", giftID)
+	}
+	return &cfg, nil
+}
+
+func loadDorm3dFavorTriggerConfig(triggerID uint32) (*dorm3dFavorTriggerConfig, error) {
+	entry, err := orm.GetConfigEntry(dorm3dFavorTriggerCategory, strconv.FormatUint(uint64(triggerID), 10))
+	if err != nil {
+		return nil, err
+	}
+	var cfg dorm3dFavorTriggerConfig
+	if err := json.Unmarshal(entry.Data, &cfg); err != nil {
+		return nil, err
+	}
+	if cfg.ID == 0 {
+		return nil, fmt.Errorf("invalid dorm3d favor trigger config id %d", triggerID)
+	}
+	return &cfg, nil
+}
+
+func loadDorm3dSetInt(key string) (uint32, error) {
+	entry, err := orm.GetConfigEntry(dorm3dSetCategory, key)
+	if err != nil {
+		return 0, err
+	}
+	var cfg dorm3dSetConfig
+	if err := json.Unmarshal(entry.Data, &cfg); err != nil {
+		return 0, err
+	}
+	return cfg.KeyValueInt, nil
+}
+
+func resolveDorm3dCharID(shipGroup uint32) (uint32, error) {
+	entry, err := orm.GetConfigEntry(dorm3dDormTemplateCategory, strconv.FormatUint(uint64(shipGroup), 10))
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return shipGroup, nil
+		}
+		return 0, err
+	}
+	var cfg dorm3dDormTemplateConfig
+	if err := json.Unmarshal(entry.Data, &cfg); err != nil {
+		return 0, err
+	}
+	if cfg.ID == 0 {
+		return shipGroup, nil
+	}
+	return cfg.ID, nil
+}
+
+func loadDorm3dMaxFavorExp(charID uint32, maxLevel uint32) (uint32, error) {
+	favorCfg, err := loadDorm3dFavorLevelConfig(charID, maxLevel)
+	if err != nil {
+		return 0, err
+	}
+	return favorCfg.FavorExp, nil
+}
+
+func loadDorm3dFavorLevelConfig(charID uint32, level uint32) (*dorm3dFavorLevelConfig, error) {
+	entries, err := orm.ListConfigEntries(dorm3dFavorCategory)
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range entries {
+		var cfg dorm3dFavorLevelConfig
+		if err := json.Unmarshal(entry.Data, &cfg); err != nil {
+			continue
+		}
+		if cfg.CharID == charID && cfg.Level == level {
+			return &cfg, nil
+		}
+	}
+	return nil, db.ErrNotFound
+}
+
+func newDorm3dTriggerRuntime(apartment *orm.Dorm3dApartment, ship *orm.Dorm3dShip, shipAtMaxLv bool, maxFavorExp uint32) dorm3dTriggerRuntime {
+	counts := make(map[uint32]uint32, len(ship.RegularTrigger))
+	for _, triggerID := range ship.RegularTrigger {
+		counts[triggerID]++
+	}
+	return dorm3dTriggerRuntime{
+		vigorUsed:   apartment.DailyVigorMax,
+		favorExp:    ship.FavorExp,
+		dailyFavor:  ship.DailyFavor,
+		shipAtMaxLv: shipAtMaxLv,
+		maxFavorExp: maxFavorExp,
+		counts:      counts,
+		newTriggers: []uint32{},
+	}
+}
+
+func (runtime *dorm3dTriggerRuntime) apply(triggerCfg *dorm3dFavorTriggerConfig, dailyVigorMax uint32) error {
+	if triggerCfg.IsRepeat == 0 && runtime.counts[triggerCfg.ID] > 0 {
+		return fmt.Errorf("trigger %d already consumed", triggerCfg.ID)
+	}
+	if runtime.vigorUsed+triggerCfg.IsDailyMax > dailyVigorMax {
+		return fmt.Errorf("insufficient vigor")
+	}
+	runtime.vigorUsed += triggerCfg.IsDailyMax
+	gain := triggerCfg.Num
+	if runtime.shipAtMaxLv {
+		if runtime.favorExp >= runtime.maxFavorExp {
+			gain = 0
+		} else if runtime.favorExp+gain > runtime.maxFavorExp {
+			gain = runtime.maxFavorExp - runtime.favorExp
+		}
+	}
+	runtime.favorExp += gain
+	runtime.dailyFavor += gain
+	runtime.counts[triggerCfg.ID]++
+	runtime.newTriggers = append(runtime.newTriggers, triggerCfg.ID)
+	return nil
+}
+
+func (runtime *dorm3dTriggerRuntime) commit(apartment *orm.Dorm3dApartment, ship *orm.Dorm3dShip) {
+	apartment.DailyVigorMax = runtime.vigorUsed
+	ship.FavorExp = runtime.favorExp
+	ship.DailyFavor = runtime.dailyFavor
+	ship.RegularTrigger = append(ship.RegularTrigger, runtime.newTriggers...)
+}
