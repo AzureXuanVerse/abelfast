@@ -319,7 +319,7 @@ func TestWorldBossSupportAndAchieveClaim(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal support payload: %v", err)
 	}
-	if _, _, err := WorldBossSupport(&supportBuf, client); err != nil {
+	if _, _, err := WorldChunk3BossSupport(&supportBuf, client); err != nil {
 		t.Fatalf("WorldBossSupport failed: %v", err)
 	}
 	supportResponse := &protobuf.SC_33510{}
@@ -333,7 +333,7 @@ func TestWorldBossSupportAndAchieveClaim(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal invalid support payload: %v", err)
 	}
-	if _, _, err := WorldBossSupport(&supportInvalidBuf, client); err != nil {
+	if _, _, err := WorldChunk3BossSupport(&supportInvalidBuf, client); err != nil {
 		t.Fatalf("WorldBossSupport invalid path failed: %v", err)
 	}
 	supportInvalidResponse := &protobuf.SC_33510{}

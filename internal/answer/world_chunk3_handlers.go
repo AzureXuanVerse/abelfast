@@ -356,7 +356,7 @@ func WorldTriggerDailyTask(buffer *[]byte, client *connection.Client) (int, int,
 	return client.SendMessage(33416, response)
 }
 
-func WorldBossSupport(buffer *[]byte, client *connection.Client) (int, int, error) {
+func WorldChunk3BossSupport(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var payload protobuf.CS_33509
 	if err := proto.Unmarshal(*buffer, &payload); err != nil {
 		return 0, 33510, err
