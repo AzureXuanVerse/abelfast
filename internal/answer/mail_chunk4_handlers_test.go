@@ -133,8 +133,8 @@ func TestWithdrawMailStoreroomResourcesSuccess(t *testing.T) {
 		t.Fatalf("seed stored gold: %v", err)
 	}
 
-	startActiveOil := queryAnswerTestInt64(t, "SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = $2", int64(client.Commander.CommanderID), int64(mailStoreroomOilResourceID))
-	startActiveGold := queryAnswerTestInt64(t, "SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = $2", int64(client.Commander.CommanderID), int64(mailStoreroomGoldResourceID))
+	startActiveOil := queryAnswerTestInt64(t, "SELECT COALESCE((SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = $2), 0)", int64(client.Commander.CommanderID), int64(mailStoreroomOilResourceID))
+	startActiveGold := queryAnswerTestInt64(t, "SELECT COALESCE((SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = $2), 0)", int64(client.Commander.CommanderID), int64(mailStoreroomGoldResourceID))
 
 	payload := marshalPacketRequest(t, &protobuf.CS_30012{Oil: proto.Uint32(200), Gold: proto.Uint32(100)})
 	if _, _, err := WithdrawMailStoreroomResources(&payload, client); err != nil {
@@ -152,11 +152,11 @@ func TestWithdrawMailStoreroomResourcesSuccess(t *testing.T) {
 	if client.Commander.GetResourceCount(mailStoreroomStoredGoldResource) != 400 {
 		t.Fatalf("expected stored gold decremented")
 	}
-	activeOil := queryAnswerTestInt64(t, "SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = $2", int64(client.Commander.CommanderID), int64(mailStoreroomOilResourceID))
+	activeOil := queryAnswerTestInt64(t, "SELECT COALESCE((SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = $2), 0)", int64(client.Commander.CommanderID), int64(mailStoreroomOilResourceID))
 	if activeOil != startActiveOil+200 {
 		t.Fatalf("expected active oil incremented")
 	}
-	activeGold := queryAnswerTestInt64(t, "SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = $2", int64(client.Commander.CommanderID), int64(mailStoreroomGoldResourceID))
+	activeGold := queryAnswerTestInt64(t, "SELECT COALESCE((SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = $2), 0)", int64(client.Commander.CommanderID), int64(mailStoreroomGoldResourceID))
 	if activeGold != startActiveGold+100 {
 		t.Fatalf("expected active gold incremented")
 	}
@@ -201,7 +201,7 @@ func TestWithdrawMailStoreroomResourcesSingleResourceWithoutPeerRow(t *testing.T
 	if err := client.Commander.SetResource(mailStoreroomStoredOilResource, 500); err != nil {
 		t.Fatalf("seed stored oil: %v", err)
 	}
-	startActiveOil := queryAnswerTestInt64(t, "SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = $2", int64(client.Commander.CommanderID), int64(mailStoreroomOilResourceID))
+	startActiveOil := queryAnswerTestInt64(t, "SELECT COALESCE((SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = $2), 0)", int64(client.Commander.CommanderID), int64(mailStoreroomOilResourceID))
 
 	execAnswerTestSQLT(t, "DELETE FROM owned_resources WHERE commander_id = $1 AND resource_id = $2", int64(client.Commander.CommanderID), int64(mailStoreroomStoredGoldResource))
 
@@ -218,7 +218,7 @@ func TestWithdrawMailStoreroomResourcesSingleResourceWithoutPeerRow(t *testing.T
 	if client.Commander.GetResourceCount(mailStoreroomStoredOilResource) != 300 {
 		t.Fatalf("expected stored oil decremented")
 	}
-	activeOil := queryAnswerTestInt64(t, "SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = $2", int64(client.Commander.CommanderID), int64(mailStoreroomOilResourceID))
+	activeOil := queryAnswerTestInt64(t, "SELECT COALESCE((SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = $2), 0)", int64(client.Commander.CommanderID), int64(mailStoreroomOilResourceID))
 	if activeOil != startActiveOil+200 {
 		t.Fatalf("expected active oil incremented")
 	}
