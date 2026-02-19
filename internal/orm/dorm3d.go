@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/jackc/pgx/v5"
 
@@ -18,6 +19,21 @@ const (
 	Dorm3dInstagramOpLike  uint32 = 4
 	Dorm3dInstagramOpShare uint32 = 5
 	Dorm3dInstagramOpExit  uint32 = 6
+
+	dorm3dInsChatGroupCategory      = "ShareCfg/dorm3d_ins_chat_group.json"
+	dorm3dInsUnlockCategory         = "ShareCfg/dorm3d_ins_unlock.json"
+	dorm3dInsTelephoneGroupCategory = "ShareCfg/dorm3d_ins_telephone_group.json"
+	dorm3dInsTemplateCategory       = "ShareCfg/dorm3d_ins_template.json"
+	dorm3dTriggerStateCategory      = "Runtime/dorm3d_ins_trigger_state"
+)
+
+var (
+	ErrDorm3dShipNotFound        = errors.New("dorm3d ship not found")
+	ErrDorm3dCommNotFound        = errors.New("dorm3d comm topic not found")
+	ErrDorm3dInvalidCommShip     = errors.New("dorm3d comm topic does not belong to ship")
+	ErrDorm3dInvalidBackground   = errors.New("dorm3d background not available")
+	ErrDorm3dUnsupportedActType  = errors.New("dorm3d unsupported unlock act type")
+	ErrDorm3dUnlockTargetMissing = errors.New("dorm3d unlock target missing")
 )
 
 type Dorm3dApartment struct {
@@ -129,6 +145,34 @@ type Dorm3dIns struct {
 
 type Dorm3dInsList []Dorm3dIns
 
+type Dorm3dEventInfo struct {
+	EventType uint32
+	Value     uint32
+	ShipGroup uint32
+}
+
+type Dorm3dActInfo struct {
+	ShipGroup uint32
+	Type      uint32
+	ActID     uint32
+	Time      uint32
+}
+
+type dorm3dInsUnlock struct {
+	Content    uint32 `json:"content"`
+	TriggerNum uint32 `json:"trigger_num"`
+	TriggerTyp uint32 `json:"trigger_type"`
+	Type       uint32 `json:"type"`
+}
+
+type dorm3dInsShipRef struct {
+	ShipGroup uint32 `json:"ship_group"`
+}
+
+type dorm3dTriggerState struct {
+	Counters map[string]uint32 `json:"counters"`
+}
+
 func NewDorm3dApartment(commanderID uint32) Dorm3dApartment {
 	return Dorm3dApartment{
 		CommanderID:        commanderID,
@@ -229,9 +273,66 @@ func GetOrCreateDorm3dApartment(commanderID uint32) (*Dorm3dApartment, error) {
 	return GetDorm3dApartment(commanderID)
 }
 
+func GetDorm3dApartmentTx(ctx context.Context, tx pgx.Tx, commanderID uint32) (*Dorm3dApartment, error) {
+	row := tx.QueryRow(ctx, `
+SELECT commander_id,
+       daily_vigor_max,
+       gifts,
+       ships,
+       gift_daily,
+       gift_permanent,
+       furniture_daily,
+       furniture_permanent,
+       rooms,
+       ins
+FROM dorm3d_apartments
+WHERE commander_id = $1
+FOR UPDATE
+`, int64(commanderID))
+	apartment, err := scanDorm3dApartment(row)
+	err = db.MapNotFound(err)
+	if err != nil {
+		return nil, err
+	}
+	apartment.EnsureDefaults()
+	return &apartment, nil
+}
+
+func GetOrCreateDorm3dApartmentTx(ctx context.Context, tx pgx.Tx, commanderID uint32) (*Dorm3dApartment, error) {
+	apartment, err := GetDorm3dApartmentTx(ctx, tx, commanderID)
+	if err == nil {
+		return apartment, nil
+	}
+	if !errors.Is(err, db.ErrNotFound) {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx, `
+INSERT INTO dorm3d_apartments (commander_id)
+VALUES ($1)
+ON CONFLICT (commander_id) DO NOTHING
+`, int64(commanderID)); err != nil {
+		return nil, err
+	}
+	return GetDorm3dApartmentTx(ctx, tx, commanderID)
+}
+
 func SaveDorm3dApartment(apartment *Dorm3dApartment) error {
 	apartment.EnsureDefaults()
 	ctx := context.Background()
+	return saveDorm3dApartmentWithQueries(ctx, db.DefaultStore.Queries, apartment)
+}
+
+func SaveDorm3dApartmentTx(ctx context.Context, tx pgx.Tx, apartment *Dorm3dApartment) error {
+	apartment.EnsureDefaults()
+	queries := db.DefaultStore.Queries.WithTx(tx)
+	return saveDorm3dApartmentWithQueries(ctx, queries, apartment)
+}
+
+type dorm3dApartmentUpserter interface {
+	UpsertDorm3dApartment(context.Context, gen.UpsertDorm3dApartmentParams) error
+}
+
+func saveDorm3dApartmentWithQueries(ctx context.Context, queries dorm3dApartmentUpserter, apartment *Dorm3dApartment) error {
 	gifts, err := marshalDorm3dJSONB(apartment.Gifts)
 	if err != nil {
 		return err
@@ -264,7 +365,7 @@ func SaveDorm3dApartment(apartment *Dorm3dApartment) error {
 	if err != nil {
 		return err
 	}
-	return db.DefaultStore.Queries.UpsertDorm3dApartment(ctx, gen.UpsertDorm3dApartmentParams{
+	return queries.UpsertDorm3dApartment(ctx, gen.UpsertDorm3dApartmentParams{
 		CommanderID:        int64(apartment.CommanderID),
 		DailyVigorMax:      int64(apartment.DailyVigorMax),
 		Gifts:              gifts,
@@ -276,6 +377,23 @@ func SaveDorm3dApartment(apartment *Dorm3dApartment) error {
 		Rooms:              rooms,
 		Ins:                ins,
 	})
+}
+
+func (apartment *Dorm3dApartment) RoomByID(roomID uint32) *Dorm3dRoom {
+	for i := range apartment.Rooms {
+		if apartment.Rooms[i].ID == roomID {
+			return &apartment.Rooms[i]
+		}
+	}
+	return nil
+}
+
+func (apartment *Dorm3dApartment) AddRoom(room Dorm3dRoom) bool {
+	if apartment.RoomByID(room.ID) != nil {
+		return false
+	}
+	apartment.Rooms = append(apartment.Rooms, room)
+	return true
 }
 
 func DeleteDorm3dApartment(commanderID uint32) error {
@@ -352,98 +470,6 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ins,
 	)
 	return err
-}
-
-func GetDorm3dApartmentTx(ctx context.Context, tx pgx.Tx, commanderID uint32) (*Dorm3dApartment, error) {
-	row := tx.QueryRow(ctx, `
-SELECT commander_id,
-       daily_vigor_max,
-       gifts,
-       ships,
-       gift_daily,
-       gift_permanent,
-       furniture_daily,
-       furniture_permanent,
-       rooms,
-       ins
-FROM dorm3d_apartments
-WHERE commander_id = $1
-FOR UPDATE
-`, int64(commanderID))
-	apartment, err := scanDorm3dApartment(row)
-	err = db.MapNotFound(err)
-	if err != nil {
-		return nil, err
-	}
-	apartment.EnsureDefaults()
-	return &apartment, nil
-}
-
-func GetOrCreateDorm3dApartmentTx(ctx context.Context, tx pgx.Tx, commanderID uint32) (*Dorm3dApartment, error) {
-	apartment, err := GetDorm3dApartmentTx(ctx, tx, commanderID)
-	if err == nil {
-		return apartment, nil
-	}
-	if !errors.Is(err, db.ErrNotFound) {
-		return nil, err
-	}
-	if _, err := tx.Exec(ctx, `
-INSERT INTO dorm3d_apartments (commander_id)
-VALUES ($1)
-ON CONFLICT (commander_id) DO NOTHING
-`, int64(commanderID)); err != nil {
-		return nil, err
-	}
-	return GetDorm3dApartmentTx(ctx, tx, commanderID)
-}
-
-func SaveDorm3dApartmentTx(ctx context.Context, tx pgx.Tx, apartment *Dorm3dApartment) error {
-	apartment.EnsureDefaults()
-	query := db.DefaultStore.Queries.WithTx(tx)
-	gifts, err := marshalDorm3dJSONB(apartment.Gifts)
-	if err != nil {
-		return err
-	}
-	ships, err := marshalDorm3dJSONB(apartment.Ships)
-	if err != nil {
-		return err
-	}
-	giftDaily, err := marshalDorm3dJSONB(apartment.GiftDaily)
-	if err != nil {
-		return err
-	}
-	giftPermanent, err := marshalDorm3dJSONB(apartment.GiftPermanent)
-	if err != nil {
-		return err
-	}
-	furnitureDaily, err := marshalDorm3dJSONB(apartment.FurnitureDaily)
-	if err != nil {
-		return err
-	}
-	furniturePermanent, err := marshalDorm3dJSONB(apartment.FurniturePermanent)
-	if err != nil {
-		return err
-	}
-	rooms, err := marshalDorm3dJSONB(apartment.Rooms)
-	if err != nil {
-		return err
-	}
-	ins, err := marshalDorm3dJSONB(apartment.Ins)
-	if err != nil {
-		return err
-	}
-	return query.UpsertDorm3dApartment(ctx, gen.UpsertDorm3dApartmentParams{
-		CommanderID:        int64(apartment.CommanderID),
-		DailyVigorMax:      int64(apartment.DailyVigorMax),
-		Gifts:              gifts,
-		Ships:              ships,
-		GiftDaily:          giftDaily,
-		GiftPermanent:      giftPermanent,
-		FurnitureDaily:     furnitureDaily,
-		FurniturePermanent: furniturePermanent,
-		Rooms:              rooms,
-		Ins:                ins,
-	})
 }
 
 func scanDorm3dApartment(scanner rowScanner) (Dorm3dApartment, error) {
@@ -570,6 +596,136 @@ func AddDorm3dInstagramReply(commanderID uint32, shipGroup uint32, postID uint32
 	return SaveDorm3dApartment(apartment)
 }
 
+func UpdateDorm3dInsCareFlag(commanderID uint32, shipGroup uint32, careFlag uint32) error {
+	apartment, err := GetOrCreateDorm3dApartment(commanderID)
+	if err != nil {
+		return err
+	}
+	if _, ok := apartment.findShip(shipGroup); !ok {
+		return ErrDorm3dShipNotFound
+	}
+	ins := apartment.ensureInsEntry(shipGroup)
+	ins.CareFlag = careFlag
+	return SaveDorm3dApartment(apartment)
+}
+
+func UpdateDorm3dInsBackground(commanderID uint32, shipGroup uint32, backID uint32) error {
+	apartment, err := GetOrCreateDorm3dApartment(commanderID)
+	if err != nil {
+		return err
+	}
+	ship, ok := apartment.findShip(shipGroup)
+	if !ok {
+		return ErrDorm3dShipNotFound
+	}
+	if backID != 0 && !containsUint32(ship.Skins, backID) && ship.CurSkin != backID {
+		return ErrDorm3dInvalidBackground
+	}
+	ins := apartment.ensureInsEntry(shipGroup)
+	ins.CurBack = backID
+	return SaveDorm3dApartment(apartment)
+}
+
+func SetDorm3dCurrentCommID(commanderID uint32, shipGroup uint32, commID uint32) error {
+	apartment, err := GetOrCreateDorm3dApartment(commanderID)
+	if err != nil {
+		return err
+	}
+	if _, ok := apartment.findShip(shipGroup); !ok {
+		return ErrDorm3dShipNotFound
+	}
+	ins := apartment.ensureInsEntry(shipGroup)
+	if !ins.hasComm(commID) {
+		return ErrDorm3dCommNotFound
+	}
+	configShipGroup, err := loadDorm3dInsShipGroup(dorm3dInsChatGroupCategory, commID)
+	if err != nil {
+		return err
+	}
+	if configShipGroup != shipGroup {
+		return ErrDorm3dInvalidCommShip
+	}
+	ins.CurCommId = commID
+	return SaveDorm3dApartment(apartment)
+}
+
+func UpdateDorm3dVisitTime(commanderID uint32, shipGroup uint32, visitTime uint32) error {
+	apartment, err := GetOrCreateDorm3dApartment(commanderID)
+	if err != nil {
+		return err
+	}
+	ship, ok := apartment.findShip(shipGroup)
+	if !ok {
+		return ErrDorm3dShipNotFound
+	}
+	ship.VisitTime = visitTime
+	return SaveDorm3dApartment(apartment)
+}
+
+func ApplyDorm3dTriggerEvents(commanderID uint32, events []Dorm3dEventInfo, now uint32) ([]Dorm3dActInfo, error) {
+	apartment, err := GetOrCreateDorm3dApartment(commanderID)
+	if err != nil {
+		return nil, err
+	}
+	ownedShips := make(map[uint32]struct{}, len(apartment.Ships))
+	for _, ship := range apartment.Ships {
+		if ship.ShipGroup == 0 {
+			continue
+		}
+		ownedShips[ship.ShipGroup] = struct{}{}
+	}
+	state, err := loadDorm3dTriggerState(commanderID)
+	if err != nil {
+		return nil, err
+	}
+	for _, event := range events {
+		if event.ShipGroup == 0 || event.EventType == 0 {
+			continue
+		}
+		if _, ok := ownedShips[event.ShipGroup]; !ok {
+			continue
+		}
+		state.Counters[dorm3dTriggerCounterKey(event.ShipGroup, event.EventType)] = maxDorm3dCounter(
+			state.Counters[dorm3dTriggerCounterKey(event.ShipGroup, event.EventType)],
+			event.Value,
+		)
+	}
+	unlocks, err := ListConfigEntries(dorm3dInsUnlockCategory)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]Dorm3dActInfo, 0)
+	for _, unlockEntry := range unlocks {
+		var unlock dorm3dInsUnlock
+		if err := json.Unmarshal(unlockEntry.Data, &unlock); err != nil {
+			continue
+		}
+		shipGroup, err := dorm3dResolveUnlockShipGroup(unlock)
+		if err != nil {
+			continue
+		}
+		counter := state.Counters[dorm3dTriggerCounterKey(shipGroup, unlock.TriggerTyp)]
+		if counter < unlock.TriggerNum {
+			continue
+		}
+		ins := apartment.ensureInsEntry(shipGroup)
+		if ins.hasAct(unlock.Type, unlock.Content) {
+			continue
+		}
+		if err := ins.unlockAct(unlock.Type, unlock.Content, now); err != nil {
+			continue
+		}
+		result = append(result, Dorm3dActInfo{ShipGroup: shipGroup, Type: unlock.Type, ActID: unlock.Content, Time: now})
+	}
+	if err := SaveDorm3dApartment(apartment); err != nil {
+		return nil, err
+	}
+	if err := saveDorm3dTriggerState(commanderID, state); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (apartment *Dorm3dApartment) EnsureDefaults() {
 	if apartment.Gifts == nil {
 		apartment.Gifts = Dorm3dGiftList{}
@@ -677,6 +833,73 @@ func (apartment *Dorm3dApartment) FindGift(giftID uint32) *Dorm3dGift {
 	return nil
 }
 
+func (apartment *Dorm3dApartment) findShip(shipGroup uint32) (*Dorm3dShip, bool) {
+	for i := range apartment.Ships {
+		if apartment.Ships[i].ShipGroup == shipGroup {
+			return &apartment.Ships[i], true
+		}
+	}
+	return nil, false
+}
+
+func (ins *Dorm3dIns) hasComm(commID uint32) bool {
+	for i := range ins.CommList {
+		if ins.CommList[i].ID == commID {
+			return true
+		}
+	}
+	return false
+}
+
+func (ins *Dorm3dIns) hasAct(actType uint32, actID uint32) bool {
+	switch actType {
+	case 1:
+		return ins.hasComm(actID)
+	case 2:
+		for i := range ins.PhoneList {
+			if ins.PhoneList[i].ID == actID {
+				return true
+			}
+		}
+		return false
+	case 3:
+		for i := range ins.FriendList {
+			if ins.FriendList[i].ID == actID {
+				return true
+			}
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+func (ins *Dorm3dIns) unlockAct(actType uint32, actID uint32, now uint32) error {
+	switch actType {
+	case 1:
+		ins.CommList = append(ins.CommList, Dorm3dCommInfo{ID: actID, Time: now, ReadFlag: 0, ReplyList: []Dorm3dKeyValue{}})
+		if ins.CurCommId == 0 {
+			ins.CurCommId = actID
+		}
+		return nil
+	case 2:
+		ins.PhoneList = append(ins.PhoneList, Dorm3dPhoneInfo{ID: actID, Time: now, ReadFlag: 0})
+		return nil
+	case 3:
+		ins.FriendList = append(ins.FriendList, Dorm3dFriendCircleInfo{
+			ID:        actID,
+			Time:      now,
+			ReadFlag:  0,
+			GoodFlag:  0,
+			ReplyList: []Dorm3dReplyFriend{},
+			ExitTime:  0,
+		})
+		return nil
+	default:
+		return ErrDorm3dUnsupportedActType
+	}
+}
+
 func (ins *Dorm3dIns) ensureFriendEntry(postID uint32, now uint32) *Dorm3dFriendCircleInfo {
 	for i := range ins.FriendList {
 		if ins.FriendList[i].ID == postID {
@@ -693,6 +916,83 @@ func (ins *Dorm3dIns) ensureFriendEntry(postID uint32, now uint32) *Dorm3dFriend
 	}
 	ins.FriendList = append(ins.FriendList, entry)
 	return &ins.FriendList[len(ins.FriendList)-1]
+}
+
+func loadDorm3dInsShipGroup(category string, id uint32) (uint32, error) {
+	entry, err := GetConfigEntry(category, strconv.FormatUint(uint64(id), 10))
+	if err != nil {
+		return 0, err
+	}
+	var data dorm3dInsShipRef
+	if err := json.Unmarshal(entry.Data, &data); err != nil {
+		return 0, err
+	}
+	if data.ShipGroup == 0 {
+		return 0, ErrDorm3dUnlockTargetMissing
+	}
+	return data.ShipGroup, nil
+}
+
+func dorm3dResolveUnlockShipGroup(unlock dorm3dInsUnlock) (uint32, error) {
+	if unlock.Content == 0 {
+		return 0, ErrDorm3dUnlockTargetMissing
+	}
+	switch unlock.Type {
+	case 1:
+		return loadDorm3dInsShipGroup(dorm3dInsChatGroupCategory, unlock.Content)
+	case 2:
+		return loadDorm3dInsShipGroup(dorm3dInsTelephoneGroupCategory, unlock.Content)
+	case 3:
+		return loadDorm3dInsShipGroup(dorm3dInsTemplateCategory, unlock.Content)
+	default:
+		return 0, ErrDorm3dUnsupportedActType
+	}
+}
+
+func loadDorm3dTriggerState(commanderID uint32) (*dorm3dTriggerState, error) {
+	entry, err := GetConfigEntry(dorm3dTriggerStateCategory, strconv.FormatUint(uint64(commanderID), 10))
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			return &dorm3dTriggerState{Counters: map[string]uint32{}}, nil
+		}
+		return nil, err
+	}
+	var state dorm3dTriggerState
+	if err := json.Unmarshal(entry.Data, &state); err != nil {
+		return nil, err
+	}
+	if state.Counters == nil {
+		state.Counters = map[string]uint32{}
+	}
+	return &state, nil
+}
+
+func saveDorm3dTriggerState(commanderID uint32, state *dorm3dTriggerState) error {
+	data, err := json.Marshal(state)
+	if err != nil {
+		return err
+	}
+	return UpsertConfigEntry(dorm3dTriggerStateCategory, strconv.FormatUint(uint64(commanderID), 10), data)
+}
+
+func dorm3dTriggerCounterKey(shipGroup uint32, triggerType uint32) string {
+	return strconv.FormatUint(uint64(shipGroup), 10) + ":" + strconv.FormatUint(uint64(triggerType), 10)
+}
+
+func maxDorm3dCounter(current uint32, value uint32) uint32 {
+	if value > current {
+		return value
+	}
+	return current
+}
+
+func containsUint32(values []uint32, target uint32) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func (list Dorm3dGiftList) Value() (driver.Value, error) {

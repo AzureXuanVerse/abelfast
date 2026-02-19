@@ -21,7 +21,7 @@ func setupDorm3dPacketClient(t *testing.T, commanderID uint32) *connection.Clien
 	return &connection.Client{Commander: commander}
 }
 
-func seedDorm3dConfig(t *testing.T, category string, key string, payload string) {
+func seedDorm3dFavorConfig(t *testing.T, category string, key string, payload string) {
 	t.Helper()
 	if err := orm.UpsertConfigEntry(category, key, []byte(payload)); err != nil {
 		t.Fatalf("failed to seed config %s/%s: %v", category, key, err)
@@ -30,11 +30,11 @@ func seedDorm3dConfig(t *testing.T, category string, key string, payload string)
 
 func TestDorm3dTriggerFavorSuccessPersists(t *testing.T) {
 	client := setupDorm3dPacketClient(t, 9200)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_set.json", "daily_vigor_max", `{"key":"daily_vigor_max","key_value_int":3}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_set.json", "favor_level", `{"key":"favor_level","key_value_int":2}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_dorm_template.json", "7001", `{"id":7001}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_favor_trigger.json", "9001", `{"id":9001,"is_daily_max":1,"is_repeat":1,"num":40}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_favor.json", "7001_2", `{"id":1002,"char_id":7001,"level":2,"favor_exp":200,"levelup_item":[]}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_set.json", "daily_vigor_max", `{"key":"daily_vigor_max","key_value_int":3}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_set.json", "favor_level", `{"key":"favor_level","key_value_int":2}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_dorm_template.json", "7001", `{"id":7001}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_favor_trigger.json", "9001", `{"id":9001,"is_daily_max":1,"is_repeat":1,"num":40}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_favor.json", "7001_2", `{"id":1002,"char_id":7001,"level":2,"favor_exp":200,"levelup_item":[]}`)
 
 	apartment := orm.NewDorm3dApartment(client.Commander.CommanderID)
 	apartment.Ships = orm.Dorm3dShipList{{ShipGroup: 7001, FavorLv: 1, FavorExp: 10, DailyFavor: 2, RegularTrigger: []uint32{}}}
@@ -78,10 +78,10 @@ func TestDorm3dTriggerFavorSuccessPersists(t *testing.T) {
 
 func TestDorm3dTriggerFavorFailsWhenOneTimeAlreadyUsed(t *testing.T) {
 	client := setupDorm3dPacketClient(t, 9201)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_set.json", "daily_vigor_max", `{"key":"daily_vigor_max","key_value_int":3}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_set.json", "favor_level", `{"key":"favor_level","key_value_int":2}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_favor_trigger.json", "9002", `{"id":9002,"is_daily_max":0,"is_repeat":0,"num":60}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_favor.json", "7002_2", `{"id":1002,"char_id":7002,"level":2,"favor_exp":200,"levelup_item":[]}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_set.json", "daily_vigor_max", `{"key":"daily_vigor_max","key_value_int":3}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_set.json", "favor_level", `{"key":"favor_level","key_value_int":2}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_favor_trigger.json", "9002", `{"id":9002,"is_daily_max":0,"is_repeat":0,"num":60}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_favor.json", "7002_2", `{"id":1002,"char_id":7002,"level":2,"favor_exp":200,"levelup_item":[]}`)
 
 	apartment := orm.NewDorm3dApartment(client.Commander.CommanderID)
 	apartment.Ships = orm.Dorm3dShipList{{ShipGroup: 7002, FavorLv: 1, FavorExp: 10, RegularTrigger: []uint32{9002}}}
@@ -118,12 +118,12 @@ func TestDorm3dTriggerFavorFailsWhenOneTimeAlreadyUsed(t *testing.T) {
 
 func TestDorm3dGiveGiftSuccessPersists(t *testing.T) {
 	client := setupDorm3dPacketClient(t, 9202)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_set.json", "daily_vigor_max", `{"key":"daily_vigor_max","key_value_int":3}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_set.json", "favor_level", `{"key":"favor_level","key_value_int":5}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_dorm_template.json", "7003", `{"id":7003}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_favor_trigger.json", "9101", `{"id":9101,"is_daily_max":0,"is_repeat":1,"num":40}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_favor.json", "7003_5", `{"id":1005,"char_id":7003,"level":5,"favor_exp":9999,"levelup_item":[]}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_gift.json", "5001", `{"id":5001,"ship_group_id":0,"favor_trigger_id":9101}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_set.json", "daily_vigor_max", `{"key":"daily_vigor_max","key_value_int":3}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_set.json", "favor_level", `{"key":"favor_level","key_value_int":5}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_dorm_template.json", "7003", `{"id":7003}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_favor_trigger.json", "9101", `{"id":9101,"is_daily_max":0,"is_repeat":1,"num":40}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_favor.json", "7003_5", `{"id":1005,"char_id":7003,"level":5,"favor_exp":9999,"levelup_item":[]}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_gift.json", "5001", `{"id":5001,"ship_group_id":0,"favor_trigger_id":9101}`)
 
 	apartment := orm.NewDorm3dApartment(client.Commander.CommanderID)
 	apartment.Gifts = orm.Dorm3dGiftList{{GiftID: 5001, Number: 3, UsedNumber: 0}}
@@ -168,10 +168,10 @@ func TestDorm3dGiveGiftSuccessPersists(t *testing.T) {
 
 func TestDorm3dGiveGiftFailsDedicatedGiftAlreadyUsed(t *testing.T) {
 	client := setupDorm3dPacketClient(t, 9203)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_set.json", "daily_vigor_max", `{"key":"daily_vigor_max","key_value_int":3}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_set.json", "favor_level", `{"key":"favor_level","key_value_int":5}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_favor.json", "7004_5", `{"id":1005,"char_id":7004,"level":5,"favor_exp":9999,"levelup_item":[]}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_gift.json", "5002", `{"id":5002,"ship_group_id":7004,"favor_trigger_id":0}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_set.json", "daily_vigor_max", `{"key":"daily_vigor_max","key_value_int":3}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_set.json", "favor_level", `{"key":"favor_level","key_value_int":5}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_favor.json", "7004_5", `{"id":1005,"char_id":7004,"level":5,"favor_exp":9999,"levelup_item":[]}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_gift.json", "5002", `{"id":5002,"ship_group_id":7004,"favor_trigger_id":0}`)
 
 	apartment := orm.NewDorm3dApartment(client.Commander.CommanderID)
 	apartment.Gifts = orm.Dorm3dGiftList{{GiftID: 5002, Number: 1, UsedNumber: 1}}
@@ -209,10 +209,10 @@ func TestDorm3dGiveGiftFailsDedicatedGiftAlreadyUsed(t *testing.T) {
 
 func TestDorm3dApartmentLevelUpSuccessReturnsDrops(t *testing.T) {
 	client := setupDorm3dPacketClient(t, 9204)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_set.json", "favor_level", `{"key":"favor_level","key_value_int":3}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_dorm_template.json", "7005", `{"id":7005}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_favor.json", "7005_2", `{"id":2002,"char_id":7005,"level":2,"favor_exp":40,"levelup_item":[[2,1001,3],[1,1,5]]}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_favor.json", "7005_3", `{"id":2003,"char_id":7005,"level":3,"favor_exp":200,"levelup_item":[]}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_set.json", "favor_level", `{"key":"favor_level","key_value_int":3}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_dorm_template.json", "7005", `{"id":7005}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_favor.json", "7005_2", `{"id":2002,"char_id":7005,"level":2,"favor_exp":40,"levelup_item":[[2,1001,3],[1,1,5]]}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_favor.json", "7005_3", `{"id":2003,"char_id":7005,"level":3,"favor_exp":200,"levelup_item":[]}`)
 
 	apartment := orm.NewDorm3dApartment(client.Commander.CommanderID)
 	apartment.Ships = orm.Dorm3dShipList{{ShipGroup: 7005, FavorLv: 1, FavorExp: 50}}
@@ -272,10 +272,10 @@ func TestDorm3dApartmentLevelUpSuccessReturnsDrops(t *testing.T) {
 
 func TestDorm3dGiveGiftFailsDedicatedGiftBulkRequest(t *testing.T) {
 	client := setupDorm3dPacketClient(t, 9207)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_set.json", "daily_vigor_max", `{"key":"daily_vigor_max","key_value_int":3}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_set.json", "favor_level", `{"key":"favor_level","key_value_int":5}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_favor.json", "7007_5", `{"id":1005,"char_id":7007,"level":5,"favor_exp":9999,"levelup_item":[]}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_gift.json", "5007", `{"id":5007,"ship_group_id":7007,"favor_trigger_id":0}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_set.json", "daily_vigor_max", `{"key":"daily_vigor_max","key_value_int":3}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_set.json", "favor_level", `{"key":"favor_level","key_value_int":5}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_favor.json", "7007_5", `{"id":1005,"char_id":7007,"level":5,"favor_exp":9999,"levelup_item":[]}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_gift.json", "5007", `{"id":5007,"ship_group_id":7007,"favor_trigger_id":0}`)
 
 	apartment := orm.NewDorm3dApartment(client.Commander.CommanderID)
 	apartment.Gifts = orm.Dorm3dGiftList{{GiftID: 5007, Number: 2, UsedNumber: 0}}
@@ -313,9 +313,9 @@ func TestDorm3dGiveGiftFailsDedicatedGiftBulkRequest(t *testing.T) {
 
 func TestDorm3dApartmentLevelUpFailsWhenInsufficientFavor(t *testing.T) {
 	client := setupDorm3dPacketClient(t, 9205)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_set.json", "favor_level", `{"key":"favor_level","key_value_int":3}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_favor.json", "7006_2", `{"id":2002,"char_id":7006,"level":2,"favor_exp":40,"levelup_item":[]}`)
-	seedDorm3dConfig(t, "ShareCfg/dorm3d_favor.json", "7006_3", `{"id":2003,"char_id":7006,"level":3,"favor_exp":200,"levelup_item":[]}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_set.json", "favor_level", `{"key":"favor_level","key_value_int":3}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_favor.json", "7006_2", `{"id":2002,"char_id":7006,"level":2,"favor_exp":40,"levelup_item":[]}`)
+	seedDorm3dFavorConfig(t, "ShareCfg/dorm3d_favor.json", "7006_3", `{"id":2003,"char_id":7006,"level":3,"favor_exp":200,"levelup_item":[]}`)
 
 	apartment := orm.NewDorm3dApartment(client.Commander.CommanderID)
 	apartment.Ships = orm.Dorm3dShipList{{ShipGroup: 7006, FavorLv: 1, FavorExp: 20}}

@@ -1,6 +1,7 @@
 package answer_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
@@ -8,6 +9,7 @@ import (
 	"github.com/ggmolly/belfast/internal/answer"
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/orm"
+	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/protobuf"
 	"google.golang.org/protobuf/proto"
 )
@@ -190,5 +192,181 @@ func TestDorm3dInstagramOpsPersist(t *testing.T) {
 	}
 	if friend.Time == 0 {
 		t.Fatalf("expected friend time to be set")
+	}
+}
+
+func seedDorm3dConfigEntry(t *testing.T, category string, key string, raw string) {
+	t.Helper()
+	if err := orm.UpsertConfigEntry(category, key, json.RawMessage(raw)); err != nil {
+		t.Fatalf("failed to seed config entry %s/%s: %v", category, key, err)
+	}
+}
+
+func decodePacketSequenceIDs(t *testing.T, client *connection.Client) []int {
+	t.Helper()
+	buffer := client.Buffer.Bytes()
+	ids := make([]int, 0)
+	offset := 0
+	for offset < len(buffer) {
+		packetID := packets.GetPacketId(offset, &buffer)
+		ids = append(ids, packetID)
+		size := packets.GetPacketSize(offset, &buffer) + 2
+		offset += size
+	}
+	return ids
+}
+
+func TestDorm3dChatSettingsPersist(t *testing.T) {
+	commander := createDorm3dCommander(t, 9102)
+	seedDorm3dConfigEntry(t, "ShareCfg/dorm3d_ins_chat_group.json", "3001", `{"id":3001,"ship_group":100}`)
+	stored := orm.NewDorm3dApartment(commander.CommanderID)
+	stored.Ships = orm.Dorm3dShipList{{ShipGroup: 100, Skins: []uint32{2001}, CurSkin: 2001}}
+	stored.Ins = orm.Dorm3dInsList{{ShipGroup: 100, CommList: []orm.Dorm3dCommInfo{{ID: 3001, Time: 10, ReadFlag: 0, ReplyList: []orm.Dorm3dKeyValue{}}}}}
+	if err := orm.CreateDorm3dApartment(&stored); err != nil {
+		t.Fatalf("failed to create dorm3d apartment: %v", err)
+	}
+	client := &connection.Client{Commander: commander}
+
+	backgroundPayload := protobuf.CS_28030{ShipId: proto.Uint32(100), BackId: proto.Uint32(2001)}
+	backgroundBuf, _ := proto.Marshal(&backgroundPayload)
+	if _, _, err := answer.Dorm3dChatSetBackground(&backgroundBuf, client); err != nil {
+		t.Fatalf("Dorm3dChatSetBackground failed: %v", err)
+	}
+	backgroundResp := &protobuf.SC_28031{}
+	decodeTestPacket(t, client, 28031, backgroundResp)
+	if backgroundResp.GetResult() != 0 {
+		t.Fatalf("expected background result 0, got %d", backgroundResp.GetResult())
+	}
+
+	carePayload := protobuf.CS_28032{ShipId: proto.Uint32(100), Value: proto.Uint32(1)}
+	careBuf, _ := proto.Marshal(&carePayload)
+	if _, _, err := answer.Dorm3dChatSetCare(&careBuf, client); err != nil {
+		t.Fatalf("Dorm3dChatSetCare failed: %v", err)
+	}
+	careResp := &protobuf.SC_28033{}
+	decodeTestPacket(t, client, 28033, careResp)
+	if careResp.GetResult() != 0 {
+		t.Fatalf("expected care result 0, got %d", careResp.GetResult())
+	}
+
+	topicPayload := protobuf.CS_28034{ShipId: proto.Uint32(100), CommId: proto.Uint32(3001)}
+	topicBuf, _ := proto.Marshal(&topicPayload)
+	if _, _, err := answer.Dorm3dInstagramSetTopic(&topicBuf, client); err != nil {
+		t.Fatalf("Dorm3dInstagramSetTopic failed: %v", err)
+	}
+	topicResp := &protobuf.SC_28035{}
+	decodeTestPacket(t, client, 28035, topicResp)
+	if topicResp.GetResult() != 0 {
+		t.Fatalf("expected topic result 0, got %d", topicResp.GetResult())
+	}
+
+	visitPayload := protobuf.CS_28036{ShipId: proto.Uint32(100)}
+	visitBuf, _ := proto.Marshal(&visitPayload)
+	if _, _, err := answer.Dorm3dRecordVisit(&visitBuf, client); err != nil {
+		t.Fatalf("Dorm3dRecordVisit failed: %v", err)
+	}
+	visitResp := &protobuf.SC_28037{}
+	decodeTestPacket(t, client, 28037, visitResp)
+	if visitResp.GetResult() != 0 {
+		t.Fatalf("expected visit result 0, got %d", visitResp.GetResult())
+	}
+
+	updated, err := orm.GetDorm3dApartment(commander.CommanderID)
+	if err != nil {
+		t.Fatalf("failed to load apartment: %v", err)
+	}
+	if updated.Ins[0].CurBack != 2001 || updated.Ins[0].CareFlag != 1 || updated.Ins[0].CurCommId != 3001 {
+		t.Fatalf("unexpected ins state %+v", updated.Ins[0])
+	}
+	if updated.Ships[0].VisitTime == 0 {
+		t.Fatalf("expected visit time to be set")
+	}
+}
+
+func TestDorm3dChatSettingsFailureResults(t *testing.T) {
+	commander := createDorm3dCommander(t, 9103)
+	stored := orm.NewDorm3dApartment(commander.CommanderID)
+	stored.Ships = orm.Dorm3dShipList{{ShipGroup: 100, Skins: []uint32{2001}, CurSkin: 2001}}
+	if err := orm.CreateDorm3dApartment(&stored); err != nil {
+		t.Fatalf("failed to create dorm3d apartment: %v", err)
+	}
+	client := &connection.Client{Commander: commander}
+
+	backgroundPayload := protobuf.CS_28030{ShipId: proto.Uint32(100), BackId: proto.Uint32(9999)}
+	backgroundBuf, _ := proto.Marshal(&backgroundPayload)
+	if _, _, err := answer.Dorm3dChatSetBackground(&backgroundBuf, client); err != nil {
+		t.Fatalf("Dorm3dChatSetBackground failed: %v", err)
+	}
+	backgroundResp := &protobuf.SC_28031{}
+	decodeTestPacket(t, client, 28031, backgroundResp)
+	if backgroundResp.GetResult() == 0 {
+		t.Fatalf("expected non-zero background result")
+	}
+
+	topicPayload := protobuf.CS_28034{ShipId: proto.Uint32(100), CommId: proto.Uint32(5555)}
+	topicBuf, _ := proto.Marshal(&topicPayload)
+	if _, _, err := answer.Dorm3dInstagramSetTopic(&topicBuf, client); err != nil {
+		t.Fatalf("Dorm3dInstagramSetTopic failed: %v", err)
+	}
+	topicResp := &protobuf.SC_28035{}
+	decodeTestPacket(t, client, 28035, topicResp)
+	if topicResp.GetResult() == 0 {
+		t.Fatalf("expected non-zero topic result")
+	}
+
+	visitPayload := protobuf.CS_28036{ShipId: proto.Uint32(200)}
+	visitBuf, _ := proto.Marshal(&visitPayload)
+	if _, _, err := answer.Dorm3dRecordVisit(&visitBuf, client); err != nil {
+		t.Fatalf("Dorm3dRecordVisit failed: %v", err)
+	}
+	visitResp := &protobuf.SC_28037{}
+	decodeTestPacket(t, client, 28037, visitResp)
+	if visitResp.GetResult() == 0 {
+		t.Fatalf("expected non-zero visit result")
+	}
+}
+
+func TestDorm3dTriggerEventUnlockAndDedupe(t *testing.T) {
+	commander := createDorm3dCommander(t, 9104)
+	seedDorm3dConfigEntry(t, "ShareCfg/dorm3d_ins_unlock.json", "1", `{"id":1,"type":1,"content":4001,"trigger_type":152,"trigger_num":2}`)
+	seedDorm3dConfigEntry(t, "ShareCfg/dorm3d_ins_chat_group.json", "4001", `{"id":4001,"ship_group":100}`)
+	stored := orm.NewDorm3dApartment(commander.CommanderID)
+	stored.Ships = orm.Dorm3dShipList{{ShipGroup: 100}}
+	if err := orm.CreateDorm3dApartment(&stored); err != nil {
+		t.Fatalf("failed to create dorm3d apartment: %v", err)
+	}
+	client := &connection.Client{Commander: commander}
+
+	payload := protobuf.CS_28023{EventList: []*protobuf.APA_EVENT_INFO{{
+		EventType: proto.Uint32(152),
+		Value:     proto.Uint32(2),
+		ShipId:    proto.Uint32(100),
+	}}}
+	buf, _ := proto.Marshal(&payload)
+	if _, _, err := answer.Dorm3dChatTriggerEvent(&buf, client); err != nil {
+		t.Fatalf("Dorm3dChatTriggerEvent failed: %v", err)
+	}
+	ids := decodePacketSequenceIDs(t, client)
+	if len(ids) != 2 || ids[0] != 28024 || ids[1] != 28025 {
+		t.Fatalf("expected packet sequence [28024 28025], got %v", ids)
+	}
+	client.Buffer.Reset()
+
+	buf, _ = proto.Marshal(&payload)
+	if _, _, err := answer.Dorm3dChatTriggerEvent(&buf, client); err != nil {
+		t.Fatalf("Dorm3dChatTriggerEvent replay failed: %v", err)
+	}
+	ids = decodePacketSequenceIDs(t, client)
+	if len(ids) != 1 || ids[0] != 28024 {
+		t.Fatalf("expected only ack packet, got %v", ids)
+	}
+	client.Buffer.Reset()
+
+	updated, err := orm.GetDorm3dApartment(commander.CommanderID)
+	if err != nil {
+		t.Fatalf("failed to load apartment: %v", err)
+	}
+	if len(updated.Ins) != 1 || len(updated.Ins[0].CommList) != 1 || updated.Ins[0].CommList[0].ID != 4001 {
+		t.Fatalf("expected unlocked comm topic persisted")
 	}
 }

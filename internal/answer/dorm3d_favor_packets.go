@@ -24,8 +24,8 @@ const (
 	dorm3dFavorCategory        = "ShareCfg/dorm3d_favor.json"
 	dorm3dDormTemplateCategory = "ShareCfg/dorm3d_dorm_template.json"
 
-	dorm3dResultSuccess = uint32(0)
-	dorm3dResultFailure = uint32(1)
+	dorm3dFavorResultSuccess = uint32(0)
+	dorm3dFavorResultFailure = uint32(1)
 )
 
 type dorm3dGiftConfig struct {
@@ -79,7 +79,7 @@ func Dorm3dTriggerFavor(buffer *[]byte, client *connection.Client) (int, int, er
 	shipGroup := payload.GetShipGroup()
 	triggerID := payload.GetTriggerId()
 	if shipGroup == 0 || triggerID == 0 {
-		return sendDorm3dTriggerFavorResult(client, dorm3dResultFailure)
+		return sendDorm3dTriggerFavorResult(client, dorm3dFavorResultFailure)
 	}
 	apartment, err := orm.GetOrCreateDorm3dApartment(client.Commander.CommanderID)
 	if err != nil {
@@ -87,12 +87,12 @@ func Dorm3dTriggerFavor(buffer *[]byte, client *connection.Client) (int, int, er
 	}
 	ship := apartment.FindShip(shipGroup)
 	if ship == nil {
-		return sendDorm3dTriggerFavorResult(client, dorm3dResultFailure)
+		return sendDorm3dTriggerFavorResult(client, dorm3dFavorResultFailure)
 	}
 	triggerCfg, err := loadDorm3dFavorTriggerConfig(triggerID)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
-			return sendDorm3dTriggerFavorResult(client, dorm3dResultFailure)
+			return sendDorm3dTriggerFavorResult(client, dorm3dFavorResultFailure)
 		}
 		return 0, 28004, err
 	}
@@ -114,13 +114,13 @@ func Dorm3dTriggerFavor(buffer *[]byte, client *connection.Client) (int, int, er
 	}
 	runtime := newDorm3dTriggerRuntime(apartment, ship, ship.FavorLv >= maxLevel, maxFavorExp)
 	if err := runtime.apply(triggerCfg, dailyVigorMax); err != nil {
-		return sendDorm3dTriggerFavorResult(client, dorm3dResultFailure)
+		return sendDorm3dTriggerFavorResult(client, dorm3dFavorResultFailure)
 	}
 	runtime.commit(apartment, ship)
 	if err := orm.SaveDorm3dApartment(apartment); err != nil {
 		return 0, 28004, err
 	}
-	return sendDorm3dTriggerFavorResult(client, dorm3dResultSuccess)
+	return sendDorm3dTriggerFavorResult(client, dorm3dFavorResultSuccess)
 }
 
 func Dorm3dApartmentLevelUp(buffer *[]byte, client *connection.Client) (int, int, error) {
@@ -133,7 +133,7 @@ func Dorm3dApartmentLevelUp(buffer *[]byte, client *connection.Client) (int, int
 	}
 	shipGroup := payload.GetShipGroup()
 	if shipGroup == 0 {
-		return sendDorm3dApartmentLevelUpResult(client, dorm3dResultFailure, []*protobuf.DROPINFO{})
+		return sendDorm3dApartmentLevelUpResult(client, dorm3dFavorResultFailure, []*protobuf.DROPINFO{})
 	}
 	maxLevel, err := loadDorm3dSetInt("favor_level")
 	if err != nil {
@@ -178,11 +178,11 @@ func Dorm3dApartmentLevelUp(buffer *[]byte, client *connection.Client) (int, int
 		return orm.SaveDorm3dApartmentTx(ctx, tx, apartment)
 	}); err != nil {
 		if errors.Is(err, errDorm3dBusinessFailed) {
-			return sendDorm3dApartmentLevelUpResult(client, dorm3dResultFailure, []*protobuf.DROPINFO{})
+			return sendDorm3dApartmentLevelUpResult(client, dorm3dFavorResultFailure, []*protobuf.DROPINFO{})
 		}
 		return 0, 28006, err
 	}
-	return sendDorm3dApartmentLevelUpResult(client, dorm3dResultSuccess, drops)
+	return sendDorm3dApartmentLevelUpResult(client, dorm3dFavorResultSuccess, drops)
 }
 
 func HandleDorm3dGiveGift(buffer *[]byte, client *connection.Client) (int, int, error) {
@@ -196,7 +196,7 @@ func HandleDorm3dGiveGift(buffer *[]byte, client *connection.Client) (int, int, 
 	shipGroup := payload.GetShipGroup()
 	giftPayloads := payload.GetGifts()
 	if shipGroup == 0 || len(giftPayloads) == 0 {
-		return sendDorm3dGiveGiftResult(client, dorm3dResultFailure)
+		return sendDorm3dGiveGiftResult(client, dorm3dFavorResultFailure)
 	}
 	apartment, err := orm.GetOrCreateDorm3dApartment(client.Commander.CommanderID)
 	if err != nil {
@@ -204,7 +204,7 @@ func HandleDorm3dGiveGift(buffer *[]byte, client *connection.Client) (int, int, 
 	}
 	ship := apartment.FindShip(shipGroup)
 	if ship == nil {
-		return sendDorm3dGiveGiftResult(client, dorm3dResultFailure)
+		return sendDorm3dGiveGiftResult(client, dorm3dFavorResultFailure)
 	}
 	dailyVigorMax, err := loadDorm3dSetInt("daily_vigor_max")
 	if err != nil {
@@ -226,7 +226,7 @@ func HandleDorm3dGiveGift(buffer *[]byte, client *connection.Client) (int, int, 
 	requestedByGiftID := make(map[uint32]uint32)
 	for _, giftPayload := range giftPayloads {
 		if giftPayload == nil || giftPayload.GetGiftId() == 0 || giftPayload.GetNumber() == 0 {
-			return sendDorm3dGiveGiftResult(client, dorm3dResultFailure)
+			return sendDorm3dGiveGiftResult(client, dorm3dFavorResultFailure)
 		}
 		requestedByGiftID[giftPayload.GetGiftId()] += giftPayload.GetNumber()
 	}
@@ -235,20 +235,20 @@ func HandleDorm3dGiveGift(buffer *[]byte, client *connection.Client) (int, int, 
 	for giftID, requested := range requestedByGiftID {
 		giftState := apartment.FindGift(giftID)
 		if giftState == nil || requested > giftState.Number {
-			return sendDorm3dGiveGiftResult(client, dorm3dResultFailure)
+			return sendDorm3dGiveGiftResult(client, dorm3dFavorResultFailure)
 		}
 		giftCfg, err := loadDorm3dGiftConfig(giftID)
 		if err != nil {
 			if errors.Is(err, db.ErrNotFound) {
-				return sendDorm3dGiveGiftResult(client, dorm3dResultFailure)
+				return sendDorm3dGiveGiftResult(client, dorm3dFavorResultFailure)
 			}
 			return 0, 28010, err
 		}
 		if giftCfg.ShipGroupID != 0 && giftCfg.ShipGroupID != shipGroup {
-			return sendDorm3dGiveGiftResult(client, dorm3dResultFailure)
+			return sendDorm3dGiveGiftResult(client, dorm3dFavorResultFailure)
 		}
 		if giftCfg.ShipGroupID != 0 && (giftState.UsedNumber > 0 || requested > 1) {
-			return sendDorm3dGiveGiftResult(client, dorm3dResultFailure)
+			return sendDorm3dGiveGiftResult(client, dorm3dFavorResultFailure)
 		}
 		if giftCfg.FavorTriggerID == 0 {
 			continue
@@ -256,13 +256,13 @@ func HandleDorm3dGiveGift(buffer *[]byte, client *connection.Client) (int, int, 
 		triggerCfg, err := loadDorm3dFavorTriggerConfig(giftCfg.FavorTriggerID)
 		if err != nil {
 			if errors.Is(err, db.ErrNotFound) {
-				return sendDorm3dGiveGiftResult(client, dorm3dResultFailure)
+				return sendDorm3dGiveGiftResult(client, dorm3dFavorResultFailure)
 			}
 			return 0, 28010, err
 		}
 		for i := uint32(0); i < requested; i++ {
 			if err := runtime.apply(triggerCfg, dailyVigorMax); err != nil {
-				return sendDorm3dGiveGiftResult(client, dorm3dResultFailure)
+				return sendDorm3dGiveGiftResult(client, dorm3dFavorResultFailure)
 			}
 		}
 	}
@@ -276,7 +276,7 @@ func HandleDorm3dGiveGift(buffer *[]byte, client *connection.Client) (int, int, 
 	if err := orm.SaveDorm3dApartment(apartment); err != nil {
 		return 0, 28010, err
 	}
-	return sendDorm3dGiveGiftResult(client, dorm3dResultSuccess)
+	return sendDorm3dGiveGiftResult(client, dorm3dFavorResultSuccess)
 }
 
 func sendDorm3dTriggerFavorResult(client *connection.Client, result uint32) (int, int, error) {
