@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/db/gen"
@@ -16,6 +17,22 @@ const (
 	Dorm3dInstagramOpLike  uint32 = 4
 	Dorm3dInstagramOpShare uint32 = 5
 	Dorm3dInstagramOpExit  uint32 = 6
+
+	dorm3dCollectionTemplateCategory = "ShareCfg/dorm3d_collection_template.json"
+	dorm3dDialogueGroupCategory      = "ShareCfg/dorm3d_dialogue_group.json"
+	dorm3dRoomsCategory              = "ShareCfg/dorm3d_rooms.json"
+)
+
+var (
+	ErrDorm3dShipNotFound         = errors.New("dorm3d ship not found")
+	ErrDorm3dRoomNotFound         = errors.New("dorm3d room not found")
+	ErrDorm3dCollectionInvalid    = errors.New("dorm3d collection invalid")
+	ErrDorm3dCollectionShipGroup  = errors.New("dorm3d collection ship group mismatch")
+	ErrDorm3dDialogueInvalid      = errors.New("dorm3d dialogue invalid")
+	ErrDorm3dInvalidCallName      = errors.New("dorm3d call name invalid")
+	ErrDorm3dSkinNotAvailable     = errors.New("dorm3d skin not available")
+	ErrDorm3dHiddenSkinInvalid    = errors.New("dorm3d hidden skin invalid")
+	ErrDorm3dCollectionRoomConfig = errors.New("dorm3d room config invalid")
 )
 
 type Dorm3dApartment struct {
@@ -126,6 +143,19 @@ type Dorm3dIns struct {
 }
 
 type Dorm3dInsList []Dorm3dIns
+
+type dorm3dCollectionConfig struct {
+	RoomID uint32 `json:"room_id"`
+}
+
+type dorm3dRoomConfig struct {
+	Type      uint32   `json:"type"`
+	Character []uint32 `json:"character"`
+}
+
+type dorm3dDialogueConfig struct {
+	CharID uint32 `json:"char_id"`
+}
 
 func NewDorm3dApartment(commanderID uint32) Dorm3dApartment {
 	return Dorm3dApartment{
@@ -476,6 +506,100 @@ func AddDorm3dInstagramReply(commanderID uint32, shipGroup uint32, postID uint32
 	return SaveDorm3dApartment(apartment)
 }
 
+func SetDorm3dCallName(commanderID uint32, shipGroup uint32, name string, cooldown uint32) error {
+	if shipGroup == 0 || name == "" {
+		return ErrDorm3dInvalidCallName
+	}
+	apartment, err := GetOrCreateDorm3dApartment(commanderID)
+	if err != nil {
+		return err
+	}
+	ship := apartment.ensureShipEntry(shipGroup)
+	if ship.Name == name {
+		return ErrDorm3dInvalidCallName
+	}
+	ship.Name = name
+	ship.NameCd = cooldown
+	return SaveDorm3dApartment(apartment)
+}
+
+func ChangeDorm3dShipSkin(commanderID uint32, shipGroup uint32, skinID uint32) error {
+	apartment, err := GetOrCreateDorm3dApartment(commanderID)
+	if err != nil {
+		return err
+	}
+	ship, ok := apartment.findShip(shipGroup)
+	if !ok {
+		return ErrDorm3dShipNotFound
+	}
+	if skinID != 0 && !containsUint32(ship.Skins, skinID) && ship.CurSkin != skinID {
+		return ErrDorm3dSkinNotAvailable
+	}
+	ship.CurSkin = skinID
+	return SaveDorm3dApartment(apartment)
+}
+
+func UpdateDorm3dSkinHiddenParts(commanderID uint32, shipGroup uint32, skinID uint32, hiddenParts []uint32) error {
+	if skinID == 0 {
+		return ErrDorm3dHiddenSkinInvalid
+	}
+	apartment, err := GetOrCreateDorm3dApartment(commanderID)
+	if err != nil {
+		return err
+	}
+	ship, ok := apartment.findShip(shipGroup)
+	if !ok {
+		return ErrDorm3dShipNotFound
+	}
+	for i := range ship.HiddenInfo {
+		if ship.HiddenInfo[i].SkinID == skinID {
+			ship.HiddenInfo[i].HiddenParts = append([]uint32{}, hiddenParts...)
+			return SaveDorm3dApartment(apartment)
+		}
+	}
+	ship.HiddenInfo = append(ship.HiddenInfo, Dorm3dSkinHiddenInfo{SkinID: skinID, HiddenParts: append([]uint32{}, hiddenParts...)})
+	return SaveDorm3dApartment(apartment)
+}
+
+func MarkDorm3dDialogueSeen(commanderID uint32, dialogID uint32) error {
+	shipGroup, err := dorm3dDialogueShipGroup(dialogID)
+	if err != nil {
+		return err
+	}
+	apartment, err := GetOrCreateDorm3dApartment(commanderID)
+	if err != nil {
+		return err
+	}
+	ship := apartment.ensureShipEntry(shipGroup)
+	if containsUint32(ship.Dialogues, dialogID) {
+		return nil
+	}
+	ship.Dialogues = append(ship.Dialogues, dialogID)
+	return SaveDorm3dApartment(apartment)
+}
+
+func MarkDorm3dCollection(commanderID uint32, roomID uint32, collectionID uint32, shipGroup uint32) error {
+	apartment, err := GetOrCreateDorm3dApartment(commanderID)
+	if err != nil {
+		return err
+	}
+	room, ok := apartment.findRoom(roomID)
+	if !ok {
+		return ErrDorm3dRoomNotFound
+	}
+	if err := dorm3dValidateCollectionRoom(collectionID, roomID); err != nil {
+		return err
+	}
+	if err := dorm3dValidateCollectionShipGroup(roomID, shipGroup); err != nil {
+		return err
+	}
+	if containsUint32(room.Collections, collectionID) {
+		return nil
+	}
+	room.Collections = append(room.Collections, collectionID)
+	return SaveDorm3dApartment(apartment)
+}
+
 func (apartment *Dorm3dApartment) EnsureDefaults() {
 	if apartment.Gifts == nil {
 		apartment.Gifts = Dorm3dGiftList{}
@@ -565,6 +689,39 @@ func (apartment *Dorm3dApartment) ensureInsEntry(shipGroup uint32) *Dorm3dIns {
 	return &apartment.Ins[len(apartment.Ins)-1]
 }
 
+func (apartment *Dorm3dApartment) findShip(shipGroup uint32) (*Dorm3dShip, bool) {
+	for i := range apartment.Ships {
+		if apartment.Ships[i].ShipGroup == shipGroup {
+			return &apartment.Ships[i], true
+		}
+	}
+	return nil, false
+}
+
+func (apartment *Dorm3dApartment) ensureShipEntry(shipGroup uint32) *Dorm3dShip {
+	if ship, ok := apartment.findShip(shipGroup); ok {
+		return ship
+	}
+	entry := Dorm3dShip{
+		ShipGroup:      shipGroup,
+		RegularTrigger: []uint32{},
+		Dialogues:      []uint32{},
+		Skins:          []uint32{},
+		HiddenInfo:     []Dorm3dSkinHiddenInfo{},
+	}
+	apartment.Ships = append(apartment.Ships, entry)
+	return &apartment.Ships[len(apartment.Ships)-1]
+}
+
+func (apartment *Dorm3dApartment) findRoom(roomID uint32) (*Dorm3dRoom, bool) {
+	for i := range apartment.Rooms {
+		if apartment.Rooms[i].ID == roomID {
+			return &apartment.Rooms[i], true
+		}
+	}
+	return nil, false
+}
+
 func (ins *Dorm3dIns) ensureFriendEntry(postID uint32, now uint32) *Dorm3dFriendCircleInfo {
 	for i := range ins.FriendList {
 		if ins.FriendList[i].ID == postID {
@@ -581,6 +738,66 @@ func (ins *Dorm3dIns) ensureFriendEntry(postID uint32, now uint32) *Dorm3dFriend
 	}
 	ins.FriendList = append(ins.FriendList, entry)
 	return &ins.FriendList[len(ins.FriendList)-1]
+}
+
+func dorm3dDialogueShipGroup(dialogID uint32) (uint32, error) {
+	entry, err := GetConfigEntry(dorm3dDialogueGroupCategory, strconv.FormatUint(uint64(dialogID), 10))
+	if err != nil {
+		return 0, ErrDorm3dDialogueInvalid
+	}
+	var data dorm3dDialogueConfig
+	if err := json.Unmarshal(entry.Data, &data); err != nil {
+		return 0, ErrDorm3dDialogueInvalid
+	}
+	if data.CharID == 0 {
+		return 0, ErrDorm3dDialogueInvalid
+	}
+	return data.CharID, nil
+}
+
+func dorm3dValidateCollectionRoom(collectionID uint32, roomID uint32) error {
+	entry, err := GetConfigEntry(dorm3dCollectionTemplateCategory, strconv.FormatUint(uint64(collectionID), 10))
+	if err != nil {
+		return ErrDorm3dCollectionInvalid
+	}
+	var data dorm3dCollectionConfig
+	if err := json.Unmarshal(entry.Data, &data); err != nil {
+		return ErrDorm3dCollectionInvalid
+	}
+	if data.RoomID != roomID {
+		return ErrDorm3dCollectionInvalid
+	}
+	return nil
+}
+
+func dorm3dValidateCollectionShipGroup(roomID uint32, shipGroup uint32) error {
+	entry, err := GetConfigEntry(dorm3dRoomsCategory, strconv.FormatUint(uint64(roomID), 10))
+	if err != nil {
+		return ErrDorm3dCollectionRoomConfig
+	}
+	var room dorm3dRoomConfig
+	if err := json.Unmarshal(entry.Data, &room); err != nil {
+		return ErrDorm3dCollectionRoomConfig
+	}
+	if room.Type != 2 {
+		return nil
+	}
+	if len(room.Character) == 0 || room.Character[0] == 0 {
+		return ErrDorm3dCollectionRoomConfig
+	}
+	if shipGroup == 0 || shipGroup != room.Character[0] {
+		return ErrDorm3dCollectionShipGroup
+	}
+	return nil
+}
+
+func containsUint32(values []uint32, target uint32) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func (list Dorm3dGiftList) Value() (driver.Value, error) {
