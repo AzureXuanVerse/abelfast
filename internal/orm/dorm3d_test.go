@@ -1,6 +1,8 @@
 package orm
 
 import (
+	"encoding/json"
+	"errors"
 	"testing"
 )
 
@@ -122,5 +124,109 @@ func TestDorm3dJSONScan(t *testing.T) {
 	var decodedIns Dorm3dInsList
 	if err := decodedIns.Scan(value); err != nil {
 		t.Fatalf("ins scan: %v", err)
+	}
+}
+
+func TestDorm3dInsMutations(t *testing.T) {
+	initCommanderItemTestDB(t)
+	clearTable(t, &Dorm3dApartment{})
+	clearTable(t, &ConfigEntry{})
+
+	apartment := NewDorm3dApartment(3)
+	apartment.Ships = Dorm3dShipList{{ShipGroup: 100, Skins: []uint32{2001}, CurSkin: 2001}}
+	apartment.Ins = Dorm3dInsList{{ShipGroup: 100, CommList: []Dorm3dCommInfo{{ID: 3001, ReplyList: []Dorm3dKeyValue{}}}}}
+	if err := CreateDorm3dApartment(&apartment); err != nil {
+		t.Fatalf("create apartment: %v", err)
+	}
+	if err := UpsertConfigEntry(dorm3dInsChatGroupCategory, "3001", json.RawMessage(`{"id":3001,"ship_group":100}`)); err != nil {
+		t.Fatalf("seed chat group config: %v", err)
+	}
+
+	if err := UpdateDorm3dInsBackground(3, 100, 2001); err != nil {
+		t.Fatalf("update background: %v", err)
+	}
+	if err := UpdateDorm3dInsCareFlag(3, 100, 1); err != nil {
+		t.Fatalf("update care: %v", err)
+	}
+	if err := SetDorm3dCurrentCommID(3, 100, 3001); err != nil {
+		t.Fatalf("set current comm: %v", err)
+	}
+	if err := UpdateDorm3dVisitTime(3, 100, 1234); err != nil {
+		t.Fatalf("update visit time: %v", err)
+	}
+
+	updated, err := GetDorm3dApartment(3)
+	if err != nil {
+		t.Fatalf("get apartment: %v", err)
+	}
+	if updated.Ins[0].CurBack != 2001 || updated.Ins[0].CareFlag != 1 || updated.Ins[0].CurCommId != 3001 {
+		t.Fatalf("unexpected ins values: %+v", updated.Ins[0])
+	}
+	if updated.Ships[0].VisitTime != 1234 {
+		t.Fatalf("expected visit time 1234, got %d", updated.Ships[0].VisitTime)
+	}
+}
+
+func TestDorm3dInsMutationValidationFailures(t *testing.T) {
+	initCommanderItemTestDB(t)
+	clearTable(t, &Dorm3dApartment{})
+	clearTable(t, &ConfigEntry{})
+
+	apartment := NewDorm3dApartment(4)
+	apartment.Ships = Dorm3dShipList{{ShipGroup: 100, Skins: []uint32{2001}, CurSkin: 2001}}
+	apartment.Ins = Dorm3dInsList{{ShipGroup: 100, CommList: []Dorm3dCommInfo{{ID: 3001, ReplyList: []Dorm3dKeyValue{}}}}}
+	if err := CreateDorm3dApartment(&apartment); err != nil {
+		t.Fatalf("create apartment: %v", err)
+	}
+
+	if err := UpdateDorm3dInsBackground(4, 100, 9999); !errors.Is(err, ErrDorm3dInvalidBackground) {
+		t.Fatalf("expected invalid background error, got %v", err)
+	}
+	if err := SetDorm3dCurrentCommID(4, 100, 5555); !errors.Is(err, ErrDorm3dCommNotFound) {
+		t.Fatalf("expected missing comm error, got %v", err)
+	}
+	if err := UpdateDorm3dVisitTime(4, 999, 1); !errors.Is(err, ErrDorm3dShipNotFound) {
+		t.Fatalf("expected missing ship error, got %v", err)
+	}
+}
+
+func TestApplyDorm3dTriggerEventsUnlockAndDedupe(t *testing.T) {
+	initCommanderItemTestDB(t)
+	clearTable(t, &Dorm3dApartment{})
+	clearTable(t, &ConfigEntry{})
+
+	apartment := NewDorm3dApartment(5)
+	apartment.Ships = Dorm3dShipList{{ShipGroup: 100}}
+	if err := CreateDorm3dApartment(&apartment); err != nil {
+		t.Fatalf("create apartment: %v", err)
+	}
+	if err := UpsertConfigEntry(dorm3dInsUnlockCategory, "1", json.RawMessage(`{"id":1,"type":1,"content":4001,"trigger_type":152,"trigger_num":2}`)); err != nil {
+		t.Fatalf("seed unlock config: %v", err)
+	}
+	if err := UpsertConfigEntry(dorm3dInsChatGroupCategory, "4001", json.RawMessage(`{"id":4001,"ship_group":100}`)); err != nil {
+		t.Fatalf("seed chat group config: %v", err)
+	}
+
+	unlocks, err := ApplyDorm3dTriggerEvents(5, []Dorm3dEventInfo{{EventType: 152, Value: 2, ShipGroup: 100}}, 88)
+	if err != nil {
+		t.Fatalf("apply trigger events: %v", err)
+	}
+	if len(unlocks) != 1 || unlocks[0].ActID != 4001 || unlocks[0].Type != 1 {
+		t.Fatalf("unexpected unlocks: %+v", unlocks)
+	}
+	unlocks, err = ApplyDorm3dTriggerEvents(5, []Dorm3dEventInfo{{EventType: 152, Value: 3, ShipGroup: 100}}, 99)
+	if err != nil {
+		t.Fatalf("apply trigger events second pass: %v", err)
+	}
+	if len(unlocks) != 0 {
+		t.Fatalf("expected deduped unlocks, got %+v", unlocks)
+	}
+
+	updated, err := GetDorm3dApartment(5)
+	if err != nil {
+		t.Fatalf("get apartment: %v", err)
+	}
+	if len(updated.Ins) != 1 || len(updated.Ins[0].CommList) != 1 || updated.Ins[0].CommList[0].ID != 4001 {
+		t.Fatalf("unexpected unlocked state: %+v", updated.Ins)
 	}
 }
