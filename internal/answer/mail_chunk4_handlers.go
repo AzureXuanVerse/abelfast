@@ -108,8 +108,8 @@ func WithdrawMailStoreroomResources(buffer *[]byte, client *connection.Client) (
 	if oil == 0 && gold == 0 {
 		return connection.SendProtoMessage(30013, client, response)
 	}
-	if !client.Commander.HasEnoughResource(mailStoreroomStoredOilResource, oil) ||
-		!client.Commander.HasEnoughResource(mailStoreroomStoredGoldResource, gold) {
+	if (oil > 0 && !client.Commander.HasEnoughResource(mailStoreroomStoredOilResource, oil)) ||
+		(gold > 0 && !client.Commander.HasEnoughResource(mailStoreroomStoredGoldResource, gold)) {
 		return connection.SendProtoMessage(30013, client, response)
 	}
 

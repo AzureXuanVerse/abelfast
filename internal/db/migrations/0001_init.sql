@@ -171,8 +171,6 @@ CREATE TABLE IF NOT EXISTS commanders (
   manifesto text NOT NULL DEFAULT '',
   dorm_name text NOT NULL DEFAULT '',
   random_ship_mode bigint NOT NULL DEFAULT 0,
-  child_display bigint NOT NULL DEFAULT 1004,
-  mail_storeroom_lv bigint NOT NULL DEFAULT 1,
   random_flag_ship_enabled boolean NOT NULL DEFAULT false,
   deleted_at timestamptz
 );

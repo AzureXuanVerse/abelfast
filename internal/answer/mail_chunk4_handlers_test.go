@@ -184,6 +184,34 @@ func TestWithdrawMailStoreroomResourcesCapFailureDoesNotMutate(t *testing.T) {
 	}
 }
 
+func TestWithdrawMailStoreroomResourcesSingleResourceWithoutPeerRow(t *testing.T) {
+	client := setupPlayerUpdateTest(t)
+	seedConfigEntry(t, "ShareCfg/gameset.json", "max_oil", `{"key_value":25000,"description":""}`)
+	seedConfigEntry(t, "ShareCfg/gameset.json", "max_gold", `{"key_value":600000,"description":""}`)
+	if err := client.Commander.SetResource(mailStoreroomStoredOilResource, 500); err != nil {
+		t.Fatalf("seed stored oil: %v", err)
+	}
+
+	execAnswerTestSQLT(t, "DELETE FROM owned_resources WHERE commander_id = $1 AND resource_id = $2", int64(client.Commander.CommanderID), int64(mailStoreroomStoredGoldResource))
+
+	payload := marshalPacketRequest(t, &protobuf.CS_30012{Oil: proto.Uint32(200), Gold: proto.Uint32(0)})
+	if _, _, err := WithdrawMailStoreroomResources(&payload, client); err != nil {
+		t.Fatalf("WithdrawMailStoreroomResources failed: %v", err)
+	}
+
+	response := &protobuf.SC_30013{}
+	decodeLoveLetterPacketMessage(t, client, 30013, response)
+	if response.GetResult() != 0 {
+		t.Fatalf("expected success, got %d", response.GetResult())
+	}
+	if client.Commander.GetResourceCount(mailStoreroomStoredOilResource) != 300 {
+		t.Fatalf("expected stored oil decremented")
+	}
+	if client.Commander.GetResourceCount(mailStoreroomOilResourceID) != 2200 {
+		t.Fatalf("expected active oil incremented")
+	}
+}
+
 func TestExtendMailStoreroomCapacityPersistsLevel(t *testing.T) {
 	client := setupPlayerUpdateTest(t)
 	seedConfigEntry(t, mailStoreroomConfigEntryCategory, "1", `{"id":1,"level":1,"upgrade_gem":0,"upgrade_gold":100,"oil_store":600000,"gold_store":1800000}`)
