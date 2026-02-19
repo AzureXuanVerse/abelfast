@@ -26,6 +26,21 @@ func TestRegisterPacketsIncludesActivityBossHandlers(t *testing.T) {
 			t.Fatalf("expected handler registration for %d", packetID)
 		}
 	}
+	if len(packets.PacketDecisionFn[27002]) == 0 {
+		t.Fatalf("expected handler registration for 27002")
+	}
+	if len(packets.PacketDecisionFn[27012]) == 0 {
+		t.Fatalf("expected handler registration for 27012")
+	}
+	if len(packets.PacketDecisionFn[27029]) == 0 {
+		t.Fatalf("expected handler registration for 27029")
+	}
+	if len(packets.PacketDecisionFn[27045]) == 0 {
+		t.Fatalf("expected handler registration for 27045")
+	}
+	if len(packets.PacketDecisionFn[27047]) == 0 {
+		t.Fatalf("expected handler registration for 27047")
+	}
 	if len(packets.PacketDecisionFn[28001]) == 0 {
 		t.Fatalf("expected handler registration for 28001")
 	}
