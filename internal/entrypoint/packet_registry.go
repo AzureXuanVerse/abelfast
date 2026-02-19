@@ -352,6 +352,9 @@ func registerPackets() {
 	packets.RegisterPacketHandler(12017, []packets.PacketHandler{answer.ModShip})
 	packets.RegisterPacketHandler(11401, []packets.PacketHandler{answer.ChatRoomChange})
 	packets.RegisterPacketHandler(50102, []packets.PacketHandler{answer.ReceiveChatMessage})
+	packets.RegisterPacketHandler(50105, []packets.PacketHandler{answer.SendFriendMessage})
+	packets.RegisterPacketHandler(50111, []packets.PacketHandler{answer.ReportPlayer})
+	packets.RegisterPacketHandler(50113, []packets.PacketHandler{answer.GetThemeTemplatePlayerInfo})
 	packets.RegisterPacketHandler(12032, []packets.PacketHandler{answer.ProposeShip})
 	packets.RegisterPacketHandler(20005, []packets.PacketHandler{answer.SubmitTask})
 	packets.RegisterPacketHandler(20007, []packets.PacketHandler{func(b *[]byte, c *connection.Client) (int, int, error) {
