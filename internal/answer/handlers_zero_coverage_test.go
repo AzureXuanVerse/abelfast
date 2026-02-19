@@ -142,6 +142,18 @@ func TestTrackingNoops(t *testing.T) {
 	if _, _, err := UrExchangeTracking(&buffer, client); err != nil {
 		t.Fatalf("ur exchange tracking failed: %v", err)
 	}
+	validTelemetry := protobuf.CS_28090{TrackTyp: proto.Uint32(1), IntArgs: []int32{1, 2}, StrArgs: []string{"a"}}
+	telemetryBuf, err := proto.Marshal(&validTelemetry)
+	if err != nil {
+		t.Fatalf("marshal telemetry payload: %v", err)
+	}
+	if _, _, err := ApartmentTrackEvent(&telemetryBuf, client); err != nil {
+		t.Fatalf("apartment track event failed: %v", err)
+	}
+	invalid := []byte{0xff, 0x01}
+	if _, _, err := ApartmentTrackEvent(&invalid, client); err == nil {
+		t.Fatalf("expected apartment track event decode error")
+	}
 }
 
 func TestSimpleResponseHandlers(t *testing.T) {
