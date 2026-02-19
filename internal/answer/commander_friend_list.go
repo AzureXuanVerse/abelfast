@@ -27,6 +27,15 @@ func CommanderFriendList(buffer *[]byte, client *connection.Client) (int, int, e
 			}
 		}
 	}
+	if len(response.FriendList) == 0 {
+		legacyProfiles, profileErr := orm.ListFriendProfiles(client.Commander.CommanderID)
+		if profileErr == nil && len(legacyProfiles) > 0 {
+			response.FriendList = make([]*protobuf.FRIEND_INFO, 0, len(legacyProfiles))
+			for _, profile := range legacyProfiles {
+				response.FriendList = append(response.FriendList, buildFriendInfo(profile, client))
+			}
+		}
+	}
 
 	requests, err := orm.ListIncomingFriendRequests(client.Commander.CommanderID)
 	if err == nil {
