@@ -71,11 +71,11 @@ func AcceptFriendRequest(buffer *[]byte, client *connection.Client) (int, int, e
 		return n, packetID, nil
 	}
 
-	acceptorPush := protobuf.SC_50008{Player: buildFriendInfo(requesterProfile, false)}
+	acceptorPush := protobuf.SC_50008{Player: buildFriendInfo(requesterProfile, client)}
 	_, _, _ = client.SendMessage(50008, &acceptorPush)
 
 	if requesterClient, ok := client.Server.FindClientByCommander(requesterID); ok {
-		requesterPush := protobuf.SC_50008{Player: buildFriendInfo(targetProfile, true)}
+		requesterPush := protobuf.SC_50008{Player: buildFriendInfo(targetProfile, requesterClient)}
 		_, _, _ = requesterClient.SendMessage(50008, &requesterPush)
 	}
 

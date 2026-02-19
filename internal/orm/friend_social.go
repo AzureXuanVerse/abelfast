@@ -25,12 +25,6 @@ type FriendLink struct {
 	CreatedAt   time.Time
 }
 
-type CommanderSocialProfile struct {
-	CommanderID uint32
-	Name        string
-	Level       uint32
-}
-
 type PendingFriendRequest struct {
 	Requester CommanderSocialProfile
 	Content   string

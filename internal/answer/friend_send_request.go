@@ -66,7 +66,7 @@ func SendFriendRequest(buffer *[]byte, client *connection.Client) (int, int, err
 	push := protobuf.SC_50005{
 		Msg: &protobuf.MSG_INFO_P50{
 			Timestamp: proto.Uint32(uint32(time.Now().UTC().Unix())),
-			Player:    buildPlayerInfo(requesterProfile),
+			Player:    buildPlayerInfoP50(requesterProfile),
 			Content:   proto.String(payload.GetContent()),
 		},
 	}
