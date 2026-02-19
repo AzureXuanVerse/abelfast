@@ -2,6 +2,7 @@ package answer_test
 
 import (
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/ggmolly/belfast/internal/answer"
@@ -12,6 +13,8 @@ import (
 )
 
 func createDorm3dCommander(t *testing.T, commanderID uint32) *orm.Commander {
+	os.Setenv("MODE", "test")
+	orm.InitDatabase()
 	commander := &orm.Commander{
 		CommanderID: commanderID,
 		AccountID:   commanderID,
