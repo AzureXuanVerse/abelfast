@@ -628,9 +628,6 @@ func ApplyDorm3dTriggerEvents(commanderID uint32, events []Dorm3dEventInfo, now 
 		if err != nil {
 			continue
 		}
-		if _, ok := ownedShips[shipGroup]; !ok {
-			continue
-		}
 		counter := state.Counters[dorm3dTriggerCounterKey(shipGroup, unlock.TriggerTyp)]
 		if counter < unlock.TriggerNum {
 			continue
