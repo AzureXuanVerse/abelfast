@@ -52,7 +52,7 @@ func TestDorm3dRoomUnlockSuccessAndSnapshot(t *testing.T) {
 	orm.InitDatabase()
 	seedDorm3dConfig(t, 4)
 
-	commander := createDorm3dCommander(t, 9201)
+	commander := createDorm3dCommander(t, 9301)
 	if err := commander.SetResource(1, 500); err != nil {
 		t.Fatalf("failed to seed resource: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestDorm3dRoomUnlockFailures(t *testing.T) {
 	orm.InitDatabase()
 	seedDorm3dConfig(t, 4)
 
-	duplicateCommander := createDorm3dCommander(t, 9202)
+	duplicateCommander := createDorm3dCommander(t, 9302)
 	if err := duplicateCommander.SetResource(1, 500); err != nil {
 		t.Fatalf("failed to seed resource: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestDorm3dRoomUnlockFailures(t *testing.T) {
 		t.Fatalf("expected duplicate unlock failure")
 	}
 
-	insufficientCommander := createDorm3dCommander(t, 9203)
+	insufficientCommander := createDorm3dCommander(t, 9303)
 	if err := insufficientCommander.SetResource(1, 50); err != nil {
 		t.Fatalf("failed to seed resource: %v", err)
 	}
@@ -163,7 +163,7 @@ func TestDorm3dRoomUnlockFailures(t *testing.T) {
 
 func TestDorm3dReplaceFurniture(t *testing.T) {
 	orm.InitDatabase()
-	commander := createDorm3dCommander(t, 9204)
+	commander := createDorm3dCommander(t, 9304)
 	stored := orm.NewDorm3dApartment(commander.CommanderID)
 	stored.Rooms = orm.Dorm3dRoomList{{
 		ID: 9,
@@ -232,7 +232,7 @@ func TestDorm3dRoomInviteUnlock(t *testing.T) {
 	orm.InitDatabase()
 	seedDorm3dConfig(t, 4)
 
-	commander := createDorm3dCommander(t, 9205)
+	commander := createDorm3dCommander(t, 9305)
 	if err := commander.SetResource(4, 1000); err != nil {
 		t.Fatalf("failed to seed resource: %v", err)
 	}
@@ -290,7 +290,7 @@ func TestDorm3dRoomInviteUnlock(t *testing.T) {
 		t.Fatalf("expected invalid target failure")
 	}
 
-	insufficientCommander := createDorm3dCommander(t, 9206)
+	insufficientCommander := createDorm3dCommander(t, 9306)
 	if err := insufficientCommander.SetResource(4, 100); err != nil {
 		t.Fatalf("failed to seed resource: %v", err)
 	}
@@ -309,7 +309,7 @@ func TestDorm3dRoomInviteUnlock(t *testing.T) {
 		t.Fatalf("expected insufficient resource result 2, got %d", insufficientResp.GetResult())
 	}
 
-	missingRoomCommander := createDorm3dCommander(t, 9207)
+	missingRoomCommander := createDorm3dCommander(t, 9307)
 	if err := missingRoomCommander.SetResource(4, 1000); err != nil {
 		t.Fatalf("failed to seed resource: %v", err)
 	}

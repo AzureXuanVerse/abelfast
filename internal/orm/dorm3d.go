@@ -939,6 +939,24 @@ func (apartment *Dorm3dApartment) ensureInsEntry(shipGroup uint32) *Dorm3dIns {
 	return &apartment.Ins[len(apartment.Ins)-1]
 }
 
+func (apartment *Dorm3dApartment) FindShip(shipGroup uint32) *Dorm3dShip {
+	for i := range apartment.Ships {
+		if apartment.Ships[i].ShipGroup == shipGroup {
+			return &apartment.Ships[i]
+		}
+	}
+	return nil
+}
+
+func (apartment *Dorm3dApartment) FindGift(giftID uint32) *Dorm3dGift {
+	for i := range apartment.Gifts {
+		if apartment.Gifts[i].GiftID == giftID {
+			return &apartment.Gifts[i]
+		}
+	}
+	return nil
+}
+
 func (apartment *Dorm3dApartment) findShip(shipGroup uint32) (*Dorm3dShip, bool) {
 	for i := range apartment.Ships {
 		if apartment.Ships[i].ShipGroup == shipGroup {
