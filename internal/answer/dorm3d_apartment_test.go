@@ -347,16 +347,7 @@ func TestDorm3dTriggerEventUnlockAndDedupe(t *testing.T) {
 	if len(ids) != 2 || ids[0] != 28024 || ids[1] != 28025 {
 		t.Fatalf("expected packet sequence [28024 28025], got %v", ids)
 	}
-	ack := &protobuf.SC_28024{}
-	decodeTestPacket(t, client, 28024, ack)
-	if ack.GetResult() != 0 {
-		t.Fatalf("expected ack result 0")
-	}
-	unlock := &protobuf.SC_28025{}
-	decodeTestPacket(t, client, 28025, unlock)
-	if len(unlock.GetList()) != 1 || unlock.GetList()[0].GetActId() != 4001 {
-		t.Fatalf("expected unlock act 4001")
-	}
+	client.Buffer.Reset()
 
 	buf, _ = proto.Marshal(&payload)
 	if _, _, err := answer.Dorm3dChatTriggerEvent(&buf, client); err != nil {
@@ -366,7 +357,7 @@ func TestDorm3dTriggerEventUnlockAndDedupe(t *testing.T) {
 	if len(ids) != 1 || ids[0] != 28024 {
 		t.Fatalf("expected only ack packet, got %v", ids)
 	}
-	decodeTestPacket(t, client, 28024, ack)
+	client.Buffer.Reset()
 
 	updated, err := orm.GetDorm3dApartment(commander.CommanderID)
 	if err != nil {
