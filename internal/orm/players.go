@@ -234,6 +234,108 @@ SELECT EXISTS(
 	return exists, nil
 }
 
+func GetCommanderCoresByIDs(commanderIDs []uint32) (map[uint32]*Commander, error) {
+	result := make(map[uint32]*Commander, len(commanderIDs))
+	if len(commanderIDs) == 0 {
+		return result, nil
+	}
+	if db.DefaultStore == nil {
+		return nil, errors.New("db not initialized")
+	}
+
+	ids := make([]int64, 0, len(commanderIDs))
+	for _, id := range commanderIDs {
+		ids = append(ids, int64(id))
+	}
+
+	ctx := context.Background()
+	rows, err := db.DefaultStore.Pool.Query(ctx, `
+SELECT
+	commander_id,
+	account_id,
+	level,
+	exp,
+	name,
+	last_login,
+	guide_index,
+	new_guide_index,
+	name_change_cooldown,
+	room_id,
+	exchange_count,
+	draw_count1,
+	draw_count10,
+	support_requisition_count,
+	support_requisition_month,
+	collect_attack_count,
+	acc_pay_lv,
+	living_area_cover_id,
+	selected_icon_frame_id,
+	selected_chat_frame_id,
+	selected_battle_ui_id,
+	display_icon_id,
+	display_skin_id,
+	display_icon_theme_id,
+	manifesto,
+	dorm_name,
+	random_ship_mode,
+	mail_storeroom_lv,
+	random_flag_ship_enabled,
+	deleted_at
+FROM commanders
+WHERE commander_id = ANY($1)
+	AND deleted_at IS NULL
+`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		commander := &Commander{}
+		if err := rows.Scan(
+			&commander.CommanderID,
+			&commander.AccountID,
+			&commander.Level,
+			&commander.Exp,
+			&commander.Name,
+			&commander.LastLogin,
+			&commander.GuideIndex,
+			&commander.NewGuideIndex,
+			&commander.NameChangeCooldown,
+			&commander.RoomID,
+			&commander.ExchangeCount,
+			&commander.DrawCount1,
+			&commander.DrawCount10,
+			&commander.SupportRequisitionCount,
+			&commander.SupportRequisitionMonth,
+			&commander.CollectAttackCount,
+			&commander.AccPayLv,
+			&commander.LivingAreaCoverID,
+			&commander.SelectedIconFrameID,
+			&commander.SelectedChatFrameID,
+			&commander.SelectedBattleUIID,
+			&commander.DisplayIconID,
+			&commander.DisplaySkinID,
+			&commander.DisplayIconThemeID,
+			&commander.Manifesto,
+			&commander.DormName,
+			&commander.RandomShipMode,
+			&commander.MailStoreroomLv,
+			&commander.RandomFlagShipEnabled,
+			&commander.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		result[commander.CommanderID] = commander
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
 func CommanderNameExists(name string) (bool, error) {
 	ctx := context.Background()
 	var exists bool
