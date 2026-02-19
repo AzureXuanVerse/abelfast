@@ -64,9 +64,12 @@ func PlayerInfo(buffer *[]byte, client *connection.Client) (int, int, error) {
 		Cover: &protobuf.LIVINGAREA_COVER{
 			Id: proto.Uint32(client.Commander.LivingAreaCoverID),
 		},
-		MailStoreroomLv: proto.Uint32(1),
+		MailStoreroomLv: proto.Uint32(client.Commander.MailStoreroomLv),
 		BattleUi:        proto.Uint32(client.Commander.SelectedBattleUIID),
 		NewGuideIndex:   proto.Uint32(client.Commander.NewGuideIndex),
+	}
+	if response.GetMailStoreroomLv() == 0 {
+		response.MailStoreroomLv = proto.Uint32(1)
 	}
 
 	// Get user's secretaries

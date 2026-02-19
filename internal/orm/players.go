@@ -340,6 +340,7 @@ SELECT
 	manifesto,
 	dorm_name,
 	random_ship_mode,
+	mail_storeroom_lv,
 	random_flag_ship_enabled,
 	deleted_at
 FROM commanders
@@ -377,6 +378,7 @@ WHERE commander_id = $1
 		&commander.Manifesto,
 		&commander.DormName,
 		&commander.RandomShipMode,
+		&commander.MailStoreroomLv,
 		&commander.RandomFlagShipEnabled,
 		&deletedAt,
 	)

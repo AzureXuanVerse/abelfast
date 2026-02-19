@@ -56,10 +56,11 @@ INSERT INTO commanders (
   dorm_name,
   random_ship_mode,
   child_display,
+  mail_storeroom_lv,
   random_flag_ship_enabled
 ) VALUES (
   $1, $2, 1, 0, $3, now(), $4, $5, '1970-01-01 00:00:00+00',
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '', '', 0, 1004, false
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, '', '', 0, 1004, 1, false
 )
 `
 
@@ -113,6 +114,7 @@ SELECT
   dorm_name,
   random_ship_mode,
   child_display,
+  mail_storeroom_lv,
   random_flag_ship_enabled
 FROM commanders
 WHERE account_id = $1
@@ -149,6 +151,7 @@ type GetCommanderByAccountIDRow struct {
 	DormName                string
 	RandomShipMode          int64
 	ChildDisplay            int64
+	MailStoreroomLv         int64
 	RandomFlagShipEnabled   bool
 }
 
@@ -184,6 +187,7 @@ func (q *Queries) GetCommanderByAccountID(ctx context.Context, accountID int64) 
 		&i.DormName,
 		&i.RandomShipMode,
 		&i.ChildDisplay,
+		&i.MailStoreroomLv,
 		&i.RandomFlagShipEnabled,
 	)
 	return i, err
@@ -219,6 +223,7 @@ SELECT
   dorm_name,
   random_ship_mode,
   child_display,
+  mail_storeroom_lv,
   random_flag_ship_enabled
 FROM commanders
 WHERE commander_id = $1
@@ -254,6 +259,7 @@ type GetCommanderByIDRow struct {
 	DormName                string
 	RandomShipMode          int64
 	ChildDisplay            int64
+	MailStoreroomLv         int64
 	RandomFlagShipEnabled   bool
 }
 
@@ -289,6 +295,7 @@ func (q *Queries) GetCommanderByID(ctx context.Context, commanderID int64) (GetC
 		&i.DormName,
 		&i.RandomShipMode,
 		&i.ChildDisplay,
+		&i.MailStoreroomLv,
 		&i.RandomFlagShipEnabled,
 	)
 	return i, err
