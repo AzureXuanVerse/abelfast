@@ -1,7 +1,10 @@
 package orm
 
 import (
+	"context"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
 )
 
 func TestDorm3dApartmentLifecycle(t *testing.T) {
@@ -57,6 +60,39 @@ func TestDorm3dEnsureDefaults(t *testing.T) {
 	apartment.EnsureDefaults()
 	if apartment.Gifts == nil || apartment.Ships == nil || apartment.Ins == nil {
 		t.Fatalf("expected defaults set")
+	}
+}
+
+func TestDorm3dRoomHelpers(t *testing.T) {
+	apartment := NewDorm3dApartment(9)
+	if !apartment.AddRoom(Dorm3dRoom{ID: 4}) {
+		t.Fatalf("expected first add room to succeed")
+	}
+	if apartment.AddRoom(Dorm3dRoom{ID: 4}) {
+		t.Fatalf("expected duplicate add room to fail")
+	}
+	if apartment.RoomByID(4) == nil {
+		t.Fatalf("expected room lookup by id to succeed")
+	}
+}
+
+func TestSaveDorm3dApartmentTx(t *testing.T) {
+	initCommanderItemTestDB(t)
+	clearTable(t, &Dorm3dApartment{})
+
+	apartment := NewDorm3dApartment(33)
+	apartment.DailyVigorMax = 42
+	if err := WithPGXTx(context.Background(), func(tx pgx.Tx) error {
+		return SaveDorm3dApartmentTx(context.Background(), tx, &apartment)
+	}); err != nil {
+		t.Fatalf("save dorm3d apartment tx: %v", err)
+	}
+	stored, err := GetDorm3dApartment(33)
+	if err != nil {
+		t.Fatalf("get dorm3d apartment: %v", err)
+	}
+	if stored.DailyVigorMax != 42 {
+		t.Fatalf("expected daily vigor max 42, got %d", stored.DailyVigorMax)
 	}
 }
 
