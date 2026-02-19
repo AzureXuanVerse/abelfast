@@ -65,6 +65,32 @@ func TestWorldBossDamageRankSorted(t *testing.T) {
 	}
 }
 
+func TestWorldBossDamageRankUsesTargetBossState(t *testing.T) {
+	requester := worldBossTestClient(22)
+
+	targetState, err := orm.GetOrCreateCommanderWorldBossState(23)
+	if err != nil {
+		t.Fatalf("target state init failed: %v", err)
+	}
+	targetState.SelfBoss = &orm.WorldBossBossState{ID: 117, TemplateID: 7, Lv: 1, Hp: 5000, Owner: 23, LastTime: uint32(time.Now().Unix()) + 600}
+	targetState.SetRankings(117, []orm.WorldBossRankEntry{{CommanderID: 23, Name: "target", Damage: 3333}})
+	if err := orm.SaveCommanderWorldBossState(targetState); err != nil {
+		t.Fatalf("target state save failed: %v", err)
+	}
+
+	req := protobuf.CS_34505{BossId: proto.Uint32(117)}
+	buf, _ := proto.Marshal(&req)
+	if _, _, err := WorldBossDamageRank(&buf, requester); err != nil {
+		t.Fatalf("rank handler failed: %v", err)
+	}
+
+	var resp protobuf.SC_34506
+	decodePacketAt(t, requester, 0, 34506, &resp)
+	if len(resp.GetRankList()) != 1 || resp.GetRankList()[0].GetId() != 23 {
+		t.Fatalf("expected rank list sourced from target boss owner")
+	}
+}
+
 func TestWorldBossSupportUpdatesTimer(t *testing.T) {
 	client := worldBossTestClient(3)
 	state, _ := orm.GetOrCreateCommanderWorldBossState(client.Commander.CommanderID)
@@ -166,6 +192,55 @@ func TestWorldBossArchivesAutoBattleStartStop(t *testing.T) {
 	decodePacketAt(t, client, 0, 34526, &stopResp)
 	if stopResp.GetResult() != 0 || stopResp.GetCount() == 0 {
 		t.Fatalf("expected auto-battle stop success with settlement")
+	}
+}
+
+func TestWorldBossArchivesStopAutoBattleCapsAtFinishTime(t *testing.T) {
+	client := worldBossTestClient(27)
+	now := uint32(time.Now().Unix())
+	state, _ := orm.GetOrCreateCommanderWorldBossState(client.Commander.CommanderID)
+	state.SelfBoss = &orm.WorldBossBossState{ID: 75, TemplateID: 7, Lv: 1, Hp: 100, Owner: 27, LastTime: now + 1800}
+	state.AutoBattleBossID = 75
+	state.AutoBattleStartTime = now - 3600
+	state.AutoFightFinishTime = now - 3300
+	_ = orm.SaveCommanderWorldBossState(state)
+
+	stopReq := protobuf.CS_34525{BossId: proto.Uint32(75)}
+	stopBuf, _ := proto.Marshal(&stopReq)
+	if _, _, err := WorldBossArchivesStopAutoBattle(&stopBuf, client); err != nil {
+		t.Fatalf("stop failed: %v", err)
+	}
+
+	var stopResp protobuf.SC_34526
+	decodePacketAt(t, client, 0, 34526, &stopResp)
+	if stopResp.GetResult() != 0 {
+		t.Fatalf("expected auto-battle stop success")
+	}
+	if stopResp.GetCount() != 6 {
+		t.Fatalf("expected settlement capped to finish-time window, got %d", stopResp.GetCount())
+	}
+}
+
+func TestWorldBossCacheHpRefreshReadsRequestedBosses(t *testing.T) {
+	requester := worldBossTestClient(31)
+	requesterState, _ := orm.GetOrCreateCommanderWorldBossState(requester.Commander.CommanderID)
+	requesterState.SelfBoss = &orm.WorldBossBossState{ID: 401, TemplateID: 7, Lv: 1, Hp: 123, Owner: 31, LastTime: uint32(time.Now().Unix()) + 600}
+	_ = orm.SaveCommanderWorldBossState(requesterState)
+
+	targetState, _ := orm.GetOrCreateCommanderWorldBossState(32)
+	targetState.SelfBoss = &orm.WorldBossBossState{ID: 402, TemplateID: 7, Lv: 1, Hp: 987, Owner: 32, LastTime: uint32(time.Now().Unix()) + 600, RankCount: 5}
+	_ = orm.SaveCommanderWorldBossState(targetState)
+
+	req := protobuf.CS_34517{BossId: []uint32{402}}
+	buf, _ := proto.Marshal(&req)
+	if _, _, err := WorldBossCacheHpRefresh(&buf, requester); err != nil {
+		t.Fatalf("cache hp refresh failed: %v", err)
+	}
+
+	var resp protobuf.SC_34518
+	decodePacketAt(t, requester, 0, 34518, &resp)
+	if len(resp.GetList()) != 1 || resp.GetList()[0].GetId() != 402 {
+		t.Fatalf("expected requested target boss entry in refresh response")
 	}
 }
 

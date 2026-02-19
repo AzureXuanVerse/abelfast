@@ -65,9 +65,12 @@ func WorldBossDamageRank(buffer *[]byte, client *connection.Client) (int, int, e
 		return 0, 34506, err
 	}
 
-	state, err := orm.GetOrCreateCommanderWorldBossState(client.Commander.CommanderID)
+	state, err := resolveWorldBossStateByBossID(client.Commander.CommanderID, payload.GetBossId())
 	if err != nil {
 		return 0, 34506, err
+	}
+	if state == nil {
+		return client.SendMessage(34506, &protobuf.SC_34506{RankList: []*protobuf.WORLDBOSS_RANK_P34{}})
 	}
 
 	rankEntries := state.GetRankings(payload.GetBossId())
@@ -232,11 +235,6 @@ func WorldBossCacheHpRefresh(buffer *[]byte, client *connection.Client) (int, in
 		return 0, 34518, err
 	}
 
-	state, err := orm.GetOrCreateCommanderWorldBossState(client.Commander.CommanderID)
-	if err != nil {
-		return 0, 34518, err
-	}
-
 	seen := make(map[uint32]bool, len(payload.GetBossId()))
 	result := make([]*protobuf.WORLDBOSS_SIMPLE, 0, len(payload.GetBossId()))
 	for _, bossID := range payload.GetBossId() {
@@ -244,7 +242,11 @@ func WorldBossCacheHpRefresh(buffer *[]byte, client *connection.Client) (int, in
 			continue
 		}
 		seen[bossID] = true
-		if state.SelfBoss == nil || state.SelfBoss.ID != bossID {
+		state, err := resolveWorldBossStateByBossID(client.Commander.CommanderID, bossID)
+		if err != nil {
+			return 0, 34518, err
+		}
+		if state == nil || state.SelfBoss == nil || state.SelfBoss.ID != bossID {
 			continue
 		}
 		result = append(result, &protobuf.WORLDBOSS_SIMPLE{
@@ -429,7 +431,14 @@ func WorldBossArchivesStopAutoBattle(buffer *[]byte, client *connection.Client) 
 	if start == 0 || start > now {
 		start = now
 	}
-	elapsed := now - start
+	end := now
+	if state.AutoFightFinishTime > 0 && state.AutoFightFinishTime < end {
+		end = state.AutoFightFinishTime
+	}
+	if end < start {
+		end = start
+	}
+	elapsed := end - start
 	count := elapsed/60 + 1
 	damage := count * 1000
 	oil := count * 5
@@ -527,4 +536,29 @@ func worldBossStateToProto(boss *orm.WorldBossBossState) *protobuf.WORLDBOSS_INF
 		FightCount: proto.Uint32(boss.FightCount),
 		RankCount:  proto.Uint32(boss.RankCount),
 	}
+}
+
+func resolveWorldBossStateByBossID(requesterCommanderID uint32, bossID uint32) (*orm.WorldBossState, error) {
+	requesterState, err := orm.GetOrCreateCommanderWorldBossState(requesterCommanderID)
+	if err != nil {
+		return nil, err
+	}
+	if requesterState.SelfBoss != nil && requesterState.SelfBoss.ID == bossID {
+		return requesterState, nil
+	}
+
+	states, err := orm.ListWorldBossStates()
+	if err != nil {
+		return nil, err
+	}
+	for _, state := range states {
+		if state == nil || state.CommanderID == requesterCommanderID {
+			continue
+		}
+		if state.SelfBoss != nil && state.SelfBoss.ID == bossID {
+			return state, nil
+		}
+	}
+
+	return nil, nil
 }

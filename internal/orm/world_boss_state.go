@@ -119,6 +119,41 @@ func SaveCommanderWorldBossState(state *WorldBossState) error {
 	return UpsertConfigEntry(worldBossStateCategory, strconv.FormatUint(uint64(state.CommanderID), 10), data)
 }
 
+func ListWorldBossStates() ([]*WorldBossState, error) {
+	if db.DefaultStore == nil {
+		worldBossStateMemoryMu.RLock()
+		states := make([]*WorldBossState, 0, len(worldBossStateMemory))
+		for commanderID, state := range worldBossStateMemory {
+			cloned := cloneWorldBossState(state)
+			cloned.ensureDefaults(commanderID)
+			states = append(states, cloned)
+		}
+		worldBossStateMemoryMu.RUnlock()
+		return states, nil
+	}
+
+	entries, err := ListConfigEntries(worldBossStateCategory)
+	if err != nil {
+		return nil, err
+	}
+	states := make([]*WorldBossState, 0, len(entries))
+	for _, entry := range entries {
+		commanderID, parseErr := strconv.ParseUint(entry.Key, 10, 32)
+		if parseErr != nil {
+			continue
+		}
+		state := &WorldBossState{}
+		if len(entry.Data) != 0 {
+			if unmarshalErr := json.Unmarshal(entry.Data, state); unmarshalErr != nil {
+				continue
+			}
+		}
+		state.ensureDefaults(uint32(commanderID))
+		states = append(states, state)
+	}
+	return states, nil
+}
+
 func (state *WorldBossState) GetRankings(bossID uint32) []WorldBossRankEntry {
 	state.ensureDefaults(state.CommanderID)
 	values := state.Rankings[strconv.FormatUint(uint64(bossID), 10)]
