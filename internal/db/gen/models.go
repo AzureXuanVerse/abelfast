@@ -407,6 +407,15 @@ type CommanderMeow struct {
 	CreatedAt   pgtype.Timestamptz
 }
 
+type CommanderMetaPtProgress struct {
+	CommanderID int64
+	GroupID     int64
+	Pt          int64
+	FetchList   []byte
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type CommanderMiscItem struct {
 	CommanderID int64
 	ItemID      int64

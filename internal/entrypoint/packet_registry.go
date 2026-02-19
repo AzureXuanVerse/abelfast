@@ -93,6 +93,7 @@ func registerPackets() {
 	packets.RegisterPacketHandler(34501, []packets.PacketHandler{answer.WorldBossInfo})
 	packets.RegisterPacketHandler(63317, []packets.PacketHandler{answer.MetaCharacterTacticsInfoRequestCommandResponse})
 	packets.RegisterPacketHandler(34001, []packets.PacketHandler{answer.GetMetaShipsPointsResponse})
+	packets.RegisterPacketHandler(34003, []packets.PacketHandler{answer.ClaimMetaPtAward})
 	packets.RegisterPacketHandler(18001, []packets.PacketHandler{answer.ExerciseEnemies})
 	packets.RegisterPacketHandler(18003, []packets.PacketHandler{answer.ExerciseReplaceRivals})
 	packets.RegisterPacketHandler(18006, []packets.PacketHandler{answer.ExercisePowerRankList})
