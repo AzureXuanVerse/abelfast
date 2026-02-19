@@ -47,6 +47,7 @@ func loadCommanderWithDetailsSQLC(id uint32) (Commander, error) {
 		DormName:                row.DormName,
 		RandomShipMode:          uint32(row.RandomShipMode),
 		ChildDisplay:            uint32(row.ChildDisplay),
+		MailStoreroomLv:         uint32(row.MailStoreroomLv),
 		RandomFlagShipEnabled:   row.RandomFlagShipEnabled,
 	}
 

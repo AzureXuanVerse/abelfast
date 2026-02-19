@@ -240,6 +240,7 @@ type Commander struct {
 	RandomFlagShipEnabled   bool
 	DeletedAt               pgtype.Timestamptz
 	ChildDisplay            int64
+	MailStoreroomLv         int64
 }
 
 type CommanderActivityTask struct {

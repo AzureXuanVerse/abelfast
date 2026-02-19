@@ -17,10 +17,7 @@ func mailToMailInfo(mail *orm.Mail) *protobuf.MAIL_INFO {
 			Number: proto.Uint32(attachment.Quantity),
 		}
 	}
-	fullTitle := mail.Title
-	if mail.CustomSender != nil {
-		fullTitle += "||" + *mail.CustomSender
-	}
+	fullTitle := mailTitleWithSender(mail)
 	attachFlag := mail.AttachmentsCollected
 	if len(mail.Attachments) == 0 {
 		attachFlag = false
@@ -37,6 +34,14 @@ func mailToMailInfo(mail *orm.Mail) *protobuf.MAIL_INFO {
 		ReadFlag:       proto.Uint32(boolToUint32(mail.Read)),
 		AttachFlag:     proto.Uint32(boolToUint32(attachFlag)),
 	}
+}
+
+func mailTitleWithSender(mail *orm.Mail) string {
+	fullTitle := mail.Title
+	if mail.CustomSender != nil {
+		fullTitle += "||" + *mail.CustomSender
+	}
+	return fullTitle
 }
 
 func SendMailList(buffer *[]byte, client *connection.Client) (int, int, error) {

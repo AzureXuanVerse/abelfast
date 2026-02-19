@@ -56,5 +56,6 @@ SET
   dorm_name = $26,
   random_ship_mode = $27,
   child_display = $28,
-  random_flag_ship_enabled = $29
+  mail_storeroom_lv = $29,
+  random_flag_ship_enabled = $30
 WHERE commander_id = $1;

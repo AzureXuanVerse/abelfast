@@ -42,6 +42,7 @@ type Commander struct {
 	DormName                string     `gorm:"size:50;default:'';not_null"`
 	RandomShipMode          uint32     `gorm:"default:0;not_null"`
 	ChildDisplay            uint32     `gorm:"default:1004;not_null"`
+	MailStoreroomLv         uint32     `gorm:"default:1;not_null"`
 	RandomFlagShipEnabled   bool       `gorm:"default:false;not_null"`
 	DeletedAt               *time.Time `gorm:"index"`
 
@@ -377,7 +378,8 @@ SET
   manifesto = $25,
   dorm_name = $26,
   random_ship_mode = $27,
-  random_flag_ship_enabled = $28
+  mail_storeroom_lv = $28,
+  random_flag_ship_enabled = $29
 WHERE commander_id = $1
 `,
 		int64(c.CommanderID),
@@ -407,6 +409,7 @@ WHERE commander_id = $1
 		c.Manifesto,
 		c.DormName,
 		int64(c.RandomShipMode),
+		int64(c.MailStoreroomLv),
 		c.RandomFlagShipEnabled,
 	)
 	return err
