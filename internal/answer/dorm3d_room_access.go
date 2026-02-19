@@ -74,25 +74,35 @@ func Dorm3dRoomUnlock(buffer *[]byte, client *connection.Client) (int, int, erro
 	if err != nil {
 		return sendDorm3dRoomUnlockFailure(client, apartment)
 	}
-	if !canConsumeDorm3dCosts(client.Commander, costs) {
-		return sendDorm3dRoomUnlockFailure(client, apartment)
-	}
-	for _, cost := range costs {
-		if err := consumeDorm3dCost(client.Commander, cost); err != nil {
-			return sendDorm3dRoomUnlockFailure(client, apartment)
+	ctx := context.Background()
+	var room orm.Dorm3dRoom
+	if err := orm.WithPGXTx(ctx, func(tx pgx.Tx) error {
+		freshApartment, txErr := orm.GetOrCreateDorm3dApartmentTx(ctx, tx, client.Commander.CommanderID)
+		if txErr != nil {
+			return txErr
 		}
-	}
+		if freshApartment.RoomByID(roomID) != nil {
+			return fmt.Errorf("room already unlocked")
+		}
 
-	room := orm.Dorm3dRoom{
-		ID:          roomID,
-		Furnitures:  []orm.Dorm3dFurniture{},
-		Collections: []uint32{},
-		Ships:       []uint32{},
-	}
-	if !apartment.AddRoom(room) {
-		return sendDorm3dRoomUnlockFailure(client, apartment)
-	}
-	if err := orm.SaveDorm3dApartment(apartment); err != nil {
+		room = orm.Dorm3dRoom{
+			ID:          roomID,
+			Furnitures:  []orm.Dorm3dFurniture{},
+			Collections: []uint32{},
+			Ships:       []uint32{},
+		}
+		if !freshApartment.AddRoom(room) {
+			return fmt.Errorf("room already unlocked")
+		}
+
+		for _, cost := range costs {
+			if txErr := consumeDorm3dCostTx(ctx, tx, client.Commander, cost); txErr != nil {
+				return txErr
+			}
+		}
+
+		return orm.SaveDorm3dApartmentTx(ctx, tx, freshApartment)
+	}); err != nil {
 		return sendDorm3dRoomUnlockFailure(client, apartment)
 	}
 
@@ -187,13 +197,9 @@ func Dorm3dRoomInviteUnlock(buffer *[]byte, client *connection.Client) (int, int
 	if !ok {
 		return sendDorm3dResultOnly(client, 28020, dorm3dResultFailure)
 	}
-	if !client.Commander.HasEnoughResource(costResourceID, costAmount) {
-		return sendDorm3dResultOnly(client, 28020, dorm3dResultNoCost)
-	}
-
 	ctx := context.Background()
 	if err := orm.WithPGXTx(ctx, func(tx pgx.Tx) error {
-		freshApartment, txErr := orm.GetOrCreateDorm3dApartment(client.Commander.CommanderID)
+		freshApartment, txErr := orm.GetOrCreateDorm3dApartmentTx(ctx, tx, client.Commander.CommanderID)
 		if txErr != nil {
 			return txErr
 		}
@@ -290,30 +296,12 @@ func parseDorm3dCosts(raw json.RawMessage) ([]dorm3dCost, error) {
 	return costs, nil
 }
 
-func canConsumeDorm3dCosts(commander *orm.Commander, costs []dorm3dCost) bool {
-	for _, cost := range costs {
-		switch cost.DropType {
-		case consts.DROP_TYPE_RESOURCE:
-			if !commander.HasEnoughResource(cost.DropID, cost.Count) {
-				return false
-			}
-		case consts.DROP_TYPE_ITEM:
-			if !commander.HasEnoughItem(cost.DropID, cost.Count) {
-				return false
-			}
-		default:
-			return false
-		}
-	}
-	return true
-}
-
-func consumeDorm3dCost(commander *orm.Commander, cost dorm3dCost) error {
+func consumeDorm3dCostTx(ctx context.Context, tx pgx.Tx, commander *orm.Commander, cost dorm3dCost) error {
 	switch cost.DropType {
 	case consts.DROP_TYPE_RESOURCE:
-		return commander.ConsumeResource(cost.DropID, cost.Count)
+		return commander.ConsumeResourceTx(ctx, tx, cost.DropID, cost.Count)
 	case consts.DROP_TYPE_ITEM:
-		return commander.ConsumeItem(cost.DropID, cost.Count)
+		return commander.ConsumeItemTx(ctx, tx, cost.DropID, cost.Count)
 	default:
 		return fmt.Errorf("unsupported cost type %d", cost.DropType)
 	}

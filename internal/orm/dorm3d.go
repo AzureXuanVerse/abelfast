@@ -229,6 +229,49 @@ func GetOrCreateDorm3dApartment(commanderID uint32) (*Dorm3dApartment, error) {
 	return GetDorm3dApartment(commanderID)
 }
 
+func GetDorm3dApartmentTx(ctx context.Context, tx pgx.Tx, commanderID uint32) (*Dorm3dApartment, error) {
+	row := tx.QueryRow(ctx, `
+SELECT commander_id,
+       daily_vigor_max,
+       gifts,
+       ships,
+       gift_daily,
+       gift_permanent,
+       furniture_daily,
+       furniture_permanent,
+       rooms,
+       ins
+FROM dorm3d_apartments
+WHERE commander_id = $1
+FOR UPDATE
+`, int64(commanderID))
+	apartment, err := scanDorm3dApartment(row)
+	err = db.MapNotFound(err)
+	if err != nil {
+		return nil, err
+	}
+	apartment.EnsureDefaults()
+	return &apartment, nil
+}
+
+func GetOrCreateDorm3dApartmentTx(ctx context.Context, tx pgx.Tx, commanderID uint32) (*Dorm3dApartment, error) {
+	apartment, err := GetDorm3dApartmentTx(ctx, tx, commanderID)
+	if err == nil {
+		return apartment, nil
+	}
+	if !errors.Is(err, db.ErrNotFound) {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx, `
+INSERT INTO dorm3d_apartments (commander_id)
+VALUES ($1)
+ON CONFLICT (commander_id) DO NOTHING
+`, int64(commanderID)); err != nil {
+		return nil, err
+	}
+	return GetDorm3dApartmentTx(ctx, tx, commanderID)
+}
+
 func SaveDorm3dApartment(apartment *Dorm3dApartment) error {
 	apartment.EnsureDefaults()
 	ctx := context.Background()
