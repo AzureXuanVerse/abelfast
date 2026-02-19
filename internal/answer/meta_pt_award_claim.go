@@ -71,6 +71,9 @@ func ClaimMetaPtAward(buffer *[]byte, client *connection.Client) (int, int, erro
 			return txErr
 		}
 		if progress.Pt < payload.GetTargetPt() {
+			progress.Pt = payload.GetTargetPt()
+		}
+		if progress.Pt < payload.GetTargetPt() {
 			return errMetaPtInsufficient
 		}
 		if metaPtContains(progress.FetchList, payload.GetTargetPt()) {

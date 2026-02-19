@@ -84,20 +84,31 @@ func TestClaimMetaPtAwardFailures(t *testing.T) {
 		}
 	})
 
-	t.Run("insufficient pt", func(t *testing.T) {
+	t.Run("persists target pt when below threshold", func(t *testing.T) {
 		client := setupMetaPtTestClient(t)
 		seedMetaPtConfigEntry(t, 970108, `{"id":970108,"type":1,"target":[100],"award_display":[[1,1,100]]}`)
 		if err := orm.SaveCommanderMetaPtProgress(&orm.CommanderMetaPtProgress{CommanderID: client.Commander.CommanderID, GroupID: 970108, Pt: 50, FetchList: []uint32{}}); err != nil {
 			t.Fatalf("seed progress: %v", err)
 		}
+		startGold := client.Commander.GetResourceCount(1)
 		payload := marshalPacketRequest(t, &protobuf.CS_34003{GroupId: proto.Uint32(970108), TargetPt: proto.Uint32(100)})
 		if _, _, err := ClaimMetaPtAward(&payload, client); err != nil {
 			t.Fatalf("claim call failed: %v", err)
 		}
 		response := &protobuf.SC_34004{}
 		decodeLoveLetterPacketMessage(t, client, 34004, response)
-		if response.GetResult() != metaPtClaimResultInsufficient || len(response.GetDropList()) != 0 {
+		if response.GetResult() != metaPtClaimResultSuccess || len(response.GetDropList()) != 1 {
 			t.Fatalf("unexpected response: result=%d drops=%+v", response.GetResult(), response.GetDropList())
+		}
+		if client.Commander.GetResourceCount(1) != startGold+100 {
+			t.Fatalf("expected claim reward to be granted")
+		}
+		stored, err := orm.GetCommanderMetaPtProgress(client.Commander.CommanderID, 970108)
+		if err != nil {
+			t.Fatalf("load progress: %v", err)
+		}
+		if stored.Pt != 100 {
+			t.Fatalf("expected pt to be persisted to target threshold, got %d", stored.Pt)
 		}
 	})
 
