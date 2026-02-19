@@ -68,7 +68,8 @@ func Dorm3dSetCall(buffer *[]byte, client *connection.Client) (int, int, error) 
 	}
 	response := protobuf.SC_28022{Result: proto.Uint32(0)}
 	name := strings.TrimSpace(payload.GetName())
-	if err := orm.SetDorm3dCallName(client.Commander.CommanderID, payload.GetShipGroup(), name, uint32(time.Now().Unix())+dorm3dCallNameCooldownSeconds); err != nil {
+	now := uint32(time.Now().Unix())
+	if err := orm.SetDorm3dCallName(client.Commander.CommanderID, payload.GetShipGroup(), name, now, now+dorm3dCallNameCooldownSeconds); err != nil {
 		response.Result = proto.Uint32(1)
 	}
 	return client.SendMessage(28022, &response)

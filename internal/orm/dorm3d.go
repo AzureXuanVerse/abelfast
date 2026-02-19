@@ -506,7 +506,7 @@ func AddDorm3dInstagramReply(commanderID uint32, shipGroup uint32, postID uint32
 	return SaveDorm3dApartment(apartment)
 }
 
-func SetDorm3dCallName(commanderID uint32, shipGroup uint32, name string, cooldown uint32) error {
+func SetDorm3dCallName(commanderID uint32, shipGroup uint32, name string, now uint32, cooldown uint32) error {
 	if shipGroup == 0 || name == "" {
 		return ErrDorm3dInvalidCallName
 	}
@@ -514,7 +514,13 @@ func SetDorm3dCallName(commanderID uint32, shipGroup uint32, name string, cooldo
 	if err != nil {
 		return err
 	}
-	ship := apartment.ensureShipEntry(shipGroup)
+	ship, ok := apartment.findShip(shipGroup)
+	if !ok {
+		return ErrDorm3dShipNotFound
+	}
+	if ship.NameCd > now {
+		return ErrDorm3dInvalidCallName
+	}
 	if ship.Name == name {
 		return ErrDorm3dInvalidCallName
 	}

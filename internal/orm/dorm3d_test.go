@@ -148,7 +148,7 @@ func TestDorm3dApartmentOps(t *testing.T) {
 		t.Fatalf("seed room config: %v", err)
 	}
 
-	if err := SetDorm3dCallName(6, 100, "Commander", 55); err != nil {
+	if err := SetDorm3dCallName(6, 100, "Commander", 1, 55); err != nil {
 		t.Fatalf("set call name: %v", err)
 	}
 	if err := ChangeDorm3dShipSkin(6, 100, 2001); err != nil {
@@ -200,8 +200,17 @@ func TestDorm3dApartmentOpValidationErrors(t *testing.T) {
 		t.Fatalf("seed room config: %v", err)
 	}
 
-	if err := SetDorm3dCallName(7, 0, "", 0); !errors.Is(err, ErrDorm3dInvalidCallName) {
+	if err := SetDorm3dCallName(7, 0, "", 0, 0); !errors.Is(err, ErrDorm3dInvalidCallName) {
 		t.Fatalf("expected invalid call name error, got %v", err)
+	}
+	if err := SetDorm3dCallName(7, 999, "Commander", 0, 100); !errors.Is(err, ErrDorm3dShipNotFound) {
+		t.Fatalf("expected ship not found error, got %v", err)
+	}
+	if err := SetDorm3dCallName(7, 100, "Commander", 10, 100); err != nil {
+		t.Fatalf("expected initial call name set to succeed, got %v", err)
+	}
+	if err := SetDorm3dCallName(7, 100, "Commander2", 50, 150); !errors.Is(err, ErrDorm3dInvalidCallName) {
+		t.Fatalf("expected cooldown validation failure, got %v", err)
 	}
 	if err := ChangeDorm3dShipSkin(7, 100, 9999); !errors.Is(err, ErrDorm3dSkinNotAvailable) {
 		t.Fatalf("expected skin unavailable error, got %v", err)
