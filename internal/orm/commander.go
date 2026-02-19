@@ -41,6 +41,7 @@ type Commander struct {
 	Manifesto               string     `gorm:"size:200;default:'';not_null"`
 	DormName                string     `gorm:"size:50;default:'';not_null"`
 	RandomShipMode          uint32     `gorm:"default:0;not_null"`
+	ChildDisplay            uint32     `gorm:"default:1004;not_null"`
 	RandomFlagShipEnabled   bool       `gorm:"default:false;not_null"`
 	DeletedAt               *time.Time `gorm:"index"`
 

@@ -55,5 +55,6 @@ SET
   manifesto = $25,
   dorm_name = $26,
   random_ship_mode = $27,
-  random_flag_ship_enabled = $28
+  child_display = $28,
+  random_flag_ship_enabled = $29
 WHERE commander_id = $1;

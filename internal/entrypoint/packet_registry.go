@@ -384,10 +384,16 @@ func registerPackets() {
 	packets.RegisterPacketHandler(21522, []packets.PacketHandler{answer.IslandFinishTechImmediate})
 	packets.RegisterPacketHandler(12034, []packets.PacketHandler{answer.RenameProposedShip})
 	packets.RegisterPacketHandler(27000, []packets.PacketHandler{answer.EducateRequest})
-	packets.RegisterPacketHandler(27010, []packets.PacketHandler{func(b *[]byte, c *connection.Client) (int, int, error) {
-		response := protobuf.SC_27011{}
-		return c.SendMessage(27011, &response)
-	}})
+	packets.RegisterPacketHandler(27004, []packets.PacketHandler{answer.EducateMapSiteOperate})
+	packets.RegisterPacketHandler(27006, []packets.PacketHandler{answer.EducateUpgradeFavor})
+	packets.RegisterPacketHandler(27008, []packets.PacketHandler{answer.EducateTriggerEnd})
+	packets.RegisterPacketHandler(27010, []packets.PacketHandler{answer.EducateGetEndings})
+	packets.RegisterPacketHandler(27019, []packets.PacketHandler{answer.EducateSetTarget})
+	packets.RegisterPacketHandler(27023, []packets.PacketHandler{answer.EducateSubmitTask})
+	packets.RegisterPacketHandler(27031, []packets.PacketHandler{answer.EducateSetCall})
+	packets.RegisterPacketHandler(27037, []packets.PacketHandler{answer.EducateAddTaskProgress})
+	packets.RegisterPacketHandler(27039, []packets.PacketHandler{answer.EducateAddExtraAttr})
+	packets.RegisterPacketHandler(27041, []packets.PacketHandler{answer.ChangeEducateCharacter})
 	packets.RegisterPacketHandler(12102, []packets.PacketHandler{answer.FleetCommit})
 	packets.RegisterPacketHandler(12104, []packets.PacketHandler{answer.FleetRename})
 	packets.RegisterLocalizedPacketHandler(13101, packets.LocalizedHandler{
