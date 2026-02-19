@@ -383,7 +383,12 @@ func registerPackets() {
 	packets.RegisterPacketHandler(21520, []packets.PacketHandler{answer.IslandUnlockTech})
 	packets.RegisterPacketHandler(21522, []packets.PacketHandler{answer.IslandFinishTechImmediate})
 	packets.RegisterPacketHandler(12034, []packets.PacketHandler{answer.RenameProposedShip})
+	packets.RegisterPacketHandler(27002, []packets.PacketHandler{answer.EducateExecutePlans})
+	packets.RegisterPacketHandler(27012, []packets.PacketHandler{answer.EducateGetPlans})
+	packets.RegisterPacketHandler(27029, []packets.PacketHandler{answer.EducateReset})
 	packets.RegisterPacketHandler(27000, []packets.PacketHandler{answer.EducateRequest})
+	packets.RegisterPacketHandler(27045, []packets.PacketHandler{answer.EducateRequestOption})
+	packets.RegisterPacketHandler(27047, []packets.PacketHandler{answer.EducateRefresh})
 	packets.RegisterPacketHandler(27010, []packets.PacketHandler{func(b *[]byte, c *connection.Client) (int, int, error) {
 		response := protobuf.SC_27011{}
 		return c.SendMessage(27011, &response)
