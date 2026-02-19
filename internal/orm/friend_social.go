@@ -110,8 +110,10 @@ func CountFriends(commanderID uint32) (uint32, error) {
 	var count int64
 	if err := db.DefaultStore.Pool.QueryRow(ctx, `
 SELECT COUNT(*)
-FROM friend_links
-WHERE commander_id = $1
+FROM friend_links fl
+JOIN commanders c ON c.commander_id = fl.friend_id
+WHERE fl.commander_id = $1
+  AND c.deleted_at IS NULL
 `, int64(commanderID)).Scan(&count); err != nil {
 		return 0, err
 	}
@@ -167,6 +169,14 @@ WHERE requester_id = $1
 		}
 		if res.RowsAffected() == 0 {
 			return ErrFriendRequestNotFound
+		}
+
+		if _, err := tx.Exec(ctx, `
+DELETE FROM friend_requests
+WHERE requester_id = $1
+  AND target_id = $2
+`, int64(targetID), int64(requesterID)); err != nil {
+			return err
 		}
 
 		if _, err := tx.Exec(ctx, `
