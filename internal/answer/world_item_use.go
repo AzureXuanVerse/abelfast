@@ -74,13 +74,31 @@ func WorldItemUse(buffer *[]byte, client *connection.Client) (int, int, error) {
 	if err != nil {
 		return connection.SendProtoMessage(33302, client, response)
 	}
-	if err := client.Commander.Load(); err != nil {
-		return connection.SendProtoMessage(33302, client, response)
-	}
+	decrementWorldItemUseCache(client, payload.GetId(), payload.GetCount())
 
 	response.Result = proto.Uint32(worldItemUseResultSuccess)
 	response.DropList = dropMapToSortedList(drops)
 	return connection.SendProtoMessage(33302, client, response)
+}
+
+func decrementWorldItemUseCache(client *connection.Client, itemID uint32, count uint32) {
+	if item, ok := client.Commander.CommanderItemsMap[itemID]; ok {
+		if item.Count <= count {
+			item.Count = 0
+			delete(client.Commander.CommanderItemsMap, itemID)
+		} else {
+			item.Count -= count
+		}
+		return
+	}
+	if item, ok := client.Commander.MiscItemsMap[itemID]; ok {
+		if item.Data <= count {
+			item.Data = 0
+			delete(client.Commander.MiscItemsMap, itemID)
+		} else {
+			item.Data -= count
+		}
+	}
 }
 
 func loadWorldItemConfig(itemID uint32) (*worldItemConfig, error) {
