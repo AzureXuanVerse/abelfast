@@ -1,6 +1,7 @@
 package answer_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -187,5 +188,151 @@ func TestDorm3dInstagramOpsPersist(t *testing.T) {
 	}
 	if friend.Time == 0 {
 		t.Fatalf("expected friend time to be set")
+	}
+}
+
+func seedDorm3dConfigEntry(t *testing.T, category string, key string, raw string) {
+	t.Helper()
+	if err := orm.UpsertConfigEntry(category, key, json.RawMessage(raw)); err != nil {
+		t.Fatalf("failed to seed config %s/%s: %v", category, key, err)
+	}
+}
+
+func TestDorm3dCollectionItemPersists(t *testing.T) {
+	commander := createDorm3dCommander(t, 9102)
+	seedDorm3dConfigEntry(t, "ShareCfg/dorm3d_collection_template.json", "7001", `{"id":7001,"room_id":10}`)
+	seedDorm3dConfigEntry(t, "ShareCfg/dorm3d_rooms.json", "10", `{"id":10,"type":2,"character":[100]}`)
+	stored := orm.NewDorm3dApartment(commander.CommanderID)
+	stored.Rooms = orm.Dorm3dRoomList{{ID: 10, Collections: []uint32{}}}
+	if err := orm.CreateDorm3dApartment(&stored); err != nil {
+		t.Fatalf("create apartment: %v", err)
+	}
+	client := &connection.Client{Commander: commander}
+	payload := protobuf.CS_28011{RoomId: proto.Uint32(10), CollectionId: proto.Uint32(7001), ShipGroup: proto.Uint32(100)}
+	buf, _ := proto.Marshal(&payload)
+	if _, _, err := answer.Dorm3dCollectionItem(&buf, client); err != nil {
+		t.Fatalf("Dorm3dCollectionItem failed: %v", err)
+	}
+	resp := &protobuf.SC_28012{}
+	decodeTestPacket(t, client, 28012, resp)
+	if resp.GetResult() != 0 {
+		t.Fatalf("expected result 0")
+	}
+
+	buf, _ = proto.Marshal(&payload)
+	if _, _, err := answer.Dorm3dCollectionItem(&buf, client); err != nil {
+		t.Fatalf("Dorm3dCollectionItem retry failed: %v", err)
+	}
+	decodeTestPacket(t, client, 28012, resp)
+
+	updated, err := orm.GetDorm3dApartment(commander.CommanderID)
+	if err != nil {
+		t.Fatalf("get apartment: %v", err)
+	}
+	if len(updated.Rooms[0].Collections) != 1 || updated.Rooms[0].Collections[0] != 7001 {
+		t.Fatalf("unexpected collections: %+v", updated.Rooms[0].Collections)
+	}
+}
+
+func TestDorm3dApartmentOpsPersist(t *testing.T) {
+	commander := createDorm3dCommander(t, 9103)
+	seedDorm3dConfigEntry(t, "ShareCfg/dorm3d_dialogue_group.json", "8001", `{"id":8001,"char_id":100}`)
+	stored := orm.NewDorm3dApartment(commander.CommanderID)
+	stored.Ships = orm.Dorm3dShipList{{ShipGroup: 100, Skins: []uint32{2001}, CurSkin: 2001, HiddenInfo: []orm.Dorm3dSkinHiddenInfo{}}}
+	if err := orm.CreateDorm3dApartment(&stored); err != nil {
+		t.Fatalf("create apartment: %v", err)
+	}
+	client := &connection.Client{Commander: commander}
+
+	skinPayload := protobuf.CS_28013{ShipGroup: proto.Uint32(100), Skin: proto.Uint32(2001)}
+	skinBuf, _ := proto.Marshal(&skinPayload)
+	if _, _, err := answer.Dorm3dChangeSkin(&skinBuf, client); err != nil {
+		t.Fatalf("Dorm3dChangeSkin failed: %v", err)
+	}
+	skinResp := &protobuf.SC_28014{}
+	decodeTestPacket(t, client, 28014, skinResp)
+	if skinResp.GetResult() != 0 {
+		t.Fatalf("expected skin result 0")
+	}
+
+	talkPayload := protobuf.CS_28015{DialogId: proto.Uint32(8001)}
+	talkBuf, _ := proto.Marshal(&talkPayload)
+	if _, _, err := answer.Dorm3dTalk(&talkBuf, client); err != nil {
+		t.Fatalf("Dorm3dTalk failed: %v", err)
+	}
+	talkResp := &protobuf.SC_28016{}
+	decodeTestPacket(t, client, 28016, talkResp)
+	if talkResp.GetResult() != 0 || len(talkResp.GetDropList()) != 0 {
+		t.Fatalf("expected talk success with empty drops")
+	}
+
+	callPayload := protobuf.CS_28021{ShipGroup: proto.Uint32(100), Name: proto.String("Commander")}
+	callBuf, _ := proto.Marshal(&callPayload)
+	if _, _, err := answer.Dorm3dSetCall(&callBuf, client); err != nil {
+		t.Fatalf("Dorm3dSetCall failed: %v", err)
+	}
+	callResp := &protobuf.SC_28022{}
+	decodeTestPacket(t, client, 28022, callResp)
+	if callResp.GetResult() != 0 {
+		t.Fatalf("expected call-name result 0")
+	}
+
+	hiddenPayload := protobuf.CS_28038{ShipGroup: proto.Uint32(100), SkinId: proto.Uint32(2001), HiddenParts: []uint32{3, 9}}
+	hiddenBuf, _ := proto.Marshal(&hiddenPayload)
+	if _, _, err := answer.Dorm3dSetSkinHiddenParts(&hiddenBuf, client); err != nil {
+		t.Fatalf("Dorm3dSetSkinHiddenParts failed: %v", err)
+	}
+	hiddenResp := &protobuf.SC_28039{}
+	decodeTestPacket(t, client, 28039, hiddenResp)
+	if hiddenResp.GetResult() != 0 {
+		t.Fatalf("expected hidden-parts result 0")
+	}
+
+	updated, err := orm.GetDorm3dApartment(commander.CommanderID)
+	if err != nil {
+		t.Fatalf("get apartment: %v", err)
+	}
+	ship := updated.Ships[0]
+	if ship.Name != "Commander" || ship.NameCd == 0 {
+		t.Fatalf("expected call name + cooldown persisted")
+	}
+	if len(ship.Dialogues) != 1 || ship.Dialogues[0] != 8001 {
+		t.Fatalf("expected dialogue persisted")
+	}
+	if len(ship.HiddenInfo) != 1 || len(ship.HiddenInfo[0].HiddenParts) != 2 {
+		t.Fatalf("expected hidden info persisted")
+	}
+}
+
+func TestDorm3dApartmentOpsFailureResults(t *testing.T) {
+	commander := createDorm3dCommander(t, 9104)
+	stored := orm.NewDorm3dApartment(commander.CommanderID)
+	stored.Ships = orm.Dorm3dShipList{{ShipGroup: 100, Skins: []uint32{2001}}}
+	stored.Rooms = orm.Dorm3dRoomList{{ID: 10}}
+	if err := orm.CreateDorm3dApartment(&stored); err != nil {
+		t.Fatalf("create apartment: %v", err)
+	}
+	client := &connection.Client{Commander: commander}
+
+	collectionPayload := protobuf.CS_28011{RoomId: proto.Uint32(10), CollectionId: proto.Uint32(9999), ShipGroup: proto.Uint32(0)}
+	collectionBuf, _ := proto.Marshal(&collectionPayload)
+	if _, _, err := answer.Dorm3dCollectionItem(&collectionBuf, client); err != nil {
+		t.Fatalf("Dorm3dCollectionItem failed: %v", err)
+	}
+	collectionResp := &protobuf.SC_28012{}
+	decodeTestPacket(t, client, 28012, collectionResp)
+	if collectionResp.GetResult() == 0 {
+		t.Fatalf("expected non-zero collection result")
+	}
+
+	changeSkinPayload := protobuf.CS_28013{ShipGroup: proto.Uint32(100), Skin: proto.Uint32(9999)}
+	changeSkinBuf, _ := proto.Marshal(&changeSkinPayload)
+	if _, _, err := answer.Dorm3dChangeSkin(&changeSkinBuf, client); err != nil {
+		t.Fatalf("Dorm3dChangeSkin failed: %v", err)
+	}
+	changeSkinResp := &protobuf.SC_28014{}
+	decodeTestPacket(t, client, 28014, changeSkinResp)
+	if changeSkinResp.GetResult() == 0 {
+		t.Fatalf("expected non-zero skin result")
 	}
 }

@@ -1,6 +1,8 @@
 package orm
 
 import (
+	"encoding/json"
+	"errors"
 	"testing"
 )
 
@@ -122,5 +124,95 @@ func TestDorm3dJSONScan(t *testing.T) {
 	var decodedIns Dorm3dInsList
 	if err := decodedIns.Scan(value); err != nil {
 		t.Fatalf("ins scan: %v", err)
+	}
+}
+
+func TestDorm3dApartmentOps(t *testing.T) {
+	initCommanderItemTestDB(t)
+	clearTable(t, &Dorm3dApartment{})
+	clearTable(t, &ConfigEntry{})
+
+	apartment := NewDorm3dApartment(6)
+	apartment.Ships = Dorm3dShipList{{ShipGroup: 100, Skins: []uint32{2001}, HiddenInfo: []Dorm3dSkinHiddenInfo{}}}
+	apartment.Rooms = Dorm3dRoomList{{ID: 10, Collections: []uint32{}}}
+	if err := CreateDorm3dApartment(&apartment); err != nil {
+		t.Fatalf("create apartment: %v", err)
+	}
+	if err := UpsertConfigEntry(dorm3dDialogueGroupCategory, "8001", json.RawMessage(`{"id":8001,"char_id":100}`)); err != nil {
+		t.Fatalf("seed dialogue config: %v", err)
+	}
+	if err := UpsertConfigEntry(dorm3dCollectionTemplateCategory, "7001", json.RawMessage(`{"id":7001,"room_id":10}`)); err != nil {
+		t.Fatalf("seed collection config: %v", err)
+	}
+	if err := UpsertConfigEntry(dorm3dRoomsCategory, "10", json.RawMessage(`{"id":10,"type":2,"character":[100]}`)); err != nil {
+		t.Fatalf("seed room config: %v", err)
+	}
+
+	if err := SetDorm3dCallName(6, 100, "Commander", 55); err != nil {
+		t.Fatalf("set call name: %v", err)
+	}
+	if err := ChangeDorm3dShipSkin(6, 100, 2001); err != nil {
+		t.Fatalf("change skin: %v", err)
+	}
+	if err := UpdateDorm3dSkinHiddenParts(6, 100, 2001, []uint32{1, 2}); err != nil {
+		t.Fatalf("update hidden parts: %v", err)
+	}
+	if err := MarkDorm3dDialogueSeen(6, 8001); err != nil {
+		t.Fatalf("mark dialogue seen: %v", err)
+	}
+	if err := MarkDorm3dCollection(6, 10, 7001, 100); err != nil {
+		t.Fatalf("mark collection: %v", err)
+	}
+	if err := MarkDorm3dCollection(6, 10, 7001, 100); err != nil {
+		t.Fatalf("mark collection second time: %v", err)
+	}
+
+	updated, err := GetDorm3dApartment(6)
+	if err != nil {
+		t.Fatalf("get apartment: %v", err)
+	}
+	if updated.Ships[0].Name != "Commander" || updated.Ships[0].NameCd != 55 {
+		t.Fatalf("expected call name persisted")
+	}
+	if len(updated.Ships[0].Dialogues) != 1 || updated.Ships[0].Dialogues[0] != 8001 {
+		t.Fatalf("expected dialogue persisted")
+	}
+	if len(updated.Ships[0].HiddenInfo) != 1 || len(updated.Ships[0].HiddenInfo[0].HiddenParts) != 2 {
+		t.Fatalf("expected hidden parts persisted")
+	}
+	if len(updated.Rooms[0].Collections) != 1 || updated.Rooms[0].Collections[0] != 7001 {
+		t.Fatalf("expected collection persisted once")
+	}
+}
+
+func TestDorm3dApartmentOpValidationErrors(t *testing.T) {
+	initCommanderItemTestDB(t)
+	clearTable(t, &Dorm3dApartment{})
+	clearTable(t, &ConfigEntry{})
+
+	apartment := NewDorm3dApartment(7)
+	apartment.Ships = Dorm3dShipList{{ShipGroup: 100, Skins: []uint32{2001}}}
+	apartment.Rooms = Dorm3dRoomList{{ID: 10, Collections: []uint32{}}}
+	if err := CreateDorm3dApartment(&apartment); err != nil {
+		t.Fatalf("create apartment: %v", err)
+	}
+	if err := UpsertConfigEntry(dorm3dRoomsCategory, "10", json.RawMessage(`{"id":10,"type":2,"character":[100]}`)); err != nil {
+		t.Fatalf("seed room config: %v", err)
+	}
+
+	if err := SetDorm3dCallName(7, 0, "", 0); !errors.Is(err, ErrDorm3dInvalidCallName) {
+		t.Fatalf("expected invalid call name error, got %v", err)
+	}
+	if err := ChangeDorm3dShipSkin(7, 100, 9999); !errors.Is(err, ErrDorm3dSkinNotAvailable) {
+		t.Fatalf("expected skin unavailable error, got %v", err)
+	}
+	if err := UpdateDorm3dSkinHiddenParts(7, 100, 0, nil); !errors.Is(err, ErrDorm3dHiddenSkinInvalid) {
+		t.Fatalf("expected invalid hidden skin error, got %v", err)
+	}
+	if err := MarkDorm3dDialogueSeen(7, 9999); !errors.Is(err, ErrDorm3dDialogueInvalid) {
+		t.Fatalf("expected dialogue invalid error, got %v", err)
+	}
+	if err := MarkDorm3dCollection(7, 10, 9999, 100); !errors.Is(err, ErrDorm3dCollectionInvalid) {
+		t.Fatalf("expected collection invalid error, got %v", err)
 	}
 }
