@@ -42,6 +42,9 @@ func loadEducateSiteOptions() ([]*protobuf.CHILD_SITE_OPTION, error) {
 	if err != nil {
 		return defaultEducateSiteOptions(), nil
 	}
+	if len(entries) == 0 {
+		return defaultEducateSiteOptions(), nil
+	}
 
 	options := make([]*protobuf.CHILD_SITE_OPTION, 0, len(entries))
 	for _, entry := range entries {
@@ -67,6 +70,9 @@ func loadEducateSiteOptions() ([]*protobuf.CHILD_SITE_OPTION, error) {
 	sort.Slice(options, func(i, j int) bool {
 		return options[i].GetSiteId() < options[j].GetSiteId()
 	})
+	if len(options) == 0 {
+		return defaultEducateSiteOptions(), nil
+	}
 
 	return options, nil
 }
