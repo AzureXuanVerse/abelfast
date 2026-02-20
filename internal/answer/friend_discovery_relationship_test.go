@@ -112,6 +112,63 @@ func TestSearchFriendInvalidNumericKeyword(t *testing.T) {
 	}
 }
 
+func TestSearchFriendByNameSuccess(t *testing.T) {
+	client := setupHandlerCommander(t)
+	targetProfile := seedSocialCommander(t, 910010, "ByNameTarget")
+
+	request := &protobuf.CS_50001{Type: proto.Uint32(1), Keyword: proto.String(targetProfile.Name)}
+	buffer, err := proto.Marshal(request)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	if _, _, err := SearchFriend(&buffer, client); err != nil {
+		t.Fatalf("SearchFriend failed: %v", err)
+	}
+	response := decodeSinglePacket(t, client, 50002, &protobuf.SC_50002{})
+	if response.GetResult() != 0 {
+		t.Fatalf("expected result 0, got %d", response.GetResult())
+	}
+	if response.GetPlayer() == nil {
+		t.Fatalf("expected player payload")
+	}
+	if response.GetPlayer().GetId() != targetProfile.CommanderID {
+		t.Fatalf("expected player id %d, got %d", targetProfile.CommanderID, response.GetPlayer().GetId())
+	}
+}
+
+func TestSearchFriendDecodeFailure(t *testing.T) {
+	client := &connection.Client{}
+	malformed := []byte{0xFF, 0x01}
+
+	if _, _, err := SearchFriend(&malformed, client); err == nil {
+		t.Fatalf("expected decode failure")
+	}
+	if client.Buffer.Len() != 0 {
+		t.Fatalf("expected no response packet on decode failure")
+	}
+}
+
+func TestSearchFriendUnsupportedTypeReturnsNotFoundResult(t *testing.T) {
+	client := &connection.Client{}
+	request := &protobuf.CS_50001{Type: proto.Uint32(99), Keyword: proto.String("ignored")}
+	buffer, err := proto.Marshal(request)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	if _, _, err := SearchFriend(&buffer, client); err != nil {
+		t.Fatalf("SearchFriend failed: %v", err)
+	}
+	response := decodeSinglePacket(t, client, 50002, &protobuf.SC_50002{})
+	if response.GetResult() == 0 {
+		t.Fatalf("expected non-zero result for unsupported search type")
+	}
+	if response.GetPlayer() != nil {
+		t.Fatalf("expected no player payload for unsupported search type")
+	}
+}
+
 func TestFriendSearchListAndBatchLookup(t *testing.T) {
 	client := setupHandlerCommander(t)
 	firstProfile := seedSocialCommander(t, 910101, "List One")
@@ -157,6 +214,36 @@ func TestFriendSearchListAndBatchLookup(t *testing.T) {
 	}
 	if batchResponse.GetUserList()[1].GetId() != secondProfile.CommanderID {
 		t.Fatalf("expected second user id %d, got %d", secondProfile.CommanderID, batchResponse.GetUserList()[1].GetId())
+	}
+}
+
+func TestFriendSearchListUnsupportedTypeReturnsEmpty(t *testing.T) {
+	client := &connection.Client{}
+
+	request := &protobuf.CS_50014{Type: proto.Uint32(9)}
+	buffer, err := proto.Marshal(request)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	if _, _, err := FriendSearchList(&buffer, client); err != nil {
+		t.Fatalf("FriendSearchList failed: %v", err)
+	}
+	response := decodeSinglePacket(t, client, 50015, &protobuf.SC_50015{})
+	if len(response.GetPlayerList()) != 0 {
+		t.Fatalf("expected empty player list for unsupported type")
+	}
+}
+
+func TestFriendSearchListDecodeFailure(t *testing.T) {
+	client := &connection.Client{}
+	malformed := []byte{0xFF, 0x01}
+
+	if _, _, err := FriendSearchList(&malformed, client); err == nil {
+		t.Fatalf("expected decode failure")
+	}
+	if client.Buffer.Len() != 0 {
+		t.Fatalf("expected no response packet on decode failure")
 	}
 }
 
