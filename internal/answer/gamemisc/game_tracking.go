@@ -1,4 +1,4 @@
-package answer
+package gamemisc
 
 import (
 	"github.com/ggmolly/belfast/internal/connection"
