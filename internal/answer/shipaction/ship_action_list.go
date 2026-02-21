@@ -1,4 +1,4 @@
-package answer
+package shipaction
 
 import (
 	"github.com/ggmolly/belfast/internal/connection"
