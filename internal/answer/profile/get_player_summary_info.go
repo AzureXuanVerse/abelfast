@@ -1,4 +1,4 @@
-package answer
+package profile
 
 import (
 	"github.com/ggmolly/belfast/internal/connection"
