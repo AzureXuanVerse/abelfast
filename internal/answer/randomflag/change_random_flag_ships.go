@@ -1,4 +1,4 @@
-package answer
+package randomflag
 
 import (
 	"github.com/ggmolly/belfast/internal/connection"
