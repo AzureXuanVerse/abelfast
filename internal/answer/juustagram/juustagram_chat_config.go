@@ -1,4 +1,4 @@
-package answer
+package juustagram
 
 import (
 	"encoding/json"
