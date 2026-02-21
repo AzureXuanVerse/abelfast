@@ -23,6 +23,7 @@ const (
 
 type CS_70005 struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            *uint32                `protobuf:"varint,1,req,name=id" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -57,13 +58,20 @@ func (*CS_70005) Descriptor() ([]byte, []int) {
 	return file_CS_70005_proto_rawDescGZIP(), []int{0}
 }
 
+func (x *CS_70005) GetId() uint32 {
+	if x != nil && x.Id != nil {
+		return *x.Id
+	}
+	return 0
+}
+
 var File_CS_70005_proto protoreflect.FileDescriptor
 
 const file_CS_70005_proto_rawDesc = "" +
 	"\n" +
-	"\x0eCS_70005.proto\x12\abelfast\"\n" +
-	"\n" +
-	"\bCS_70005B\fZ\n" +
+	"\x0eCS_70005.proto\x12\abelfast\"\x1a\n" +
+	"\bCS_70005\x12\x0e\n" +
+	"\x02id\x18\x01 \x02(\rR\x02idB\fZ\n" +
 	"./protobuf"
 
 var (

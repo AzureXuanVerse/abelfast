@@ -23,6 +23,7 @@ const (
 
 type SC_70002 struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	Result        *uint32                `protobuf:"varint,1,req,name=result" json:"result,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -57,13 +58,20 @@ func (*SC_70002) Descriptor() ([]byte, []int) {
 	return file_SC_70002_proto_rawDescGZIP(), []int{0}
 }
 
+func (x *SC_70002) GetResult() uint32 {
+	if x != nil && x.Result != nil {
+		return *x.Result
+	}
+	return 0
+}
+
 var File_SC_70002_proto protoreflect.FileDescriptor
 
 const file_SC_70002_proto_rawDesc = "" +
 	"\n" +
-	"\x0eSC_70002.proto\x12\abelfast\"\n" +
-	"\n" +
-	"\bSC_70002B\fZ\n" +
+	"\x0eSC_70002.proto\x12\abelfast\"\"\n" +
+	"\bSC_70002\x12\x16\n" +
+	"\x06result\x18\x01 \x02(\rR\x06resultB\fZ\n" +
 	"./protobuf"
 
 var (

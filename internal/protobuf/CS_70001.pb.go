@@ -23,6 +23,8 @@ const (
 
 type CS_70001 struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            *uint32                `protobuf:"varint,1,req,name=id" json:"id,omitempty"`
+	AttrList      []uint32               `protobuf:"varint,2,rep,name=attr_list,json=attrList" json:"attr_list,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -57,13 +59,28 @@ func (*CS_70001) Descriptor() ([]byte, []int) {
 	return file_CS_70001_proto_rawDescGZIP(), []int{0}
 }
 
+func (x *CS_70001) GetId() uint32 {
+	if x != nil && x.Id != nil {
+		return *x.Id
+	}
+	return 0
+}
+
+func (x *CS_70001) GetAttrList() []uint32 {
+	if x != nil {
+		return x.AttrList
+	}
+	return nil
+}
+
 var File_CS_70001_proto protoreflect.FileDescriptor
 
 const file_CS_70001_proto_rawDesc = "" +
 	"\n" +
-	"\x0eCS_70001.proto\x12\abelfast\"\n" +
-	"\n" +
-	"\bCS_70001B\fZ\n" +
+	"\x0eCS_70001.proto\x12\abelfast\"7\n" +
+	"\bCS_70001\x12\x0e\n" +
+	"\x02id\x18\x01 \x02(\rR\x02id\x12\x1b\n" +
+	"\tattr_list\x18\x02 \x03(\rR\battrListB\fZ\n" +
 	"./protobuf"
 
 var (

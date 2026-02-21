@@ -23,6 +23,8 @@ const (
 
 type SC_70006 struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	Result        *uint32                `protobuf:"varint,1,req,name=result" json:"result,omitempty"`
+	Ship          *SHIPINFO              `protobuf:"bytes,2,opt,name=ship" json:"ship,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -57,13 +59,28 @@ func (*SC_70006) Descriptor() ([]byte, []int) {
 	return file_SC_70006_proto_rawDescGZIP(), []int{0}
 }
 
+func (x *SC_70006) GetResult() uint32 {
+	if x != nil && x.Result != nil {
+		return *x.Result
+	}
+	return 0
+}
+
+func (x *SC_70006) GetShip() *SHIPINFO {
+	if x != nil {
+		return x.Ship
+	}
+	return nil
+}
+
 var File_SC_70006_proto protoreflect.FileDescriptor
 
 const file_SC_70006_proto_rawDesc = "" +
 	"\n" +
-	"\x0eSC_70006.proto\x12\abelfast\"\n" +
-	"\n" +
-	"\bSC_70006B\fZ\n" +
+	"\x0eSC_70006.proto\x12\abelfast\x1a\x0eSHIPINFO.proto\"I\n" +
+	"\bSC_70006\x12\x16\n" +
+	"\x06result\x18\x01 \x02(\rR\x06result\x12%\n" +
+	"\x04ship\x18\x02 \x01(\v2\x11.belfast.SHIPINFOR\x04shipB\fZ\n" +
 	"./protobuf"
 
 var (
@@ -81,13 +98,15 @@ func file_SC_70006_proto_rawDescGZIP() []byte {
 var file_SC_70006_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_SC_70006_proto_goTypes = []any{
 	(*SC_70006)(nil), // 0: belfast.SC_70006
+	(*SHIPINFO)(nil), // 1: belfast.SHIPINFO
 }
 var file_SC_70006_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	1, // 0: belfast.SC_70006.ship:type_name -> belfast.SHIPINFO
+	1, // [1:1] is the sub-list for method output_type
+	1, // [1:1] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_SC_70006_proto_init() }
@@ -95,6 +114,7 @@ func file_SC_70006_proto_init() {
 	if File_SC_70006_proto != nil {
 		return
 	}
+	file_SHIPINFO_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

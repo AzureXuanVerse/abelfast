@@ -23,6 +23,7 @@ const (
 
 type SC_70000 struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	MetaCharList  []*METACHARINFO        `protobuf:"bytes,1,rep,name=meta_char_list,json=metaCharList" json:"meta_char_list,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -57,13 +58,20 @@ func (*SC_70000) Descriptor() ([]byte, []int) {
 	return file_SC_70000_proto_rawDescGZIP(), []int{0}
 }
 
+func (x *SC_70000) GetMetaCharList() []*METACHARINFO {
+	if x != nil {
+		return x.MetaCharList
+	}
+	return nil
+}
+
 var File_SC_70000_proto protoreflect.FileDescriptor
 
 const file_SC_70000_proto_rawDesc = "" +
 	"\n" +
-	"\x0eSC_70000.proto\x12\abelfast\"\n" +
-	"\n" +
-	"\bSC_70000B\fZ\n" +
+	"\x0eSC_70000.proto\x12\abelfast\x1a\x12METACHARINFO.proto\"G\n" +
+	"\bSC_70000\x12;\n" +
+	"\x0emeta_char_list\x18\x01 \x03(\v2\x15.belfast.METACHARINFOR\fmetaCharListB\fZ\n" +
 	"./protobuf"
 
 var (
@@ -80,14 +88,16 @@ func file_SC_70000_proto_rawDescGZIP() []byte {
 
 var file_SC_70000_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_SC_70000_proto_goTypes = []any{
-	(*SC_70000)(nil), // 0: belfast.SC_70000
+	(*SC_70000)(nil),     // 0: belfast.SC_70000
+	(*METACHARINFO)(nil), // 1: belfast.METACHARINFO
 }
 var file_SC_70000_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	1, // 0: belfast.SC_70000.meta_char_list:type_name -> belfast.METACHARINFO
+	1, // [1:1] is the sub-list for method output_type
+	1, // [1:1] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_SC_70000_proto_init() }
@@ -95,6 +105,7 @@ func file_SC_70000_proto_init() {
 	if File_SC_70000_proto != nil {
 		return
 	}
+	file_METACHARINFO_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
