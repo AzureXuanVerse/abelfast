@@ -342,6 +342,11 @@ type CommanderFurniture struct {
 	GetTime     int64
 }
 
+type CommanderGuildState struct {
+	CommanderID   int64
+	GuildWaitTime int64
+}
+
 type CommanderHome struct {
 	CommanderID int64
 	Level       int64
@@ -761,12 +766,40 @@ type GlobalSkinRestrictionWindow struct {
 	StopTime  int64
 }
 
+type Guild struct {
+	ID              int64
+	Policy          int64
+	Faction         int64
+	Name            string
+	Level           int64
+	Announce        string
+	Manifesto       string
+	Exp             int64
+	MemberCount     int64
+	ChangeFactionCd int64
+	KickLeaderCd    int64
+	Capital         int64
+	TechID          int64
+	CreatedAt       pgtype.Timestamp
+	UpdatedAt       pgtype.Timestamp
+	DeletedAt       pgtype.Timestamp
+}
+
 type GuildChatMessage struct {
 	ID       int64
 	GuildID  int64
 	SenderID int64
 	SentAt   pgtype.Timestamptz
 	Content  string
+}
+
+type GuildMember struct {
+	GuildID       int64
+	CommanderID   int64
+	Duty          int64
+	Liveness      int64
+	PreOnlineTime int64
+	JoinTime      int64
 }
 
 type GuildShopGood struct {
@@ -780,6 +813,16 @@ type GuildShopState struct {
 	CommanderID     int64
 	RefreshCount    int64
 	NextRefreshTime int64
+}
+
+type GuildUserInfo struct {
+	CommanderID    int64
+	GuildID        int64
+	DonateCount    int64
+	BenefitTime    int64
+	WeeklyTaskFlag int64
+	ExtraDonate    int64
+	ExtraOperation int64
 }
 
 type IslandAchievementState struct {

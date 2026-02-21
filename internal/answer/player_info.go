@@ -17,6 +17,10 @@ func PlayerInfo(buffer *[]byte, client *connection.Client) (int, int, error) {
 	if err := ensureGuideIndices(client.Commander); err != nil {
 		return 0, 11003, err
 	}
+	guildWaitTime, err := orm.GetCommanderGuildWaitTime(client.Commander.CommanderID)
+	if err != nil {
+		return 0, 11003, err
+	}
 
 	response := protobuf.SC_11003{
 		Id:                 proto.Uint32(uint32(client.Commander.CommanderID)),
@@ -41,7 +45,7 @@ func PlayerInfo(buffer *[]byte, client *connection.Client) (int, int, error) {
 		RegisterTime:       proto.Uint32(0),
 		ShipCount:          proto.Uint32(uint32(len(client.Commander.Ships))),
 		AccPayLv:           proto.Uint32(0),
-		GuildWaitTime:      proto.Uint32(0),
+		GuildWaitTime:      proto.Uint32(guildWaitTime),
 		ChatMsgBanTime:     proto.Uint32(0),
 		CommanderBagMax:    proto.Uint32(250),
 		Display: &protobuf.DISPLAYINFO{
