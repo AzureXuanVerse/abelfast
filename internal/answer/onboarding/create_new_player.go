@@ -1,4 +1,4 @@
-package answer
+package onboarding
 
 import (
 	"errors"
