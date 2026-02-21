@@ -17,6 +17,7 @@ import (
 
 func seedGuildCoreConfig(t *testing.T) {
 	t.Helper()
+	execAnswerExternalTestSQLT(t, "INSERT INTO resources (id, item_id, name) VALUES (4, 0, 'gem') ON CONFLICT (id) DO UPDATE SET item_id = EXCLUDED.item_id, name = EXCLUDED.name")
 	if err := orm.UpsertConfigEntry("ShareCfg/gameset.json", "create_guild_cost", json.RawMessage(`{"key_value":300}`)); err != nil {
 		t.Fatalf("seed create_guild_cost: %v", err)
 	}
