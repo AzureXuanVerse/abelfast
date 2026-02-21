@@ -809,6 +809,72 @@ type GuildMember struct {
 	JoinTime      int64
 }
 
+type GuildOperationEvent struct {
+	GuildID       int64
+	EventTid      int64
+	Position      int64
+	StartTime     int64
+	CompleteTime  int64
+	Efficiency    int64
+	Completed     bool
+	Shipinevent   []byte
+	AttrAccList   []byte
+	AttrCountList []byte
+	Eventnodes    []byte
+	Personship    []byte
+	FormationTime int64
+}
+
+type GuildOperationParticipant struct {
+	GuildID       int64
+	CommanderID   int64
+	JoinTimes     int64
+	IsParticipant int64
+}
+
+type GuildOperationPerf struct {
+	GuildID   int64
+	EventTid  int64
+	PerfIndex int64
+}
+
+type GuildOperationState struct {
+	GuildID   int64
+	ChapterID int64
+	StartTime int64
+	EndTime   int64
+	CreatedAt pgtype.Timestamp
+	UpdatedAt pgtype.Timestamp
+}
+
+type GuildReport struct {
+	GuildID   int64
+	ID        int64
+	EventID   int64
+	EventType int64
+	Score     int64
+	Status    int64
+	Claimed   bool
+	DropType  int64
+	DropID    int64
+	DropCount int64
+	CreatedAt pgtype.Timestamp
+}
+
+type GuildReportNode struct {
+	GuildID  int64
+	ReportID int64
+	NodeID   int64
+	Status   int64
+}
+
+type GuildReportRank struct {
+	GuildID  int64
+	ReportID int64
+	UserID   int64
+	Damage   int64
+}
+
 type GuildShopGood struct {
 	CommanderID int64
 	Index       int64

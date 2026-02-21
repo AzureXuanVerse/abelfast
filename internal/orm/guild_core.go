@@ -34,6 +34,7 @@ var (
 	ErrCommanderNotInGuild  = errors.New("commander is not in guild")
 	ErrGuildPermission      = errors.New("guild permission denied")
 	ErrGuildInvalidArgument = errors.New("invalid guild argument")
+	ErrGuildInsufficientCap = errors.New("guild capital is insufficient")
 )
 
 type Guild struct {
