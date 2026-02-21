@@ -120,20 +120,38 @@ func buildGuildBaseInfo(guild *orm.Guild) *protobuf.GUILD_BASE_INFO {
 
 func buildGuildExpansionInfo(guild *orm.Guild) *protobuf.GUILD_EXPANSION_INFO {
 	capital := uint32(0)
+	benefitFinishTime := uint32(0)
+	lastBenefitFinishTime := uint32(0)
+	techCancelCnt := uint32(0)
+	weeklyTask := &protobuf.WEEKLY_TASK{
+		Id:            proto.Uint32(0),
+		Progress:      proto.Uint32(0),
+		Monday_0Clock: proto.Uint32(0),
+	}
 	if guild != nil {
 		capital = guild.Capital
+		officeState, err := orm.GetGuildOfficeState(guild.ID)
+		if err == nil {
+			benefitFinishTime = officeState.BenefitFinishTime
+			lastBenefitFinishTime = officeState.LastBenefitFinishTime
+			techCancelCnt = officeState.TechCancelCnt
+		}
+		weeklyTaskState, err := orm.GetGuildWeeklyTaskState(guild.ID)
+		if err == nil {
+			weeklyTask = &protobuf.WEEKLY_TASK{
+				Id:            proto.Uint32(weeklyTaskState.TaskID),
+				Progress:      proto.Uint32(weeklyTaskState.Progress),
+				Monday_0Clock: proto.Uint32(weeklyTaskState.Monday0Clock),
+			}
+		}
 	}
 	return &protobuf.GUILD_EXPANSION_INFO{
-		Capital: proto.Uint32(capital),
-		ThisWeeklyTasks: &protobuf.WEEKLY_TASK{
-			Id:            proto.Uint32(0),
-			Progress:      proto.Uint32(0),
-			Monday_0Clock: proto.Uint32(0),
-		},
-		BenefitFinishTime:     proto.Uint32(0),
+		Capital:               proto.Uint32(capital),
+		ThisWeeklyTasks:       weeklyTask,
+		BenefitFinishTime:     proto.Uint32(benefitFinishTime),
 		RetreatCnt:            proto.Uint32(0),
-		TechCancelCnt:         proto.Uint32(0),
-		LastBenefitFinishTime: proto.Uint32(0),
+		TechCancelCnt:         proto.Uint32(techCancelCnt),
+		LastBenefitFinishTime: proto.Uint32(lastBenefitFinishTime),
 		ActiveEventCnt:        proto.Uint32(0),
 	}
 }

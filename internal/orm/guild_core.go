@@ -75,6 +75,7 @@ type GuildUserInfo struct {
 	CommanderID    uint32
 	GuildID        uint32
 	DonateCount    uint32
+	DonateTasks    []uint32
 	BenefitTime    uint32
 	WeeklyTaskFlag uint32
 	ExtraDonate    uint32
@@ -462,15 +463,17 @@ ORDER BY gm.duty ASC, gm.join_time ASC
 func GetGuildUserInfo(commanderID uint32) (*GuildUserInfo, error) {
 	ctx := context.Background()
 	row := db.DefaultStore.Pool.QueryRow(ctx, `
-SELECT commander_id, guild_id, donate_count, benefit_time, weekly_task_flag, extra_donate, extra_operation
+SELECT commander_id, guild_id, donate_count, donate_tasks, benefit_time, weekly_task_flag, extra_donate, extra_operation
 FROM guild_user_infos
 WHERE commander_id = $1
 `, int64(commanderID))
 	var info GuildUserInfo
+	var donateTasksRaw []byte
 	err := row.Scan(
 		&info.CommanderID,
 		&info.GuildID,
 		&info.DonateCount,
+		&donateTasksRaw,
 		&info.BenefitTime,
 		&info.WeeklyTaskFlag,
 		&info.ExtraDonate,
@@ -481,6 +484,9 @@ WHERE commander_id = $1
 	}
 	if err != nil {
 		return nil, err
+	}
+	if len(donateTasksRaw) > 0 {
+		_ = json.Unmarshal(donateTasksRaw, &info.DonateTasks)
 	}
 	return &info, nil
 }
