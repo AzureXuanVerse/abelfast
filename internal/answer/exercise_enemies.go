@@ -16,9 +16,10 @@ func ExerciseEnemies(buffer *[]byte, client *connection.Client) (int, int, error
 	if err != nil {
 		return 0, 18002, err
 	}
+	score, rank := currentExerciseSeasonScoreAndRank()
 	response := protobuf.SC_18002{
-		Score:               proto.Uint32(0),
-		Rank:                proto.Uint32(0),
+		Score:               proto.Uint32(score),
+		Rank:                proto.Uint32(rank),
 		FightCount:          proto.Uint32(0),
 		FightCountResetTime: proto.Uint32(0),
 		FlashTargetCount:    proto.Uint32(0),

@@ -51,18 +51,27 @@ func setupExerciseTest(t *testing.T) *connection.Client {
 
 func decodePacketMessage(t *testing.T, client *connection.Client, expectedPacketID int, resp proto.Message) {
 	t.Helper()
-	buffer := client.Buffer.Bytes()
-	packetID := packets.GetPacketId(0, &buffer)
+	decodePacketMessageAtOffset(t, client.Buffer.Bytes(), 0, expectedPacketID, resp)
+}
+
+func decodePacketMessageAtOffset(t *testing.T, buffer []byte, offset int, expectedPacketID int, resp proto.Message) int {
+	t.Helper()
+	if offset >= len(buffer) {
+		t.Fatalf("offset %d out of range for buffer length %d", offset, len(buffer))
+	}
+	slice := buffer[offset:]
+	packetID := packets.GetPacketId(0, &slice)
 	if packetID != expectedPacketID {
 		t.Fatalf("expected packet %d, got %d", expectedPacketID, packetID)
 	}
-	packetSize := packets.GetPacketSize(0, &buffer) + 2
-	if len(buffer) < packetSize {
-		t.Fatalf("expected packet size %d, got %d", packetSize, len(buffer))
+	packetSize := packets.GetPacketSize(0, &slice) + 2
+	if len(slice) < packetSize {
+		t.Fatalf("expected packet size %d, got %d", packetSize, len(slice))
 	}
 	payloadStart := packets.HEADER_SIZE
 	payloadEnd := payloadStart + (packetSize - packets.HEADER_SIZE)
-	if err := proto.Unmarshal(buffer[payloadStart:payloadEnd], resp); err != nil {
+	if err := proto.Unmarshal(slice[payloadStart:payloadEnd], resp); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
 	}
+	return offset + packetSize
 }
