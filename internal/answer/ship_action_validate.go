@@ -13,9 +13,21 @@ func HandleShipActionValidate(buffer *[]byte, client *connection.Client) (int, i
 	}
 
 	response := protobuf.SC_12021{Result: proto.Uint32(1)}
-	if _, ok := client.Commander.OwnedShipsMap[data.GetShipId()]; ok {
+	ship, ok := client.Commander.OwnedShipsMap[data.GetShipId()]
+	if ok {
 		response.Result = proto.Uint32(0)
 	}
 
-	return client.SendMessage(12021, &response)
+	if _, _, err := client.SendMessage(12021, &response); err != nil {
+		return 0, 12021, err
+	}
+
+	if ok {
+		push := protobuf.SC_12019{Intimacy: proto.Uint32(ship.Intimacy)}
+		if _, _, err := client.SendMessage(12019, &push); err != nil {
+			return 0, 12019, err
+		}
+	}
+
+	return 0, 12021, nil
 }
