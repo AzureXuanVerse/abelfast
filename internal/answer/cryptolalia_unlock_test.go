@@ -61,13 +61,18 @@ func TestCryptolaliaUnlockConsumesCurrencyAndPersists(t *testing.T) {
 		t.Fatalf("CryptolaliaUnlock: %v", err)
 	}
 	var resp protobuf.SC_16206
-	decodePacketAt(t, client, 0, 16206, &resp)
+	offset := decodePacketAt(t, client, 0, 16206, &resp)
+	var sync protobuf.SC_11004
+	decodePacketAt(t, client, offset, 11004, &sync)
 	client.Buffer.Reset()
 	if resp.GetRet() != 0 {
 		t.Fatalf("expected ret=0, got %d", resp.GetRet())
 	}
+	if findGemAmount(sync.GetResourceList()) != client.Commander.GetResourceCount(4) {
+		t.Fatalf("expected resource sync gems=%d", client.Commander.GetResourceCount(4))
+	}
 	if client.Commander.GetResourceCount(4) != 80 {
-		t.Fatalf("expected gems to be consumed")
+		t.Fatalf("expected gems to be consumed, got %d", client.Commander.GetResourceCount(4))
 	}
 
 	ids, err := orm.ListCommanderSoundStoryIDs(client.Commander.CommanderID)
@@ -77,6 +82,19 @@ func TestCryptolaliaUnlockConsumesCurrencyAndPersists(t *testing.T) {
 	if len(ids) != 1 || ids[0] != 1 {
 		t.Fatalf("expected persisted sound story")
 	}
+}
+
+func findResourceAmount(resources []*protobuf.RESOURCE, resourceType uint32) uint32 {
+	for _, resource := range resources {
+		if resource.GetType() == resourceType {
+			return resource.GetNum()
+		}
+	}
+	return 0
+}
+
+func findGemAmount(resources []*protobuf.RESOURCE) uint32 {
+	return findResourceAmount(resources, 4) + findResourceAmount(resources, 14)
 }
 
 func TestCryptolaliaUnlockIsIdempotent(t *testing.T) {
@@ -96,13 +114,16 @@ func TestCryptolaliaUnlockIsIdempotent(t *testing.T) {
 		t.Fatalf("CryptolaliaUnlock second: %v", err)
 	}
 	var resp protobuf.SC_16206
-	decodePacketAt(t, client, 0, 16206, &resp)
-	client.Buffer.Reset()
+	offset := decodePacketAt(t, client, 0, 16206, &resp)
 	if resp.GetRet() != 0 {
 		t.Fatalf("expected ret=0, got %d", resp.GetRet())
 	}
+	if offset != len(client.Buffer.Bytes()) {
+		t.Fatalf("expected idempotent unlock to emit only SC_16206")
+	}
+	client.Buffer.Reset()
 	if client.Commander.GetResourceCount(4) != 80 {
-		t.Fatalf("expected currency not to be consumed twice")
+		t.Fatalf("expected currency not to be consumed twice, got %d", client.Commander.GetResourceCount(4))
 	}
 }
 

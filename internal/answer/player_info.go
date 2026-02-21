@@ -90,13 +90,7 @@ func PlayerInfo(buffer *[]byte, client *connection.Client) (int, int, error) {
 		return 0, 11003, nil
 	}
 
-	response.ResourceList = make([]*protobuf.RESOURCE, len(client.Commander.OwnedResources))
-	for i, resource := range client.Commander.OwnedResources {
-		response.ResourceList[i] = &protobuf.RESOURCE{
-			Type: proto.Uint32(resource.ResourceID),
-			Num:  proto.Uint32(resource.Amount),
-		}
-	}
+	response.ResourceList = buildResourceSnapshot(client.Commander.OwnedResources)
 	if response.Display.GetIcon() == 0 && len(secretaries) > 0 {
 		response.Display.Icon = proto.Uint32(secretaries[0].ShipID)
 	}

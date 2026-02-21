@@ -59,6 +59,7 @@ func CryptolaliaUnlock(buffer *[]byte, client *connection.Client) (int, int, err
 
 	commanderID := client.Commander.CommanderID
 	ctx := context.Background()
+	resourceConsumed := false
 	err = orm.WithPGXTx(ctx, func(tx pgx.Tx) error {
 		q := db.DefaultStore.Queries.WithTx(tx)
 		unlocked, err := orm.IsCommanderSoundStoryUnlockedTx(q, commanderID, payload.GetId())
@@ -77,6 +78,7 @@ func CryptolaliaUnlock(buffer *[]byte, client *connection.Client) (int, int, err
 			if err := client.Commander.ConsumeResourceTx(ctx, tx, cost.id, cost.amount); err != nil {
 				return err
 			}
+			resourceConsumed = true
 		case 2:
 			if !client.Commander.HasEnoughItem(cost.id, cost.amount) {
 				return errInsufficient
@@ -100,8 +102,16 @@ func CryptolaliaUnlock(buffer *[]byte, client *connection.Client) (int, int, err
 		}
 		return client.SendMessage(16206, &response)
 	}
-
-	return client.SendMessage(16206, &response)
+	bytesWritten, packetID, err := client.SendMessage(16206, &response)
+	if err != nil {
+		return bytesWritten, packetID, err
+	}
+	if cost.dropType == 1 && resourceConsumed {
+		if _, _, err := SendPlayerResourceSync(client); err != nil {
+			return bytesWritten, packetID, err
+		}
+	}
+	return bytesWritten, packetID, nil
 }
 
 type soundStoryCost struct {
