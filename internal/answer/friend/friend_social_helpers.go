@@ -1,4 +1,4 @@
-package answer
+package friend
 
 const (
 	friendOperationSuccess uint32 = 0

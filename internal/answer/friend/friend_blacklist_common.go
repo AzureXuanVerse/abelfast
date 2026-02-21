@@ -1,4 +1,4 @@
-package answer
+package friend
 
 const (
 	friendBlacklistResultSuccess       = uint32(0)
