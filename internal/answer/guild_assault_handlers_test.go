@@ -15,6 +15,8 @@ func seedGuildAssaultTestContext(t *testing.T, commanderID uint32, guildID uint3
 	execAnswerTestSQLT(t, "DELETE FROM guild_assault_recommendations")
 	execAnswerTestSQLT(t, "DELETE FROM guild_assault_fleet_slots")
 	execAnswerTestSQLT(t, "DELETE FROM guild_boss_mission_fleets")
+	execAnswerTestSQLT(t, "DELETE FROM guild_operation_boss_ranks")
+	execAnswerTestSQLT(t, "DELETE FROM guild_operation_boss_states")
 	execAnswerTestSQLT(t, "DELETE FROM guild_operation_events")
 	execAnswerTestSQLT(t, "DELETE FROM guild_operation_states")
 	execAnswerTestSQLT(t, "DELETE FROM guild_members")

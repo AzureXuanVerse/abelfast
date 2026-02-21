@@ -835,6 +835,23 @@ type GuildMember struct {
 	JoinTime      int64
 }
 
+type GuildOperationBossRank struct {
+	GuildID     int64
+	OperationID int64
+	BossID      int64
+	UserID      int64
+	Damage      int64
+}
+
+type GuildOperationBossState struct {
+	GuildID     int64
+	OperationID int64
+	BossID      int64
+	Damage      int64
+	Hp          int64
+	UpdatedAt   pgtype.Timestamp
+}
+
 type GuildOperationEvent struct {
 	GuildID       int64
 	EventTid      int64
