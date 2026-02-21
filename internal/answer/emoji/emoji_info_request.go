@@ -1,4 +1,4 @@
-package answer
+package emoji
 
 import (
 	"encoding/json"
