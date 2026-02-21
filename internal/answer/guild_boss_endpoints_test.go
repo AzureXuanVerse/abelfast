@@ -93,7 +93,7 @@ func TestGuildGetBossInfoCommandResponse(t *testing.T) {
 	}
 }
 
-func TestGuildGetBossInfoCommandResponseNoBossStateReturnsEnded(t *testing.T) {
+func TestGuildGetBossInfoCommandResponseNoBossStateReturnsDefaultBossEvent(t *testing.T) {
 	client := setupConfigTest(t)
 	seedGuildAssaultTestContext(t, client.Commander.CommanderID, 9202, 7302)
 
@@ -104,11 +104,14 @@ func TestGuildGetBossInfoCommandResponseNoBossStateReturnsEnded(t *testing.T) {
 	}
 	var resp protobuf.SC_61028
 	decodeResponse(t, client, &resp)
-	if resp.GetResult() != guildEventResultNoActiveOperation {
-		t.Fatalf("expected result %d, got %d", guildEventResultNoActiveOperation, resp.GetResult())
+	if resp.GetResult() != guildEventResultSuccess {
+		t.Fatalf("expected result %d, got %d", guildEventResultSuccess, resp.GetResult())
 	}
 	if resp.GetBossEvent() == nil {
-		t.Fatalf("expected non-nil boss event on ended response")
+		t.Fatalf("expected non-nil boss event")
+	}
+	if resp.GetBossEvent().GetBossId() != 0 || resp.GetBossEvent().GetDamage() != 0 || resp.GetBossEvent().GetHp() != 0 {
+		t.Fatalf("expected default boss event payload, got %+v", resp.GetBossEvent())
 	}
 }
 

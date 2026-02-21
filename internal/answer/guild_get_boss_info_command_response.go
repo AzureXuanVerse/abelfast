@@ -44,7 +44,7 @@ func GuildGetBossInfoCommandResponse(buffer *[]byte, client *connection.Client) 
 	bossState, err := orm.GetGuildOperationBossState(state.GuildID, state.ChapterID)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
-			response.Result = proto.Uint32(guildEventResultNoActiveOperation)
+			response.Result = proto.Uint32(guildEventResultSuccess)
 			return client.SendMessage(61028, response)
 		}
 		return 0, 61028, err
