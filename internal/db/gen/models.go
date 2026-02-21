@@ -469,6 +469,23 @@ type CommanderShipSkill struct {
 	Exp         int64
 }
 
+type CommanderShipyardBlueprint struct {
+	CommanderID    int64
+	BlueprintID    int64
+	ShipID         int64
+	StartTime      int64
+	BluePrintLevel int64
+	Exp            int64
+	StartDuration  int64
+}
+
+type CommanderShipyardState struct {
+	CommanderID              int64
+	ColdTime                 int64
+	DailyCatchupStrengthen   int64
+	DailyCatchupStrengthenUr int64
+}
+
 type CommanderSkillClass struct {
 	CommanderID int64
 	RoomID      int64
