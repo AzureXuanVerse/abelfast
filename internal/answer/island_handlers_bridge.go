@@ -351,6 +351,10 @@ func IslandSignInInvitation(buffer *[]byte, client *connection.Client) (int, int
 	return island.IslandSignInInvitation(buffer, client)
 }
 
+func IslandTradeInvitation(buffer *[]byte, client *connection.Client) (int, int, error) {
+	return island.IslandTradeInvitation(buffer, client)
+}
+
 func HandleIslandGetGiftTag(buffer *[]byte, client *connection.Client) (int, int, error) {
 	return island.HandleIslandGetGiftTag(buffer, client)
 }
