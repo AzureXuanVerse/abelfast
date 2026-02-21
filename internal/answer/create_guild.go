@@ -19,8 +19,11 @@ func CreateGuild(buffer *[]byte, client *connection.Client) (int, int, error) {
 	policy := payload.GetPolicy()
 	name := normalizeGuildText(payload.GetName())
 	manifesto := normalizeGuildText(payload.GetManifesto())
-	if !isValidGuildFaction(faction) || !isValidGuildPolicy(policy) || !isValidGuildName(name) || manifesto == "" {
+	if !isValidGuildName(name) {
 		response.Result = proto.Uint32(guildResultNameInvalid)
+		return client.SendMessage(60002, &response)
+	}
+	if !isValidGuildFaction(faction) || !isValidGuildPolicy(policy) || manifesto == "" {
 		return client.SendMessage(60002, &response)
 	}
 	createCost, err := loadGameSetUint("create_guild_cost")
