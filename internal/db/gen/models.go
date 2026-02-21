@@ -428,6 +428,35 @@ type CommanderMetaPtProgress struct {
 	UpdatedAt   pgtype.Timestamptz
 }
 
+type CommanderMetaTacticsSkillState struct {
+	CommanderID int64
+	ShipID      int64
+	SkillID     int64
+	SkillPos    int64
+	Level       int64
+	Exp         int64
+	UpdatedAt   pgtype.Timestamptz
+}
+
+type CommanderMetaTacticsState struct {
+	CommanderID    int64
+	ShipID         int64
+	CurrentSkillID int64
+	DailyExp       int64
+	DoubleExp      int64
+	SwitchCnt      int64
+	UpdatedAt      pgtype.Timestamptz
+}
+
+type CommanderMetaTacticsTaskProgress struct {
+	CommanderID int64
+	ShipID      int64
+	SkillID     int64
+	TaskID      int64
+	FinishCnt   int64
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type CommanderMiscItem struct {
 	CommanderID int64
 	ItemID      int64
@@ -1594,6 +1623,13 @@ type OwnedShipEquipment struct {
 	Pos     int64
 	EquipID int64
 	SkinID  int64
+}
+
+type OwnedShipMetaRepair struct {
+	OwnerID   int64
+	ShipID    int64
+	RepairID  int64
+	CreatedAt pgtype.Timestamptz
 }
 
 type OwnedShipShadowSkin struct {

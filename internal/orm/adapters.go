@@ -63,11 +63,22 @@ func ToProtoOwnedShip(ship OwnedShip, randomFlags []uint32, shadowSkins []OwnedS
 		MaxLevel:            proto.Uint32(ship.MaxLevel),
 		CommonFlag:          proto.Uint32(boolToUint32(ship.CommonFlag)),
 		ActivityNpc:         proto.Uint32(ship.ActivityNPC),
-		MetaRepairList:      nil,
+		MetaRepairList:      loadShipMetaRepairList(ship),
 		Spweapon:            nil,
 		SkinShadowList:      skinShadowList,
 		CharRandomFlag:      randomFlags,
 	}
+}
+
+func loadShipMetaRepairList(ship OwnedShip) []uint32 {
+	if ship.OwnerID == 0 || ship.ID == 0 {
+		return nil
+	}
+	repairs, err := ListOwnedShipMetaRepairIDs(ship.OwnerID, ship.ID)
+	if err != nil || len(repairs) == 0 {
+		return nil
+	}
+	return repairs
 }
 
 func buildSkinShadowList(entries []OwnedShipShadowSkin) []*protobuf.KVDATA {
