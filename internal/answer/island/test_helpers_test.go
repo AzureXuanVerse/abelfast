@@ -154,6 +154,7 @@ func setupHandlerCommander(t *testing.T) *connection.Client {
 	clearTable(t, &orm.IslandCollectFragmentSignState{})
 	clearTable(t, &orm.IslandCollectionCompleteState{})
 	clearTable(t, &orm.IslandSlotCollectState{})
+	clearTable(t, &orm.IslandTreasureState{})
 	clearTable(t, &orm.CommanderHomeSlot{})
 	clearTable(t, &orm.CommanderHome{})
 	commanderID := uint32(time.Now().UnixNano())
