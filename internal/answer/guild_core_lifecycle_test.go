@@ -30,7 +30,7 @@ func seedGuildCoreConfig(t *testing.T) {
 	if err := orm.UpsertConfigEntry("ShareCfg/guildset.json", "guild_tech_default", json.RawMessage(`{"key_value":1000}`)); err != nil {
 		t.Fatalf("seed guild_tech_default: %v", err)
 	}
-	if err := orm.UpsertConfigEntry("ShareCfg/guild_data_level.json", "1", json.RawMessage(`{"assistant_commander":1}`)); err != nil {
+	if err := orm.UpsertConfigEntry("ShareCfg/guild_data_level.json", "1", json.RawMessage(`{"assistant_commander":1,"member_num":30}`)); err != nil {
 		t.Fatalf("seed guild_data_level: %v", err)
 	}
 }
@@ -52,6 +52,7 @@ func createGuildCommander(t *testing.T, commanderID uint32) *orm.Commander {
 func cleanupGuildCoreData(t *testing.T, commanderIDs ...uint32) {
 	t.Helper()
 	for _, commanderID := range commanderIDs {
+		execAnswerExternalTestSQLT(t, "DELETE FROM guild_join_requests WHERE applicant_commander_id = $1", int64(commanderID))
 		execAnswerExternalTestSQLT(t, "DELETE FROM commander_guild_states WHERE commander_id = $1", int64(commanderID))
 		execAnswerExternalTestSQLT(t, "DELETE FROM guild_user_infos WHERE commander_id = $1", int64(commanderID))
 		execAnswerExternalTestSQLT(t, "DELETE FROM owned_resources WHERE commander_id = $1", int64(commanderID))

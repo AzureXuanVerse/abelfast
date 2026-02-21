@@ -148,6 +148,22 @@ func GetGuildDataLevelDeputyLimit(level uint32) (uint32, error) {
 	return limit, nil
 }
 
+func GetGuildDataLevelMemberLimit(level uint32) (uint32, error) {
+	entry, err := GetConfigEntry("ShareCfg/guild_data_level.json", strconv.FormatUint(uint64(level), 10))
+	if err != nil {
+		return 0, err
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(entry.Data, &payload); err != nil {
+		return 0, err
+	}
+	limit, ok := parseGuildConfigUint(payload["member_num"])
+	if !ok {
+		return 0, fmt.Errorf("invalid member_num at level %d", level)
+	}
+	return limit, nil
+}
+
 func guildNameExistsTx(ctx context.Context, tx pgx.Tx, name string, excludeGuildID uint32) (bool, error) {
 	var row pgx.Row
 	if excludeGuildID == 0 {
