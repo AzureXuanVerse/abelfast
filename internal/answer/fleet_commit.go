@@ -7,6 +7,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+var fleetCommitCreateFleet = orm.CreateFleet
+
+var fleetCommitUpdateShipList = func(fleet *orm.Fleet, commander *orm.Commander, shipList []uint32) error {
+	return fleet.UpdateShipList(commander, shipList)
+}
+
 func FleetCommit(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var payload protobuf.CS_12102
 
@@ -20,14 +26,27 @@ func FleetCommit(buffer *[]byte, client *connection.Client) (int, int, error) {
 	fleet, ok := client.Commander.FleetsMap[payload.GetId()]
 	if !ok {
 		// Create the fleet
-		if err := orm.CreateFleet(client.Commander, payload.GetId(), "", payload.ShipList); err != nil {
+		if err := fleetCommitCreateFleet(client.Commander, payload.GetId(), "", payload.ShipList); err != nil {
 			response.Result = proto.Uint32(1)
 		}
 	} else {
 		// Update the fleet
-		if err := fleet.UpdateShipList(client.Commander, payload.ShipList); err != nil {
+		if err := fleetCommitUpdateShipList(fleet, client.Commander, payload.ShipList); err != nil {
 			response.Result = proto.Uint32(1)
 		}
 	}
-	return client.SendMessage(12103, &response)
+
+	if _, _, err := client.SendMessage(12103, &response); err != nil {
+		return 0, 12103, err
+	}
+	if response.GetResult() != 0 {
+		return 0, 12103, nil
+	}
+
+	updatedFleet := client.Commander.FleetsMap[payload.GetId()]
+	if err := pushFleetSync(client, updatedFleet); err != nil {
+		return 0, 12106, err
+	}
+
+	return 0, 12103, nil
 }

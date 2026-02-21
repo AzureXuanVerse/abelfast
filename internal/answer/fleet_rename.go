@@ -2,9 +2,14 @@ package answer
 
 import (
 	"github.com/ggmolly/belfast/internal/connection"
+	"github.com/ggmolly/belfast/internal/orm"
 	"github.com/ggmolly/belfast/internal/protobuf"
 	"google.golang.org/protobuf/proto"
 )
+
+var fleetRenameApply = func(fleet *orm.Fleet, name string) error {
+	return fleet.RenameFleet(name)
+}
 
 func FleetRename(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var payload protobuf.CS_12104
@@ -20,9 +25,21 @@ func FleetRename(buffer *[]byte, client *connection.Client) (int, int, error) {
 	if !ok {
 		response.Result = proto.Uint32(1)
 	} else {
-		if err := fleet.RenameFleet(payload.GetName()); err != nil {
+		if err := fleetRenameApply(fleet, payload.GetName()); err != nil {
 			response.Result = proto.Uint32(2)
 		}
 	}
-	return client.SendMessage(12105, &response)
+
+	if _, _, err := client.SendMessage(12105, &response); err != nil {
+		return 0, 12105, err
+	}
+	if response.GetResult() != 0 {
+		return 0, 12105, nil
+	}
+
+	if err := pushFleetSync(client, fleet); err != nil {
+		return 0, 12106, err
+	}
+
+	return 0, 12105, nil
 }
