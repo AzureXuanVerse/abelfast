@@ -149,6 +149,16 @@ func SetGuildAssaultRecommendation(guildID uint32, commanderID uint32, shipID ui
 	ctx := context.Background()
 	return WithPGXTx(ctx, func(tx pgx.Tx) error {
 		if recommended {
+			var lockedGuildID int64
+			if err := tx.QueryRow(ctx, `
+SELECT id
+FROM guilds
+WHERE id = $1
+FOR UPDATE
+`, int64(guildID)).Scan(&lockedGuildID); err != nil {
+				return err
+			}
+
 			var exists bool
 			if err := tx.QueryRow(ctx, `
 SELECT EXISTS (

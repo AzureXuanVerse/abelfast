@@ -186,3 +186,42 @@ func TestGuildUpdateBossMissionFleetPersistsForActivationSnapshot(t *testing.T) 
 		t.Fatalf("expected persisted boss fleet in operation snapshot")
 	}
 }
+
+func TestMarkAssaultShipRecommendAllowsUnmarkForFormerMember(t *testing.T) {
+	client := setupConfigTest(t)
+	const guildID uint32 = 9104
+	const operationID uint32 = 7204
+	const formerCommanderID uint32 = 2
+	const shipID uint32 = 301
+
+	seedGuildAssaultTestContext(t, client.Commander.CommanderID, guildID, operationID)
+	execAnswerTestSQLT(t, "INSERT INTO commanders (commander_id, account_id, name) VALUES ($1, $1, 'Former Member') ON CONFLICT (commander_id) DO NOTHING", int64(formerCommanderID))
+	execAnswerTestSQLT(t, "INSERT INTO guild_members (guild_id, commander_id, duty, liveness, pre_online_time, join_time) VALUES ($1, $2, $3, 0, 0, 0)", int64(guildID), int64(formerCommanderID), int64(orm.GuildDutyOrdinary))
+	execAnswerTestSQLT(t, "INSERT INTO guild_assault_recommendations (guild_id, commander_id, ship_id) VALUES ($1, $2, $3)", int64(guildID), int64(formerCommanderID), int64(shipID))
+	execAnswerTestSQLT(t, "DELETE FROM guild_members WHERE guild_id = $1 AND commander_id = $2", int64(guildID), int64(formerCommanderID))
+
+	client.Buffer.Reset()
+	unmarkData, _ := proto.Marshal(&protobuf.CS_61033{RecommendUid: proto.Uint32(formerCommanderID), RecommendShipid: proto.Uint32(shipID), Cmd: proto.Uint32(1)})
+	if _, _, err := MarkAssaultShipRecommendCommandResponse(&unmarkData, client); err != nil {
+		t.Fatalf("61033 unmark failed: %v", err)
+	}
+	var unmarkResp protobuf.SC_61034
+	decodeResponse(t, client, &unmarkResp)
+	if unmarkResp.GetResult() != 0 {
+		t.Fatalf("expected unmark success, got %d", unmarkResp.GetResult())
+	}
+
+	var remaining int64
+	if err := db.DefaultStore.Pool.QueryRow(t.Context(), `
+SELECT COUNT(*)
+FROM guild_assault_recommendations
+WHERE guild_id = $1
+  AND commander_id = $2
+  AND ship_id = $3
+`, int64(guildID), int64(formerCommanderID), int64(shipID)).Scan(&remaining); err != nil {
+		t.Fatalf("count recommendations failed: %v", err)
+	}
+	if remaining != 0 {
+		t.Fatalf("expected recommendation removed, found %d", remaining)
+	}
+}

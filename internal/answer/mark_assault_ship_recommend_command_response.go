@@ -39,34 +39,36 @@ func MarkAssaultShipRecommendCommandResponse(buffer *[]byte, client *connection.
 		return client.SendMessage(61034, response)
 	}
 
-	members, err := orm.ListGuildMembers(ctx.GuildID)
-	if err != nil {
-		return 0, 61034, err
-	}
-	targetMemberExists := false
-	for _, member := range members {
-		if member.CommanderID == targetCommanderID {
-			targetMemberExists = true
-			break
+	if cmd == 0 {
+		members, err := orm.ListGuildMembers(ctx.GuildID)
+		if err != nil {
+			return 0, 61034, err
 		}
-	}
-	if !targetMemberExists {
-		return client.SendMessage(61034, response)
-	}
+		targetMemberExists := false
+		for _, member := range members {
+			if member.CommanderID == targetCommanderID {
+				targetMemberExists = true
+				break
+			}
+		}
+		if !targetMemberExists {
+			return client.SendMessage(61034, response)
+		}
 
-	slots, err := orm.ListGuildAssaultFleetSlotsByCommander(ctx.GuildID, targetCommanderID)
-	if err != nil {
-		return 0, 61034, err
-	}
-	hasShip := false
-	for _, slot := range slots {
-		if slot.ShipID == targetShipID {
-			hasShip = true
-			break
+		slots, err := orm.ListGuildAssaultFleetSlotsByCommander(ctx.GuildID, targetCommanderID)
+		if err != nil {
+			return 0, 61034, err
 		}
-	}
-	if !hasShip {
-		return client.SendMessage(61034, response)
+		hasShip := false
+		for _, slot := range slots {
+			if slot.ShipID == targetShipID {
+				hasShip = true
+				break
+			}
+		}
+		if !hasShip {
+			return client.SendMessage(61034, response)
+		}
 	}
 
 	if err := orm.SetGuildAssaultRecommendation(ctx.GuildID, targetCommanderID, targetShipID, cmd == 0); err != nil {
