@@ -785,6 +785,32 @@ type Guild struct {
 	DeletedAt       pgtype.Timestamp
 }
 
+type GuildAssaultFleetSlot struct {
+	GuildID     int64
+	CommanderID int64
+	Pos         int64
+	ShipID      int64
+	LastTime    int64
+	CreatedAt   pgtype.Timestamp
+	UpdatedAt   pgtype.Timestamp
+}
+
+type GuildAssaultRecommendation struct {
+	GuildID     int64
+	CommanderID int64
+	ShipID      int64
+	CreatedAt   pgtype.Timestamp
+}
+
+type GuildBossMissionFleet struct {
+	GuildID     int64
+	OperationID int64
+	FleetID     int64
+	Ships       []byte
+	Commanders  []byte
+	UpdatedAt   pgtype.Timestamp
+}
+
 type GuildChatMessage struct {
 	ID       int64
 	GuildID  int64

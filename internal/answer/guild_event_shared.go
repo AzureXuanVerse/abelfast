@@ -86,6 +86,24 @@ func buildOperationResponse(state *orm.GuildOperationState) *protobuf.CURRENT_OP
 	for _, perf := range state.Perfs {
 		perfs = append(perfs, &protobuf.EVENT_PERFORMANCE{EventId: proto.Uint32(perf.EventTid), Index: proto.Uint32(perf.Index)})
 	}
+	bossFleets := make([]*protobuf.BOSSEVENTFLEET, 0)
+	if fleets, err := orm.ListGuildBossMissionFleets(state.GuildID, state.ChapterID); err == nil {
+		for _, fleet := range fleets {
+			ships := make([]*protobuf.TEAM_CELL, 0, len(fleet.Ships))
+			for _, ship := range fleet.Ships {
+				ships = append(ships, &protobuf.TEAM_CELL{UserId: proto.Uint32(ship.UserID), ShipId: proto.Uint32(ship.ShipID)})
+			}
+			commanders := make([]*protobuf.COMMANDERSINFO, 0, len(fleet.Commanders))
+			for _, commander := range fleet.Commanders {
+				commanders = append(commanders, &protobuf.COMMANDERSINFO{Pos: proto.Uint32(commander.Pos), Id: proto.Uint32(commander.ID)})
+			}
+			bossFleets = append(bossFleets, &protobuf.BOSSEVENTFLEET{
+				FleetId:    proto.Uint32(fleet.FleetID),
+				Ships:      ships,
+				Commanders: commanders,
+			})
+		}
+	}
 
 	return &protobuf.CURRENT_OPERATION{
 		OperationId:     proto.Uint32(state.ChapterID),
@@ -96,7 +114,7 @@ func buildOperationResponse(state *orm.GuildOperationState) *protobuf.CURRENT_OP
 		FormationTime:   formationTime,
 		CompletedEvents: completedEvents,
 		DailyCount:      proto.Uint32(0),
-		Fleets:          []*protobuf.BOSSEVENTFLEET{},
+		Fleets:          bossFleets,
 		JoinTimes:       proto.Uint32(state.JoinTimes),
 		IsParticipant:   proto.Uint32(state.IsParticipant),
 	}
