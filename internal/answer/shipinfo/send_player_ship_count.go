@@ -1,4 +1,4 @@
-package answer
+package shipinfo
 
 import (
 	"github.com/ggmolly/belfast/internal/consts"
