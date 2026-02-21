@@ -1,4 +1,4 @@
-package answer
+package educate
 
 import (
 	"encoding/json"
