@@ -11,8 +11,19 @@ func UpdateShipLike(buffer *[]byte, client *connection.Client) (int, int, error)
 	if err := proto.Unmarshal(*buffer, &payload); err != nil {
 		return 0, 17108, err
 	}
+	likeErr := client.Commander.Like(payload.GetShipGroupId())
 	response := protobuf.SC_17108{
-		Result: proto.Uint32(boolToUint32(client.Commander.Like(*payload.ShipGroupId) != nil)),
+		Result: proto.Uint32(boolToUint32(likeErr != nil)),
 	}
-	return client.SendMessage(17108, &response)
+	size, packetID, err := client.SendMessage(17108, &response)
+	if err != nil {
+		return size, packetID, err
+	}
+	if likeErr != nil {
+		return size, packetID, nil
+	}
+	if _, err := sendCollectionShipGroupUpdate(client, payload.GetShipGroupId()); err != nil {
+		return 0, 17004, err
+	}
+	return size, packetID, nil
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/orm"
+	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/protobuf"
 	"google.golang.org/protobuf/proto"
 )
@@ -131,7 +132,13 @@ func decodeResponse(t *testing.T, client *connection.Client, response proto.Mess
 	if len(data) < 7 {
 		t.Fatalf("expected buffer to include header and payload")
 	}
-	if err := proto.Unmarshal(data[7:], response); err != nil {
+	packetSize := packets.GetPacketSize(0, &data) + 2
+	if len(data) < packetSize {
+		t.Fatalf("expected packet size %d, got %d", packetSize, len(data))
+	}
+	payloadStart := packets.HEADER_SIZE
+	payloadEnd := payloadStart + (packetSize - packets.HEADER_SIZE)
+	if err := proto.Unmarshal(data[payloadStart:payloadEnd], response); err != nil {
 		t.Fatalf("unmarshal failed: %v", err)
 	}
 }

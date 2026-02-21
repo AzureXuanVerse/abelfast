@@ -70,3 +70,30 @@ WHERE commander_id = $1 AND trophy_id = $2
 `, int64(commanderID), int64(trophyID), int64(timestamp))
 	return err
 }
+
+func ListCommanderTrophyProgress(commanderID uint32) ([]CommanderTrophyProgress, error) {
+	ctx := context.Background()
+	rows, err := db.DefaultStore.Pool.Query(ctx, `
+SELECT commander_id, trophy_id, progress, timestamp
+FROM commander_trophy_progresses
+WHERE commander_id = $1
+ORDER BY trophy_id
+`, int64(commanderID))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]CommanderTrophyProgress, 0)
+	for rows.Next() {
+		var row CommanderTrophyProgress
+		if err := rows.Scan(&row.CommanderID, &row.TrophyID, &row.Progress, &row.Timestamp); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}

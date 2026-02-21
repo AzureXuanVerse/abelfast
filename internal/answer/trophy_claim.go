@@ -44,6 +44,7 @@ func ClaimTrophy(buffer *[]byte, client *connection.Client) (int, int, error) {
 	commanderID := client.Commander.CommanderID
 	var claimTimestamp uint32
 	var unlockedNext *protobuf.ACHIEVEMENT_INFO
+	progressUpdates := make([]orm.CommanderTrophyProgress, 0, 2)
 	trophy, _, err := orm.GetOrCreateCommanderTrophyProgress(commanderID, medalID, template.TargetNum)
 	if err != nil {
 		return 0, 17302, err
@@ -56,6 +57,12 @@ func ClaimTrophy(buffer *[]byte, client *connection.Client) (int, int, error) {
 	if err := orm.ClaimCommanderTrophyProgress(commanderID, medalID, claimTimestamp); err != nil {
 		return 0, 17302, err
 	}
+	progressUpdates = append(progressUpdates, orm.CommanderTrophyProgress{
+		CommanderID: commanderID,
+		TrophyID:    medalID,
+		Progress:    trophy.Progress,
+		Timestamp:   claimTimestamp,
+	})
 
 	nextID := template.Next
 	if nextID != 0 {
@@ -73,6 +80,7 @@ func ClaimTrophy(buffer *[]byte, client *connection.Client) (int, int, error) {
 				Progress:  proto.Uint32(nextRow.Progress),
 				Timestamp: proto.Uint32(nextRow.Timestamp),
 			}
+			progressUpdates = append(progressUpdates, *nextRow)
 		}
 	}
 	response.Result = proto.Uint32(0)
@@ -80,5 +88,12 @@ func ClaimTrophy(buffer *[]byte, client *connection.Client) (int, int, error) {
 	if unlockedNext != nil {
 		response.Next = []*protobuf.ACHIEVEMENT_INFO{unlockedNext}
 	}
-	return client.SendMessage(17302, &response)
+	size, packetID, err := client.SendMessage(17302, &response)
+	if err != nil {
+		return size, packetID, err
+	}
+	if _, err := sendTrophyProgressUpdate(client, progressUpdates...); err != nil {
+		return 0, 17002, err
+	}
+	return size, packetID, nil
 }

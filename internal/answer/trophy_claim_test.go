@@ -255,3 +255,82 @@ func TestClaimTrophyRejectsInsufficientProgressWithoutMutation(t *testing.T) {
 		t.Fatalf("expected timestamp unchanged")
 	}
 }
+
+func TestClaimTrophyEmitsSC17002DeltaAfterSuccessfulClaim(t *testing.T) {
+	client := setupHandlerCommander(t)
+	clearTable(t, &orm.ConfigEntry{})
+	clearTable(t, &orm.CommanderTrophyProgress{})
+
+	seedMedalTemplate(t, 8001, 8002, 5, 0)
+	seedMedalTemplate(t, 8002, 0, 999, 0)
+	row := orm.CommanderTrophyProgress{CommanderID: client.Commander.CommanderID, TrophyID: 8001, Progress: 5, Timestamp: 0}
+	if err := orm.UpdateCommanderTrophyProgress(&row); err != nil {
+		t.Fatalf("seed trophy progress: %v", err)
+	}
+
+	payload := protobuf.CS_17301{Id: proto.Uint32(8001)}
+	buf, err := proto.Marshal(&payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	client.Buffer.Reset()
+	if _, _, err := ClaimTrophy(&buf, client); err != nil {
+		t.Fatalf("handler failed: %v", err)
+	}
+
+	var claim protobuf.SC_17302
+	offset := decodePacketAt(t, client, 0, 17302, &claim)
+	if claim.GetResult() != 0 {
+		t.Fatalf("expected result 0, got %d", claim.GetResult())
+	}
+
+	var delta protobuf.SC_17002
+	offset = decodePacketAt(t, client, offset, 17002, &delta)
+	if len(delta.GetProgressList()) != 2 {
+		t.Fatalf("expected 2 progress delta rows, got %d", len(delta.GetProgressList()))
+	}
+	byID := map[uint32]*protobuf.ACHIEVEMENT_INFO{}
+	for i := range delta.GetProgressList() {
+		byID[delta.GetProgressList()[i].GetId()] = delta.GetProgressList()[i]
+	}
+	if byID[8001] == nil || byID[8001].GetProgress() != 5 || byID[8001].GetTimestamp() == 0 {
+		t.Fatalf("expected claimed trophy row in delta")
+	}
+	if byID[8002] == nil || byID[8002].GetProgress() != 0 || byID[8002].GetTimestamp() != 0 {
+		t.Fatalf("expected unlocked next trophy row in delta")
+	}
+	if offset != len(client.Buffer.Bytes()) {
+		t.Fatalf("expected exactly two packets")
+	}
+}
+
+func TestClaimTrophyRejectedClaimDoesNotEmitSC17002(t *testing.T) {
+	client := setupHandlerCommander(t)
+	clearTable(t, &orm.ConfigEntry{})
+	clearTable(t, &orm.CommanderTrophyProgress{})
+
+	seedMedalTemplate(t, 9001, 0, 1, 0)
+	row := orm.CommanderTrophyProgress{CommanderID: client.Commander.CommanderID, TrophyID: 9001, Progress: 1, Timestamp: 123}
+	if err := orm.UpdateCommanderTrophyProgress(&row); err != nil {
+		t.Fatalf("seed trophy progress: %v", err)
+	}
+
+	payload := protobuf.CS_17301{Id: proto.Uint32(9001)}
+	buf, err := proto.Marshal(&payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	client.Buffer.Reset()
+	if _, _, err := ClaimTrophy(&buf, client); err != nil {
+		t.Fatalf("handler failed: %v", err)
+	}
+
+	var claim protobuf.SC_17302
+	offset := decodePacketAt(t, client, 0, 17302, &claim)
+	if claim.GetResult() == 0 {
+		t.Fatalf("expected non-zero result")
+	}
+	if offset != len(client.Buffer.Bytes()) {
+		t.Fatalf("expected only SC_17302 packet")
+	}
+}

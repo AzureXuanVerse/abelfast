@@ -49,3 +49,29 @@ func TestClaimCommanderTrophyProgressUpdatesTimestamp(t *testing.T) {
 		t.Fatalf("expected timestamp 1234, got %d", stored.Timestamp)
 	}
 }
+
+func TestListCommanderTrophyProgressReturnsSortedRows(t *testing.T) {
+	initCommanderItemTestDB(t)
+	clearTable(t, &CommanderTrophyProgress{})
+
+	if err := UpdateCommanderTrophyProgress(&CommanderTrophyProgress{CommanderID: 3, TrophyID: 3002, Progress: 7, Timestamp: 2}); err != nil {
+		t.Fatalf("seed trophy progress: %v", err)
+	}
+	if err := UpdateCommanderTrophyProgress(&CommanderTrophyProgress{CommanderID: 3, TrophyID: 3001, Progress: 5, Timestamp: 1}); err != nil {
+		t.Fatalf("seed trophy progress: %v", err)
+	}
+	if err := UpdateCommanderTrophyProgress(&CommanderTrophyProgress{CommanderID: 4, TrophyID: 4001, Progress: 1, Timestamp: 0}); err != nil {
+		t.Fatalf("seed other commander progress: %v", err)
+	}
+
+	rows, err := ListCommanderTrophyProgress(3)
+	if err != nil {
+		t.Fatalf("list trophy progress: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(rows))
+	}
+	if rows[0].TrophyID != 3001 || rows[1].TrophyID != 3002 {
+		t.Fatalf("expected rows sorted by trophy id")
+	}
+}

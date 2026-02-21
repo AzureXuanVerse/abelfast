@@ -1,71 +1,33 @@
 package answer
 
 import (
-	"context"
-
 	"github.com/ggmolly/belfast/internal/connection"
-	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/orm"
-
 	"github.com/ggmolly/belfast/internal/protobuf"
 	"google.golang.org/protobuf/proto"
 )
-
-type MaxShipStat struct {
-	GroupID     uint32 `gorm:"column:group_id"`
-	MaxStar     uint32 `gorm:"column:max_star"`
-	MaxIntimacy uint32 `gorm:"column:max_intimacy"`
-	MaxLevel    uint32 `gorm:"column:max_level"`
-	MarryFlag   uint32 `gorm:"column:marry_flag"`
-	HeartFlag   uint32 `gorm:"column:heart_flag"`
-	HeartCount  uint32 `gorm:"column:heart_count"`
-}
 
 func CommanderCollection(buffer *[]byte, client *connection.Client) (int, int, error) {
 	// Out of all commander's OwnedShips, return the max star, max intimacy, and max level
 	// of each ship group (= TemplateID divided by 10)
 
-	resultRows, err := db.DefaultStore.Pool.Query(context.Background(), `
-	SELECT
-		ship_id / 10 AS group_id,
-		MAX(ships.star) AS max_star,
-		MAX(intimacy) AS max_intimacy,
-		MAX(level) AS max_level,
-		MAX(CASE WHEN propose THEN 1 ELSE 0 END) AS marry_flag,
-		(SELECT COUNT(*) FROM likes WHERE group_id = owned_ships.ship_id / 10 AND liker_id = $1) AS heart_flag,
-		(SELECT COUNT(*) FROM likes WHERE group_id = owned_ships.ship_id / 10) AS heart_count
-	FROM owned_ships
-	INNER JOIN ships ON owned_ships.ship_id = ships.template_id
-	WHERE owner_id = $2
-	GROUP BY group_id, owned_ships.ship_id
-	`, int64(client.Commander.CommanderID), int64(client.Commander.CommanderID))
+	rows, err := listCollectionShipStats(client.Commander.CommanderID)
 	if err != nil {
-		return 0, 17001, err
-	}
-	defer resultRows.Close()
-	rows := make([]MaxShipStat, 0)
-	for resultRows.Next() {
-		var row MaxShipStat
-		if err := resultRows.Scan(&row.GroupID, &row.MaxStar, &row.MaxIntimacy, &row.MaxLevel, &row.MarryFlag, &row.HeartFlag, &row.HeartCount); err != nil {
-			return 0, 17001, err
-		}
-		rows = append(rows, row)
-	}
-	if err := resultRows.Err(); err != nil {
 		return 0, 17001, err
 	}
 
 	stats := make([]*protobuf.SHIP_STATISTICS_INFO, len(rows))
-	for i, row := range rows {
-		stats[i] = &protobuf.SHIP_STATISTICS_INFO{
-			Id:          proto.Uint32(row.GroupID),
-			Star:        proto.Uint32(row.MaxStar),
-			HeartFlag:   proto.Uint32(row.HeartFlag),
-			HeartCount:  proto.Uint32(row.HeartCount),
-			MarryFlag:   proto.Uint32(row.MarryFlag),
-			IntimacyMax: proto.Uint32(row.MaxIntimacy),
-			LvMax:       proto.Uint32(row.MaxLevel),
-		}
+	for i := range rows {
+		stats[i] = buildShipStatisticsInfo(rows[i])
+	}
+
+	trophyProgress, err := orm.ListCommanderTrophyProgress(client.Commander.CommanderID)
+	if err != nil {
+		return 0, 17001, err
+	}
+	progressList := make([]*protobuf.ACHIEVEMENT_INFO, len(trophyProgress))
+	for i := range trophyProgress {
+		progressList[i] = buildAchievementInfo(trophyProgress[i])
 	}
 
 	progress, err := orm.ListCommanderStoreupAwardProgress(client.Commander.CommanderID)
@@ -85,6 +47,7 @@ func CommanderCollection(buffer *[]byte, client *connection.Client) (int, int, e
 
 	response := protobuf.SC_17001{
 		DailyDiscuss:  proto.Uint32(0),
+		ProgressList:  progressList,
 		ShipInfoList:  stats,
 		ShipAwardList: awards,
 	}
