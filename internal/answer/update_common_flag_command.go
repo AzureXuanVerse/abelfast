@@ -17,6 +17,14 @@ func UpdateCommonFlagCommand(buffer *[]byte, client *connection.Client) (int, in
 	}
 	if err := orm.SetCommanderCommonFlag(client.Commander.CommanderID, payload.GetFlagId()); err != nil {
 		response.Result = proto.Uint32(1)
+		return client.SendMessage(11020, &response)
 	}
-	return client.SendMessage(11020, &response)
+	bytesWritten, packetID, err := client.SendMessage(11020, &response)
+	if err != nil {
+		return bytesWritten, packetID, err
+	}
+	if _, _, err := sendCommonFlagPush(client, payload.GetFlagId(), true); err != nil {
+		return bytesWritten, packetID, err
+	}
+	return bytesWritten, packetID, nil
 }
