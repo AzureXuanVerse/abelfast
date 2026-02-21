@@ -60,6 +60,8 @@ func setupGuildShopCommander(t *testing.T, commanderID uint32) *orm.Commander {
 	os.Setenv("MODE", "test")
 	orm.InitDatabase()
 
+	execAnswerExternalTestSQLT(t, "INSERT INTO resources (id, item_id, name) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING", int64(8), int64(0), "Guild Coin")
+
 	name := fmt.Sprintf("Guild Shop Commander %d", commanderID)
 	if err := orm.CreateCommanderRoot(commanderID, commanderID, name, 0, 0); err != nil {
 		t.Fatalf("failed to create commander: %v", err)

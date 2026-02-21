@@ -27,6 +27,20 @@ func seedConfigEntryJSON(t *testing.T, category string, key string, value any) {
 func seedGuildShopPurchaseEntry(t *testing.T, entry guildStoreEntry) {
 	t.Helper()
 	seedConfigEntryJSON(t, guildStoreConfigCategory, fmt.Sprintf("%d", entry.ID), entry)
+	if entry.Type == consts.DROP_TYPE_ITEM {
+		for _, itemID := range entry.Goods {
+			execAnswerExternalTestSQLT(
+				t,
+				"INSERT INTO items (id, name, rarity, shop_id, type, virtual_type) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO NOTHING",
+				int64(itemID),
+				fmt.Sprintf("Guild Shop Item %d", itemID),
+				int64(1),
+				int64(-2),
+				int64(0),
+				int64(0),
+			)
+		}
+	}
 }
 
 func seedGuildShopSlot(t *testing.T, commanderID uint32, index uint32, goodsID uint32, count uint32) {
