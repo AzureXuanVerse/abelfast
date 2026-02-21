@@ -148,6 +148,7 @@ func buildIslandPublicData(ownerID uint32, snapshot *orm.IslandSnapshot) *protob
 		TaskInfo:           &protobuf.PB_ISLAND_TASK{TaskIdListFinish: []uint32{}, TaskList: []*protobuf.PB_TASK{}, FocusId: proto.Uint32(0), TaskListRandom: []*protobuf.PB_TASK_RANDOM{}, WeekDailyTaskNum: proto.Uint32(0)},
 		TradeSys:           &protobuf.PB_ISLAND_TRADE_SYS{TodayEvent: proto.Uint32(0), TodayTrade: proto.Uint32(0), Effect: []*protobuf.PB_EVENT_EFFECT{}, TodayNum: []*protobuf.PB_TRADE_NUM{}, TradeList: []*protobuf.PB_ISLAND_TRADE{}, PresellList: []*protobuf.PB_TRADE_PRESELL{}},
 		BuildList:          []*protobuf.PB_ISLAND_BUILD{},
+		Treasure:           &protobuf.PB_ISLAND_TREASURE{WeekBuyNum: proto.Uint32(0), SellList: []*protobuf.PB_TRE_SELL_LIST{}, PriceList: []*protobuf.PB_TRE_HISTORY_PRICE{}, InviteList: []uint32{}},
 	}
 }
 

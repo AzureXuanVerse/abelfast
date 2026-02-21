@@ -26,7 +26,7 @@ func IslandCloseRestaurant(buffer *[]byte, client *connection.Client) (int, int,
 		return 0, 21421, err
 	}
 
-	response := &protobuf.SC_21421{Result: proto.Uint32(islandCloseRestaurantInvalid), DropList: []*protobuf.DROPINFO{}}
+	response := &protobuf.SC_21421{Result: proto.Uint32(islandCloseRestaurantInvalid), DropList: []*protobuf.DROPINFO{}, EventAdd: proto.Uint32(0), EventId: proto.Uint32(0)}
 	tradeID := payload.GetTradeId()
 	if tradeID == 0 {
 		return client.SendMessage(21421, response)

@@ -43,6 +43,7 @@ type PB_ISLAND_PUBLIC struct {
 	TaskInfo           *PB_ISLAND_TASK        `protobuf:"bytes,18,req,name=task_info,json=taskInfo" json:"task_info,omitempty"`
 	TradeSys           *PB_ISLAND_TRADE_SYS   `protobuf:"bytes,19,req,name=trade_sys,json=tradeSys" json:"trade_sys,omitempty"`
 	BuildList          []*PB_ISLAND_BUILD     `protobuf:"bytes,20,rep,name=build_list,json=buildList" json:"build_list,omitempty"`
+	Treasure           *PB_ISLAND_TREASURE    `protobuf:"bytes,21,req,name=treasure" json:"treasure,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -217,11 +218,18 @@ func (x *PB_ISLAND_PUBLIC) GetBuildList() []*PB_ISLAND_BUILD {
 	return nil
 }
 
+func (x *PB_ISLAND_PUBLIC) GetTreasure() *PB_ISLAND_TREASURE {
+	if x != nil {
+		return x.Treasure
+	}
+	return nil
+}
+
 var File_PB_ISLAND_PUBLIC_proto protoreflect.FileDescriptor
 
 const file_PB_ISLAND_PUBLIC_proto_rawDesc = "" +
 	"\n" +
-	"\x16PB_ISLAND_PUBLIC.proto\x12\abelfast\x1a\x15PB_ISLAND_BUILD.proto\x1a\x18PB_ISLAND_SHIP_SYS.proto\x1a\x14PB_ISLAND_TASK.proto\x1a\x14PB_ISLAND_TECH.proto\x1a\x19PB_ISLAND_TRADE_SYS.proto\x1a\x17PB_PLACEMENT_DATA.proto\"\xb1\x06\n" +
+	"\x16PB_ISLAND_PUBLIC.proto\x12\abelfast\x1a\x15PB_ISLAND_BUILD.proto\x1a\x18PB_ISLAND_SHIP_SYS.proto\x1a\x14PB_ISLAND_TASK.proto\x1a\x14PB_ISLAND_TECH.proto\x1a\x19PB_ISLAND_TRADE_SYS.proto\x1a\x18PB_ISLAND_TREASURE.proto\x1a\x17PB_PLACEMENT_DATA.proto\"\xea\x06\n" +
 	"\x10PB_ISLAND_PUBLIC\x12\x0e\n" +
 	"\x02id\x18\x01 \x02(\rR\x02id\x12\x14\n" +
 	"\x05level\x18\x02 \x02(\rR\x05level\x12\x10\n" +
@@ -248,7 +256,8 @@ const file_PB_ISLAND_PUBLIC_proto_rawDesc = "" +
 	"\ttask_info\x18\x12 \x02(\v2\x17.belfast.PB_ISLAND_TASKR\btaskInfo\x129\n" +
 	"\ttrade_sys\x18\x13 \x02(\v2\x1c.belfast.PB_ISLAND_TRADE_SYSR\btradeSys\x127\n" +
 	"\n" +
-	"build_list\x18\x14 \x03(\v2\x18.belfast.PB_ISLAND_BUILDR\tbuildListB\fZ\n" +
+	"build_list\x18\x14 \x03(\v2\x18.belfast.PB_ISLAND_BUILDR\tbuildList\x127\n" +
+	"\btreasure\x18\x15 \x02(\v2\x1b.belfast.PB_ISLAND_TREASURER\btreasureB\fZ\n" +
 	"./protobuf"
 
 var (
@@ -272,6 +281,7 @@ var file_PB_ISLAND_PUBLIC_proto_goTypes = []any{
 	(*PB_ISLAND_TASK)(nil),      // 4: belfast.PB_ISLAND_TASK
 	(*PB_ISLAND_TRADE_SYS)(nil), // 5: belfast.PB_ISLAND_TRADE_SYS
 	(*PB_ISLAND_BUILD)(nil),     // 6: belfast.PB_ISLAND_BUILD
+	(*PB_ISLAND_TREASURE)(nil),  // 7: belfast.PB_ISLAND_TREASURE
 }
 var file_PB_ISLAND_PUBLIC_proto_depIdxs = []int32{
 	1, // 0: belfast.PB_ISLAND_PUBLIC.tech:type_name -> belfast.PB_ISLAND_TECH
@@ -280,11 +290,12 @@ var file_PB_ISLAND_PUBLIC_proto_depIdxs = []int32{
 	4, // 3: belfast.PB_ISLAND_PUBLIC.task_info:type_name -> belfast.PB_ISLAND_TASK
 	5, // 4: belfast.PB_ISLAND_PUBLIC.trade_sys:type_name -> belfast.PB_ISLAND_TRADE_SYS
 	6, // 5: belfast.PB_ISLAND_PUBLIC.build_list:type_name -> belfast.PB_ISLAND_BUILD
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	7, // 6: belfast.PB_ISLAND_PUBLIC.treasure:type_name -> belfast.PB_ISLAND_TREASURE
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_PB_ISLAND_PUBLIC_proto_init() }
@@ -297,6 +308,7 @@ func file_PB_ISLAND_PUBLIC_proto_init() {
 	file_PB_ISLAND_TASK_proto_init()
 	file_PB_ISLAND_TECH_proto_init()
 	file_PB_ISLAND_TRADE_SYS_proto_init()
+	file_PB_ISLAND_TREASURE_proto_init()
 	file_PB_PLACEMENT_DATA_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{

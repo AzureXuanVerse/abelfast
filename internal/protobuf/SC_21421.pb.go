@@ -25,6 +25,8 @@ type SC_21421 struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Result        *uint32                `protobuf:"varint,1,req,name=result" json:"result,omitempty"`
 	DropList      []*DROPINFO            `protobuf:"bytes,2,rep,name=drop_list,json=dropList" json:"drop_list,omitempty"`
+	EventAdd      *uint32                `protobuf:"varint,3,req,name=event_add,json=eventAdd" json:"event_add,omitempty"`
+	EventId       *uint32                `protobuf:"varint,4,req,name=event_id,json=eventId" json:"event_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -73,14 +75,30 @@ func (x *SC_21421) GetDropList() []*DROPINFO {
 	return nil
 }
 
+func (x *SC_21421) GetEventAdd() uint32 {
+	if x != nil && x.EventAdd != nil {
+		return *x.EventAdd
+	}
+	return 0
+}
+
+func (x *SC_21421) GetEventId() uint32 {
+	if x != nil && x.EventId != nil {
+		return *x.EventId
+	}
+	return 0
+}
+
 var File_SC_21421_proto protoreflect.FileDescriptor
 
 const file_SC_21421_proto_rawDesc = "" +
 	"\n" +
-	"\x0eSC_21421.proto\x12\abelfast\x1a\x0eDROPINFO.proto\"R\n" +
+	"\x0eSC_21421.proto\x12\abelfast\x1a\x0eDROPINFO.proto\"\x8a\x01\n" +
 	"\bSC_21421\x12\x16\n" +
 	"\x06result\x18\x01 \x02(\rR\x06result\x12.\n" +
-	"\tdrop_list\x18\x02 \x03(\v2\x11.belfast.DROPINFOR\bdropListB\fZ\n" +
+	"\tdrop_list\x18\x02 \x03(\v2\x11.belfast.DROPINFOR\bdropList\x12\x1b\n" +
+	"\tevent_add\x18\x03 \x02(\rR\beventAdd\x12\x19\n" +
+	"\bevent_id\x18\x04 \x02(\rR\aeventIdB\fZ\n" +
 	"./protobuf"
 
 var (
