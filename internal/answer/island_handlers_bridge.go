@@ -219,6 +219,14 @@ func IslandGetData(buffer *[]byte, client *connection.Client) (int, int, error) 
 	return island.IslandGetData(buffer, client)
 }
 
+func IslandTradeOp(buffer *[]byte, client *connection.Client) (int, int, error) {
+	return island.IslandTradeOp(buffer, client)
+}
+
+func IslandGetFriendTradeRank(buffer *[]byte, client *connection.Client) (int, int, error) {
+	return island.IslandGetFriendTradeRank(buffer, client)
+}
+
 func IslandSetAccessTypeLegacy(buffer *[]byte, client *connection.Client) (int, int, error) {
 	return island.IslandSetAccessTypeLegacy(buffer, client)
 }

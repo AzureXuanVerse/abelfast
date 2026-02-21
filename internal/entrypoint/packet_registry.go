@@ -618,6 +618,8 @@ func registerPackets() {
 	packets.RegisterPacketHandler(21211, []packets.PacketHandler{answer.IslandSyncData})
 	packets.RegisterPacketHandler(21213, []packets.PacketHandler{answer.IslandEnterMap})
 	packets.RegisterPacketHandler(21215, []packets.PacketHandler{answer.IslandHeartbeat})
+	packets.RegisterPacketHandler(21240, []packets.PacketHandler{answer.IslandTradeOp})
+	packets.RegisterPacketHandler(21243, []packets.PacketHandler{answer.IslandGetFriendTradeRank})
 	packets.RegisterPacketHandler(21229, []packets.PacketHandler{answer.HandleIslandRecordLastPosition})
 	packets.RegisterPacketHandler(21230, []packets.PacketHandler{answer.HandleIslandReconnect})
 	packets.RegisterPacketHandler(21700, []packets.PacketHandler{answer.IslandAnimationOp})

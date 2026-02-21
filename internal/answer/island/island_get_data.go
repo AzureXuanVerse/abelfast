@@ -127,6 +127,19 @@ func buildIslandPublicData(ownerID uint32, snapshot *orm.IslandSnapshot) *protob
 		skinList = append(skinList, &protobuf.PB_ISLAND_SHIP_SKIN{ShipId: proto.Uint32(shipID), SkinList: list})
 	}
 
+	treasure := &protobuf.PB_ISLAND_TREASURE{WeekBuyNum: proto.Uint32(0), SellList: []*protobuf.PB_TRE_SELL_LIST{}, PriceList: []*protobuf.PB_TRE_HISTORY_PRICE{}, InviteList: []uint32{}}
+	if treasureState, err := orm.GetIslandTreasureState(ownerID); err == nil && treasureState != nil {
+		treasure.WeekBuyNum = proto.Uint32(treasureState.WeekBuyNum)
+		treasure.SellList = make([]*protobuf.PB_TRE_SELL_LIST, 0, len(treasureState.SellList))
+		for i := range treasureState.SellList {
+			treasure.SellList = append(treasure.SellList, &protobuf.PB_TRE_SELL_LIST{IslandId: proto.Uint32(treasureState.SellList[i].IslandID), Num: proto.Uint32(treasureState.SellList[i].Num)})
+		}
+		treasure.PriceList = make([]*protobuf.PB_TRE_HISTORY_PRICE, 0, len(treasureState.PriceList))
+		for i := range treasureState.PriceList {
+			treasure.PriceList = append(treasure.PriceList, &protobuf.PB_TRE_HISTORY_PRICE{Timestamp: proto.Uint32(treasureState.PriceList[i].Timestamp), Price: proto.Uint32(treasureState.PriceList[i].Price)})
+		}
+	}
+
 	return &protobuf.PB_ISLAND_PUBLIC{
 		Id:                 proto.Uint32(ownerID),
 		Level:              proto.Uint32(maxUint32(snapshot.Level, 1)),
@@ -148,7 +161,7 @@ func buildIslandPublicData(ownerID uint32, snapshot *orm.IslandSnapshot) *protob
 		TaskInfo:           &protobuf.PB_ISLAND_TASK{TaskIdListFinish: []uint32{}, TaskList: []*protobuf.PB_TASK{}, FocusId: proto.Uint32(0), TaskListRandom: []*protobuf.PB_TASK_RANDOM{}, WeekDailyTaskNum: proto.Uint32(0)},
 		TradeSys:           &protobuf.PB_ISLAND_TRADE_SYS{TodayEvent: proto.Uint32(0), TodayTrade: proto.Uint32(0), Effect: []*protobuf.PB_EVENT_EFFECT{}, TodayNum: []*protobuf.PB_TRADE_NUM{}, TradeList: []*protobuf.PB_ISLAND_TRADE{}, PresellList: []*protobuf.PB_TRADE_PRESELL{}},
 		BuildList:          []*protobuf.PB_ISLAND_BUILD{},
-		Treasure:           &protobuf.PB_ISLAND_TREASURE{WeekBuyNum: proto.Uint32(0), SellList: []*protobuf.PB_TRE_SELL_LIST{}, PriceList: []*protobuf.PB_TRE_HISTORY_PRICE{}, InviteList: []uint32{}},
+		Treasure:           treasure,
 	}
 }
 

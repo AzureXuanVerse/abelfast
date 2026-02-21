@@ -1417,6 +1417,14 @@ type IslandTechnologyState struct {
 	UpdatedAt       pgtype.Timestamptz
 }
 
+type IslandTreasureState struct {
+	CommanderID int64
+	WeekBuyNum  int64
+	SellList    []byte
+	PriceList   []byte
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type IslandWildGatherCollectState struct {
 	IslandID             int64
 	GatherID             int64
