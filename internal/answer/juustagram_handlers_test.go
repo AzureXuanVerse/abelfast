@@ -186,6 +186,23 @@ func TestJuustagramMessageRangeSkipsUnpublished(t *testing.T) {
 	}
 }
 
+func TestJuustagramMessageRangeDecodeFailure(t *testing.T) {
+	initJuustagramHandlerTestDB(t)
+	commander := &orm.Commander{CommanderID: 1001}
+	client := &connection.Client{Commander: commander}
+	buffer := []byte{0x01}
+	_, packetID, err := JuustagramMessageRange(&buffer, client)
+	if err == nil {
+		t.Fatalf("expected decode error")
+	}
+	if packetID != consts.JuustagramPacketRangeResp {
+		t.Fatalf("expected packet %d, got %d", consts.JuustagramPacketRangeResp, packetID)
+	}
+	if client.Buffer.Len() != 0 {
+		t.Fatalf("expected no response payload on decode failure")
+	}
+}
+
 func TestJuustagramOpMissingLanguageUsesEmptyText(t *testing.T) {
 	initJuustagramHandlerTestDB(t)
 	execAnswerTestSQLT(t, "DELETE FROM juustagram_message_states")

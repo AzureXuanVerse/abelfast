@@ -20,8 +20,17 @@ func JuustagramMessageRange(buffer *[]byte, client *connection.Client) (int, int
 	if client.Commander == nil {
 		return 0, consts.JuustagramPacketRangeResp, errors.New("missing commander")
 	}
-	indexBegin := payload.GetIndexBegin()
-	indexEnd := payload.GetIndexEnd()
+	// SC_11700 remains intentionally unsupported because current client bootstrap
+	// flow requests Juustagram messages via CS_11705 and consumes SC_11706.
+	messages, err := buildJuustagramMessagesForRange(client.Commander.CommanderID, payload.GetIndexBegin(), payload.GetIndexEnd())
+	if err != nil {
+		return 0, consts.JuustagramPacketRangeResp, err
+	}
+	response := protobuf.SC_11706{InsMessageList: messages}
+	return client.SendMessage(consts.JuustagramPacketRangeResp, &response)
+}
+
+func buildJuustagramMessagesForRange(commanderID uint32, indexBegin uint32, indexEnd uint32) ([]*protobuf.INS_MESSAGE, error) {
 	templates := make([]orm.JuustagramTemplate, 0)
 	for id := indexBegin; id <= indexEnd; id++ {
 		template, err := orm.GetJuustagramTemplate(id)
@@ -32,7 +41,7 @@ func JuustagramMessageRange(buffer *[]byte, client *connection.Client) (int, int
 				}
 				continue
 			}
-			return 0, consts.JuustagramPacketRangeResp, err
+			return nil, err
 		}
 		templates = append(templates, *template)
 		if id == indexEnd {
@@ -43,18 +52,17 @@ func JuustagramMessageRange(buffer *[]byte, client *connection.Client) (int, int
 	messages := make([]*protobuf.INS_MESSAGE, 0, len(templates))
 	for _, template := range templates {
 		if ok, err := isPublishableJuustagramTemplate(template); err != nil {
-			return 0, consts.JuustagramPacketRangeResp, err
+			return nil, err
 		} else if !ok {
 			// Skip templates that are not ready to be served to clients.
-			logJuustagramSkip(template, client.Commander.CommanderID)
+			logJuustagramSkip(template, commanderID)
 			continue
 		}
-		message, err := BuildJuustagramMessage(client.Commander.CommanderID, template.ID, now)
+		message, err := BuildJuustagramMessage(commanderID, template.ID, now)
 		if err != nil {
-			return 0, consts.JuustagramPacketRangeResp, err
+			return nil, err
 		}
 		messages = append(messages, message)
 	}
-	response := protobuf.SC_11706{InsMessageList: messages}
-	return client.SendMessage(consts.JuustagramPacketRangeResp, &response)
+	return messages, nil
 }
