@@ -3,9 +3,18 @@ package answer
 import (
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/consts"
+	"github.com/ggmolly/belfast/internal/orm"
 	"github.com/ggmolly/belfast/internal/protobuf"
 	"google.golang.org/protobuf/proto"
 )
+
+var exchangeShipAddOwnedShip = func(client *connection.Client, shipID uint32) (*orm.OwnedShip, error) {
+	return client.Commander.AddShip(shipID)
+}
+
+var exchangeShipCommitCommander = func(client *connection.Client) error {
+	return client.Commander.Commit()
+}
 
 func ExchangeShip(buffer *[]byte, client *connection.Client) (int, int, error) {
 	var data protobuf.CS_12047
@@ -25,7 +34,8 @@ func ExchangeShip(buffer *[]byte, client *connection.Client) (int, int, error) {
 	}
 
 	client.Commander.ExchangeCount -= 400
-	if _, err := client.Commander.AddShip(data.GetShipTid()); err != nil {
+	newShip, err := exchangeShipAddOwnedShip(client, data.GetShipTid())
+	if err != nil {
 		response.Result = proto.Uint32(3)
 		return client.SendMessage(12048, &response)
 	}
@@ -37,9 +47,16 @@ func ExchangeShip(buffer *[]byte, client *connection.Client) (int, int, error) {
 			Number: proto.Uint32(1),
 		},
 	}
-	if err := client.Commander.Commit(); err != nil {
+	if err := exchangeShipCommitCommander(client); err != nil {
 		response.Result = proto.Uint32(3)
 		return client.SendMessage(12048, &response)
 	}
-	return client.SendMessage(12048, &response)
+
+	if _, _, err := client.SendMessage(12048, &response); err != nil {
+		return 0, 12048, err
+	}
+	if _, err := pushNewShips(client, []*orm.OwnedShip{newShip}); err != nil {
+		return 0, 12042, err
+	}
+	return 0, 12048, nil
 }
