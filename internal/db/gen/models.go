@@ -793,6 +793,13 @@ type GuildChatMessage struct {
 	Content  string
 }
 
+type GuildJoinRequest struct {
+	GuildID              int64
+	ApplicantCommanderID int64
+	Content              string
+	RequestedAt          pgtype.Timestamp
+}
+
 type GuildMember struct {
 	GuildID       int64
 	CommanderID   int64
