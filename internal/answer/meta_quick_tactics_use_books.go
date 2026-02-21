@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/ggmolly/belfast/internal/connection"
+	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/orm"
 	"github.com/ggmolly/belfast/internal/protobuf"
 	"github.com/jackc/pgx/v5"
@@ -67,6 +68,9 @@ func MetaQuickTacticsUseBooks(buffer *[]byte, client *connection.Client) (int, i
 		maxCfg, err := orm.GetSkillDataTemplateConfig(skillState.SkillID)
 		if err != nil {
 			return nil
+		}
+		if maxCfg.MaxLevel == 0 || skillState.Level >= maxCfg.MaxLevel {
+			return db.ErrNotFound
 		}
 		newLevel := skillState.Level
 		newExp := skillState.Exp

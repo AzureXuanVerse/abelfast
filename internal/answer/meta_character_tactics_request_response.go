@@ -2,7 +2,6 @@ package answer
 
 import (
 	"github.com/ggmolly/belfast/internal/connection"
-	"github.com/ggmolly/belfast/internal/orm"
 	"github.com/ggmolly/belfast/internal/protobuf"
 	"google.golang.org/protobuf/proto"
 )
@@ -37,9 +36,6 @@ func MetaCharacterTacticsRequestCommandResponse(buffer *[]byte, client *connecti
 	state, skillStates, tasks, err := getMetaTacticsSnapshot(client.Commander.CommanderID, ship.ID)
 	if err != nil {
 		return 0, 63314, err
-	}
-	if state.SwitchCnt == 0 {
-		state.SwitchCnt = orm.DefaultMetaTacticsSwitchCount
 	}
 	response.DoubleExp = proto.Uint32(state.DoubleExp)
 	response.Exp = proto.Uint32(state.DailyExp)

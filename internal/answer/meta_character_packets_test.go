@@ -220,3 +220,77 @@ func TestMetaTacticsUnlockAndLevelUpFlow(t *testing.T) {
 		t.Fatalf("expected detailed tactics payload for unlocked skill")
 	}
 }
+
+func TestMetaQuickTacticsUseBooksRejectsMaxLevel(t *testing.T) {
+	client := setupPlayerUpdateTest(t)
+	initCommanderMaps(client)
+	clearTable(t, &orm.ConfigEntry{})
+	clearTable(t, &orm.CommanderItem{})
+	clearTable(t, &orm.OwnedShip{})
+	clearTable(t, &orm.Ship{})
+	execAnswerTestSQLT(t, "TRUNCATE TABLE commander_meta_tactics_skill_states RESTART IDENTITY CASCADE")
+
+	seedMetaShipForTests(t, client.Commander.CommanderID, 7201, 9703011, 20)
+	if err := client.Commander.Load(); err != nil {
+		t.Fatalf("reload commander: %v", err)
+	}
+	seedCommanderItem(t, client, 16031, 1)
+	seedConfigEntry(t, "sharecfgdata/ship_data_template.json", "9703011", `{"id":9703011,"group_type":970301,"max_level":70,"buff_list_display":[800041]}`)
+	seedConfigEntry(t, "ShareCfg/ship_meta_skilltask.json", "11", `{"id":11,"level":1,"need_exp":100,"skill_ID":800041,"skill_levelup_task":[],"skill_unlock":[]}`)
+	seedConfigEntry(t, "sharecfgdata/skill_data_template.json", "800041", `{"id":800041,"max_level":2}`)
+	seedConfigEntry(t, "sharecfgdata/item_data_statistics.json", "16031", `{"id":16031,"type":25,"usage_arg":"100"}`)
+	execAnswerTestSQLT(t, `
+INSERT INTO commander_meta_tactics_skill_states (commander_id, ship_id, skill_id, skill_pos, level, exp)
+VALUES ($1, $2, $3, 1, 2, 0)
+ON CONFLICT (commander_id, ship_id, skill_id)
+DO UPDATE SET level = 2, exp = 0
+`, int64(client.Commander.CommanderID), int64(7201), int64(800041))
+
+	payload := protobuf.CS_63319{ShipId: proto.Uint32(7201), SkillId: proto.Uint32(800041), Books: []*protobuf.ITEM_INFO{{Id: proto.Uint32(16031), Num: proto.Uint32(1)}}}
+	buffer, _ := proto.Marshal(&payload)
+	if _, _, err := MetaQuickTacticsUseBooks(&buffer, client); err != nil {
+		t.Fatalf("quick tactics failed: %v", err)
+	}
+	var response protobuf.SC_63320
+	decodeResponse(t, client, &response)
+	if response.GetRet() == 0 {
+		t.Fatalf("expected quick tactics to fail for max-level skill")
+	}
+	remaining := queryAnswerTestInt64(t, "SELECT count FROM commander_items WHERE commander_id = $1 AND item_id = $2", int64(client.Commander.CommanderID), int64(16031))
+	if remaining != 1 {
+		t.Fatalf("expected books to remain unchanged, got %d", remaining)
+	}
+}
+
+func TestMetaTacticsRequestPreservesZeroSwitchCount(t *testing.T) {
+	client := setupPlayerUpdateTest(t)
+	initCommanderMaps(client)
+	clearTable(t, &orm.ConfigEntry{})
+	clearTable(t, &orm.OwnedShip{})
+	clearTable(t, &orm.Ship{})
+	execAnswerTestSQLT(t, "TRUNCATE TABLE commander_meta_tactics_states RESTART IDENTITY CASCADE")
+
+	seedMetaShipForTests(t, client.Commander.CommanderID, 7301, 9704011, 20)
+	if err := client.Commander.Load(); err != nil {
+		t.Fatalf("reload commander: %v", err)
+	}
+	seedConfigEntry(t, "sharecfgdata/ship_data_template.json", "9704011", `{"id":9704011,"group_type":970401,"max_level":70,"buff_list_display":[800042]}`)
+	seedConfigEntry(t, "ShareCfg/ship_meta_skilltask.json", "21", `{"id":21,"level":1,"need_exp":100,"skill_ID":800042,"skill_levelup_task":[],"skill_unlock":[]}`)
+	execAnswerTestSQLT(t, `
+INSERT INTO commander_meta_tactics_states (commander_id, ship_id, current_skill_id, daily_exp, double_exp, switch_cnt)
+VALUES ($1, $2, 800042, 0, 0, 0)
+ON CONFLICT (commander_id, ship_id)
+DO UPDATE SET current_skill_id = 800042, switch_cnt = 0
+`, int64(client.Commander.CommanderID), int64(7301))
+
+	payload := protobuf.CS_63313{ShipId: proto.Uint32(7301)}
+	buffer, _ := proto.Marshal(&payload)
+	if _, _, err := MetaCharacterTacticsRequestCommandResponse(&buffer, client); err != nil {
+		t.Fatalf("tactics request failed: %v", err)
+	}
+	var response protobuf.SC_63314
+	decodeResponse(t, client, &response)
+	if response.GetSwitchCnt() != 0 {
+		t.Fatalf("expected switch count 0, got %d", response.GetSwitchCnt())
+	}
+}

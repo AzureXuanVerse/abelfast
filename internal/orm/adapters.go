@@ -32,6 +32,10 @@ func ToProtoBuildInfo(payload BuildInfoPayload) *protobuf.BUILDINFO {
 }
 
 func ToProtoOwnedShip(ship OwnedShip, randomFlags []uint32, shadowSkins []OwnedShipShadowSkin) *protobuf.SHIPINFO {
+	return toProtoOwnedShipWithRepairs(ship, randomFlags, shadowSkins, loadShipMetaRepairList(ship))
+}
+
+func toProtoOwnedShipWithRepairs(ship OwnedShip, randomFlags []uint32, shadowSkins []OwnedShipShadowSkin, repairs []uint32) *protobuf.SHIPINFO {
 	equipInfo := buildEquipInfoList(ship)
 	transformInfo := buildTransformInfoList(ship.Transforms)
 	strengthInfo := buildStrengthInfoList(ship.Strengths)
@@ -63,7 +67,7 @@ func ToProtoOwnedShip(ship OwnedShip, randomFlags []uint32, shadowSkins []OwnedS
 		MaxLevel:            proto.Uint32(ship.MaxLevel),
 		CommonFlag:          proto.Uint32(boolToUint32(ship.CommonFlag)),
 		ActivityNpc:         proto.Uint32(ship.ActivityNPC),
-		MetaRepairList:      loadShipMetaRepairList(ship),
+		MetaRepairList:      repairs,
 		Spweapon:            nil,
 		SkinShadowList:      skinShadowList,
 		CharRandomFlag:      randomFlags,
@@ -169,9 +173,27 @@ func boolToUint32(b bool) uint32 {
 }
 
 func ToProtoOwnedShipList(ships []OwnedShip, randomFlags map[uint32][]uint32, shadowSkins map[uint32][]OwnedShipShadowSkin) []*protobuf.SHIPINFO {
+	ownerShips := make(map[uint32][]uint32)
+	for _, ship := range ships {
+		if ship.OwnerID == 0 || ship.ID == 0 {
+			continue
+		}
+		ownerShips[ship.OwnerID] = append(ownerShips[ship.OwnerID], ship.ID)
+	}
+	repairsByShip := make(map[uint32][]uint32)
+	for ownerID, shipIDs := range ownerShips {
+		repairs, err := ListOwnedShipMetaRepairIDsByShips(ownerID, shipIDs)
+		if err != nil {
+			continue
+		}
+		for shipID, repairIDs := range repairs {
+			repairsByShip[shipID] = repairIDs
+		}
+	}
+
 	result := make([]*protobuf.SHIPINFO, len(ships))
 	for i, ship := range ships {
-		result[i] = ToProtoOwnedShip(ship, randomFlags[ship.ID], shadowSkins[ship.ID])
+		result[i] = toProtoOwnedShipWithRepairs(ship, randomFlags[ship.ID], shadowSkins[ship.ID], repairsByShip[ship.ID])
 	}
 	return result
 }
