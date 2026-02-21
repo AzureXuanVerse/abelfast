@@ -43,9 +43,13 @@ func TestUpdateExerciseFleet_PersistsAndReflectsInSeasonInfo(t *testing.T) {
 	}
 
 	var updateResp protobuf.SC_18009
-	decodePacketMessage(t, client, 18009, &updateResp)
+	packetData := client.Buffer.Bytes()
+	offset := decodePacketMessageAtOffset(t, packetData, 0, 18009, &updateResp)
 	if updateResp.GetResult() != 0 {
 		t.Fatalf("expected result 0, got %d", updateResp.GetResult())
+	}
+	if offset != len(packetData) {
+		t.Fatalf("expected update flow to only emit SC_18009, %d bytes remain", len(packetData)-offset)
 	}
 
 	stored, err := orm.GetExerciseFleet(client.Commander.CommanderID)
