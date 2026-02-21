@@ -1886,6 +1886,18 @@ type SurveyState struct {
 	UpdatedAt   pgtype.Timestamptz
 }
 
+type TechnologyResearchState struct {
+	CommanderID    int64
+	RefreshFlag    int64
+	RefreshDay     int64
+	CatchupVersion int64
+	CatchupTarget  int64
+	RefreshPools   []byte
+	Queue          []byte
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+}
+
 type UserRegistrationChallenge struct {
 	ID           string
 	CommanderID  int64

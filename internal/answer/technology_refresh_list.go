@@ -2,18 +2,12 @@ package answer
 
 import (
 	"github.com/ggmolly/belfast/internal/connection"
-
-	"github.com/ggmolly/belfast/internal/protobuf"
-	"google.golang.org/protobuf/proto"
 )
 
 func TechnologyRefreshList(buffer *[]byte, client *connection.Client) (int, int, error) {
-	response := protobuf.SC_63000{
-		RefreshFlag: proto.Uint32(0),
-		Catchup: &protobuf.TECHNOLOGYCATCHUP{
-			Version: proto.Uint32(0),
-			Target:  proto.Uint32(0),
-		},
+	response, err := buildTechnologyRefreshSyncResponse(client.Commander.CommanderID)
+	if err != nil {
+		return 0, 63000, err
 	}
-	return client.SendMessage(63000, &response)
+	return client.SendMessage(63000, response)
 }
