@@ -1,4 +1,4 @@
-package answer
+package propose
 
 import (
 	"github.com/ggmolly/belfast/internal/connection"

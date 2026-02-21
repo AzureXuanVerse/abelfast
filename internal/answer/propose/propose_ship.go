@@ -1,4 +1,4 @@
-package answer
+package propose
 
 import (
 	"fmt"
