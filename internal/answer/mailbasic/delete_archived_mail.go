@@ -1,4 +1,4 @@
-package answer
+package mailbasic
 
 import (
 	"github.com/ggmolly/belfast/internal/connection"
