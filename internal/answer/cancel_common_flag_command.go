@@ -15,6 +15,14 @@ func CancelCommonFlagCommand(buffer *[]byte, client *connection.Client) (int, in
 	response := protobuf.SC_11022{Result: proto.Uint32(0)}
 	if err := orm.ClearCommanderCommonFlag(client.Commander.CommanderID, payload.GetFlagId()); err != nil {
 		response.Result = proto.Uint32(1)
+		return client.SendMessage(11022, &response)
 	}
-	return client.SendMessage(11022, &response)
+	bytesWritten, packetID, err := client.SendMessage(11022, &response)
+	if err != nil {
+		return bytesWritten, packetID, err
+	}
+	if _, _, err := sendCommonFlagPush(client, payload.GetFlagId(), false); err != nil {
+		return bytesWritten, packetID, err
+	}
+	return bytesWritten, packetID, nil
 }

@@ -59,9 +59,31 @@ func TestUpdateCommonFlagCommand(t *testing.T) {
 	if _, _, err := UpdateCommonFlagCommand(&buffer, client); err != nil {
 		t.Fatalf("update common flag failed: %v", err)
 	}
+	var updateResponse protobuf.SC_11020
+	offset := decodePacketAt(t, client, 0, 11020, &updateResponse)
+	if updateResponse.GetResult() != 0 {
+		t.Fatalf("expected update result 0, got %d", updateResponse.GetResult())
+	}
+	var pushResponse protobuf.SC_11802
+	decodePacketAt(t, client, offset, 11802, &pushResponse)
+	if pushResponse.GetId() != 1000009 || pushResponse.GetValue() != 1 {
+		t.Fatalf("expected SC_11802{id=1000009,value=1}, got id=%d value=%d", pushResponse.GetId(), pushResponse.GetValue())
+	}
 	count := queryAnswerTestInt64(t, "SELECT COUNT(*) FROM commander_common_flags WHERE commander_id = $1 AND flag_id = $2", int64(client.Commander.CommanderID), int64(1000009))
 	if count == 0 {
 		t.Fatalf("load flag entry: expected row")
+	}
+}
+
+func TestUpdateCommonFlagCommandFailureNoPush(t *testing.T) {
+	client := setupPlayerUpdateTest(t)
+	buffer := []byte{0x01}
+	_, _, err := UpdateCommonFlagCommand(&buffer, client)
+	if err == nil {
+		t.Fatalf("expected unmarshal failure")
+	}
+	if client.Buffer.Len() != 0 {
+		t.Fatalf("expected no packets on decode failure")
 	}
 }
 
@@ -78,9 +100,31 @@ func TestCancelCommonFlagCommand(t *testing.T) {
 	if _, _, err := CancelCommonFlagCommand(&buffer, client); err != nil {
 		t.Fatalf("cancel common flag failed: %v", err)
 	}
+	var cancelResponse protobuf.SC_11022
+	offset := decodePacketAt(t, client, 0, 11022, &cancelResponse)
+	if cancelResponse.GetResult() != 0 {
+		t.Fatalf("expected cancel result 0, got %d", cancelResponse.GetResult())
+	}
+	var pushResponse protobuf.SC_11802
+	decodePacketAt(t, client, offset, 11802, &pushResponse)
+	if pushResponse.GetId() != 1000001 || pushResponse.GetValue() != 0 {
+		t.Fatalf("expected SC_11802{id=1000001,value=0}, got id=%d value=%d", pushResponse.GetId(), pushResponse.GetValue())
+	}
 	count := queryAnswerTestInt64(t, "SELECT COUNT(*) FROM commander_common_flags WHERE commander_id = $1 AND flag_id = $2", int64(client.Commander.CommanderID), int64(1000001))
 	if count != 0 {
 		t.Fatalf("expected flag to be removed")
+	}
+}
+
+func TestCancelCommonFlagCommandDecodeFailureNoPush(t *testing.T) {
+	client := setupPlayerUpdateTest(t)
+	buffer := []byte{0x01}
+	_, _, err := CancelCommonFlagCommand(&buffer, client)
+	if err == nil {
+		t.Fatalf("expected unmarshal failure")
+	}
+	if client.Buffer.Len() != 0 {
+		t.Fatalf("expected no packets on decode failure")
 	}
 }
 
