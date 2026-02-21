@@ -1,4 +1,4 @@
-package answer
+package phantomquest
 
 import (
 	"github.com/ggmolly/belfast/internal/connection"
