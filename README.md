@@ -11,9 +11,6 @@ Once your account is created (onboarding is skipped!) you can then [register you
 > [!WARNING]
 > Traffic is logged and stored for debugging purposes. Log off from your main account for security reasons.
 
-> [!TIP]
-> Use `cmd/pcap_decode/main.go` to decode packets from `pcap` files into JSON.
-
 # 📊 Packet Progress
 
 ![Packet progress](https://cdn.molly.sh/belfast/implem.png)
