@@ -285,6 +285,12 @@ type CommanderBuff struct {
 	ExpiresAt   pgtype.Timestamptz
 }
 
+type CommanderChargeSuccessEvent struct {
+	CommanderID int64
+	PayID       string
+	CreatedAt   pgtype.Timestamptz
+}
+
 type CommanderColoringState struct {
 	CommanderID int64
 	ActivityID  int64

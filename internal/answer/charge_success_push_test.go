@@ -3,9 +3,16 @@ package answer
 import (
 	"testing"
 
+	"github.com/ggmolly/belfast/internal/connection"
+	"github.com/ggmolly/belfast/internal/orm"
 	"github.com/ggmolly/belfast/internal/protobuf"
 	"google.golang.org/protobuf/proto"
 )
+
+func resetChargeSuccessDedupForTest(t *testing.T) {
+	t.Helper()
+	clearTable(t, &orm.CommanderChargeSuccessEvent{})
+}
 
 func TestHandleChargeStartRemainsDisabled(t *testing.T) {
 	client := setupPlayerUpdateTest(t)
@@ -25,7 +32,7 @@ func TestHandleChargeStartRemainsDisabled(t *testing.T) {
 }
 
 func TestApplyChargeSuccessEventPushesSC11503(t *testing.T) {
-	resetChargeSuccessDedupForTest()
+	resetChargeSuccessDedupForTest(t)
 	client := setupPlayerUpdateTest(t)
 	event := ChargeSuccessEvent{ShopID: 10, PayID: "pay-001", Gem: 120, GemFree: 30}
 
@@ -44,7 +51,7 @@ func TestApplyChargeSuccessEventPushesSC11503(t *testing.T) {
 }
 
 func TestApplyChargeSuccessEventIdempotentByPayID(t *testing.T) {
-	resetChargeSuccessDedupForTest()
+	resetChargeSuccessDedupForTest(t)
 	client := setupPlayerUpdateTest(t)
 	event := ChargeSuccessEvent{ShopID: 22, PayID: "pay-dup", Gem: 40, GemFree: 10}
 
@@ -62,10 +69,26 @@ func TestApplyChargeSuccessEventIdempotentByPayID(t *testing.T) {
 	if len(packetIDs) != 1 || packetIDs[0] != 11503 {
 		t.Fatalf("expected a single SC_11503 packet, got %v", packetIDs)
 	}
+
+	reloadedCommander := orm.Commander{CommanderID: client.Commander.CommanderID}
+	if err := reloadedCommander.Load(); err != nil {
+		t.Fatalf("reload commander: %v", err)
+	}
+	reloadedClient := &connection.Client{Commander: &reloadedCommander}
+	if err := ApplyChargeSuccessEvent(reloadedClient.Commander, reloadedClient, event); err != nil {
+		t.Fatalf("duplicate charge success after reload: %v", err)
+	}
+	totalGems := queryAnswerTestInt64(t, "SELECT COALESCE(SUM(amount), 0) FROM owned_resources WHERE commander_id = $1 AND resource_id IN (4, 14)", int64(client.Commander.CommanderID))
+	if totalGems != 50 {
+		t.Fatalf("expected persistent idempotency across reload, got total gems %d", totalGems)
+	}
+	if reloadedClient.Buffer.Len() != 0 {
+		t.Fatalf("expected no push for duplicate event after reload")
+	}
 }
 
 func TestApplyChargeSuccessEventOfflineCommander(t *testing.T) {
-	resetChargeSuccessDedupForTest()
+	resetChargeSuccessDedupForTest(t)
 	client := setupPlayerUpdateTest(t)
 	event := ChargeSuccessEvent{ShopID: 42, PayID: "pay-offline", Gem: 80, GemFree: 20}
 
@@ -78,7 +101,7 @@ func TestApplyChargeSuccessEventOfflineCommander(t *testing.T) {
 }
 
 func TestApplyChargeSuccessEventRejectsMalformedInput(t *testing.T) {
-	resetChargeSuccessDedupForTest()
+	resetChargeSuccessDedupForTest(t)
 	client := setupPlayerUpdateTest(t)
 	if err := ApplyChargeSuccessEvent(client.Commander, client, ChargeSuccessEvent{ShopID: 0, PayID: "", Gem: 50, GemFree: 10}); err == nil {
 		t.Fatalf("expected malformed event error")
