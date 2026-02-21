@@ -326,6 +326,80 @@ func TestGuildCreateBlockedByWaitCooldown(t *testing.T) {
 	}
 }
 
+func TestGuildCreateValidationResultCodes(t *testing.T) {
+	orm.InitDatabase()
+	seedGuildCoreConfig(t)
+	commanderID := uint32(86321)
+	cleanupGuildCoreData(t, commanderID)
+	defer cleanupGuildCoreData(t, commanderID)
+
+	client := &connection.Client{Commander: createGuildCommander(t, commanderID)}
+
+	testCases := []struct {
+		name     string
+		payload  *protobuf.CS_60001
+		expected uint32
+	}{
+		{
+			name: "invalid faction uses generic failure",
+			payload: &protobuf.CS_60001{
+				Faction:   proto.Uint32(3),
+				Policy:    proto.Uint32(1),
+				Name:      proto.String("VALIDNAME"),
+				Manifesto: proto.String("manifesto"),
+			},
+			expected: 1,
+		},
+		{
+			name: "invalid policy uses generic failure",
+			payload: &protobuf.CS_60001{
+				Faction:   proto.Uint32(1),
+				Policy:    proto.Uint32(3),
+				Name:      proto.String("VALIDNAME"),
+				Manifesto: proto.String("manifesto"),
+			},
+			expected: 1,
+		},
+		{
+			name: "empty manifesto uses generic failure",
+			payload: &protobuf.CS_60001{
+				Faction:   proto.Uint32(1),
+				Policy:    proto.Uint32(1),
+				Name:      proto.String("VALIDNAME"),
+				Manifesto: proto.String("  \t"),
+			},
+			expected: 1,
+		},
+		{
+			name: "invalid name uses 2015",
+			payload: &protobuf.CS_60001{
+				Faction:   proto.Uint32(1),
+				Policy:    proto.Uint32(1),
+				Name:      proto.String(""),
+				Manifesto: proto.String("manifesto"),
+			},
+			expected: 2015,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			buf, err := proto.Marshal(tc.payload)
+			if err != nil {
+				t.Fatalf("marshal payload: %v", err)
+			}
+			if _, _, err := answer.CreateGuild(&buf, client); err != nil {
+				t.Fatalf("CreateGuild failed: %v", err)
+			}
+			resp := &protobuf.SC_60002{}
+			decodeTestPacket(t, client, 60002, resp)
+			if resp.GetResult() != tc.expected {
+				t.Fatalf("expected result %d, got %d", tc.expected, resp.GetResult())
+			}
+		})
+	}
+}
+
 func TestGuildImpeachRejectsFutureLastLogin(t *testing.T) {
 	orm.InitDatabase()
 	seedGuildCoreConfig(t)
