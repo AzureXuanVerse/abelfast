@@ -1,4 +1,4 @@
-package answer
+package shopstreet
 
 import (
 	"sort"
