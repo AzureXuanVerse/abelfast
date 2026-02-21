@@ -1,4 +1,4 @@
-package answer
+package gameroom
 
 import (
 	"encoding/json"
@@ -58,6 +58,18 @@ func loadGameRoomTemplates() ([]gameRoomTemplate, error) {
 		return templates[i].ID < templates[j].ID
 	})
 	return templates, nil
+}
+
+func LoadGameRoomTemplateIDs() ([]uint32, error) {
+	templates, err := loadGameRoomTemplates()
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]uint32, 0, len(templates))
+	for _, template := range templates {
+		ids = append(ids, template.ID)
+	}
+	return ids, nil
 }
 
 func loadGameRoomTemplate(roomID uint32) (*gameRoomTemplate, bool, error) {

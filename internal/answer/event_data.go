@@ -3,6 +3,7 @@ package answer
 import (
 	"time"
 
+	"github.com/ggmolly/belfast/internal/answer/gameroom"
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/orm"
 	"github.com/ggmolly/belfast/internal/protobuf"
@@ -10,7 +11,7 @@ import (
 )
 
 func EventData(buffer *[]byte, client *connection.Client) (int, int, error) {
-	templates, err := loadGameRoomTemplates()
+	roomIDs, err := gameroom.LoadGameRoomTemplateIDs()
 	if err != nil {
 		return 0, 26120, err
 	}
@@ -32,12 +33,12 @@ func EventData(buffer *[]byte, client *connection.Client) (int, int, error) {
 		MonthlyTicket: proto.Uint32(state.MonthlyTicket),
 		PayCoinCount:  proto.Uint32(state.PayCoinCount),
 		FirstEnter:    proto.Uint32(boolToUint32(state.FirstEnterClaimed)),
-		Rooms:         make([]*protobuf.GAMEROOM, 0, len(templates)),
+		Rooms:         make([]*protobuf.GAMEROOM, 0, len(roomIDs)),
 	}
-	for _, room := range templates {
+	for _, roomID := range roomIDs {
 		response.Rooms = append(response.Rooms, &protobuf.GAMEROOM{
-			Roomid:   proto.Uint32(room.ID),
-			MaxScore: proto.Uint32(scoreByRoom[room.ID]),
+			Roomid:   proto.Uint32(roomID),
+			MaxScore: proto.Uint32(scoreByRoom[roomID]),
 		})
 	}
 	return client.SendMessage(26120, &response)
