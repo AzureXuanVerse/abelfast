@@ -310,3 +310,48 @@ func TestDeleteFriendMissingRelation(t *testing.T) {
 		t.Fatalf("expected non-zero result when relation is missing")
 	}
 }
+
+func TestDeleteFriendInvalidTargetsReturnFailure(t *testing.T) {
+	client := setupHandlerCommander(t)
+
+	tests := []struct {
+		name string
+		id   uint32
+	}{
+		{name: "zero id", id: 0},
+		{name: "self id", id: client.Commander.CommanderID},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			request := &protobuf.CS_50011{Id: proto.Uint32(tt.id)}
+			buffer, err := proto.Marshal(request)
+			if err != nil {
+				t.Fatalf("marshal delete request: %v", err)
+			}
+
+			if _, _, err := DeleteFriend(&buffer, client); err != nil {
+				t.Fatalf("DeleteFriend failed: %v", err)
+			}
+			ack := decodeSinglePacket(t, client, 50012, &protobuf.SC_50012{})
+			if ack.GetResult() == 0 {
+				t.Fatalf("expected non-zero result for invalid target %d", tt.id)
+			}
+			if client.Buffer.Len() != 0 {
+				t.Fatalf("expected no additional packets after failed delete")
+			}
+		})
+	}
+}
+
+func TestDeleteFriendDecodeFailure(t *testing.T) {
+	client := setupHandlerCommander(t)
+	malformed := []byte{0xFF, 0x01}
+
+	if _, _, err := DeleteFriend(&malformed, client); err == nil {
+		t.Fatalf("expected decode failure")
+	}
+	if client.Buffer.Len() != 0 {
+		t.Fatalf("expected no response packet on decode failure")
+	}
+}
