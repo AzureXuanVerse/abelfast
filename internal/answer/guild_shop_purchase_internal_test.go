@@ -35,13 +35,21 @@ func TestNormalizeGuildShopSelectionAggregatesDuplicates(t *testing.T) {
 }
 
 func TestNormalizeGuildShopSelectionFixedNormalizesEmptySelection(t *testing.T) {
-	config := &guildStorePurchaseEntry{Goods: []uint32{1001}, GoodsType: guildShopGoodsTypeFixed}
+	config := &guildStorePurchaseEntry{Goods: []uint32{1001, 1002}, GoodsType: guildShopGoodsTypeFixed}
 	rewards, total, ok := normalizeGuildShopSelection(config, nil)
 	if !ok {
 		t.Fatalf("expected fixed goods to accept empty selection")
 	}
-	if total != 1 || rewards[1001] != 1 {
+	if total != 1 || rewards[1001] != 1 || rewards[1002] != 1 {
 		t.Fatalf("unexpected normalized selection total=%d rewards=%#v", total, rewards)
+	}
+}
+
+func TestNormalizeGuildShopSelectionFixedRejectsSelectedPayload(t *testing.T) {
+	config := &guildStorePurchaseEntry{Goods: []uint32{1001, 1002}, GoodsType: guildShopGoodsTypeFixed}
+	rewards, total, ok := normalizeGuildShopSelection(config, []*protobuf.GUILD_SHOP_INFO{{Id: proto.Uint32(1001), Count: proto.Uint32(1)}})
+	if ok || rewards != nil || total != 0 {
+		t.Fatalf("expected fixed goods to reject selected payload")
 	}
 }
 

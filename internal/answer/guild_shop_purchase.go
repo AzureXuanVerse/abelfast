@@ -182,9 +182,15 @@ func normalizeGuildShopSelection(config *guildStorePurchaseEntry, selected []*pr
 				return nil, 0, false
 			}
 			rewards[id] += 1
-			totalUnits += 1
 		}
-		return rewards, totalUnits, totalUnits > 0
+		if len(rewards) == 0 {
+			return nil, 0, false
+		}
+		return rewards, 1, true
+	}
+
+	if config.GoodsType == guildShopGoodsTypeFixed {
+		return nil, 0, false
 	}
 
 	for _, pick := range selected {
