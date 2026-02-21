@@ -15,7 +15,7 @@ func TestRegisterPacketsIncludesGuildEventChunk4Handlers(t *testing.T) {
 	packets.PacketDecisionFn = map[int][]packets.PacketHandler{}
 	registerPackets()
 
-	for _, packetID := range []int{61001, 61005, 61007, 61017, 61019, 61023, 61025, 61031, 61037} {
+	for _, packetID := range []int{61001, 61005, 61007, 61015, 61017, 61019, 61023, 61025, 61027, 61029, 61031, 61037} {
 		handlers, ok := packets.PacketDecisionFn[packetID]
 		if !ok {
 			t.Fatalf("expected packet %d to be registered", packetID)
