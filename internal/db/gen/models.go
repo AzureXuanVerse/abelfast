@@ -378,6 +378,12 @@ type CommanderIslandSocialState struct {
 	BlackList            []byte
 }
 
+type CommanderIslandTradeInviteState struct {
+	CommanderID         int64
+	InvitedCommanderIds []byte
+	UpdatedAt           pgtype.Timestamptz
+}
+
 type CommanderItem struct {
 	CommanderID int64
 	ItemID      int64

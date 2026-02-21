@@ -77,6 +77,10 @@ func IslandTradeOp(buffer *[]byte, client *connection.Client) (int, int, error) 
 		}
 
 		now := time.Now().UTC()
+		weekStartTimestamp := orm.CurrentWeeklyResetUnix(now)
+		if !islandTreasureStateHasPriceInWeek(state, weekStartTimestamp) {
+			state.WeekBuyNum = 0
+		}
 		todayTimestamp := currentDayStartUnix(now)
 		todayPrice := currentIslandTreasurePrice(state, settings.InitialPrice)
 		if todayPrice == 0 {
@@ -113,6 +117,14 @@ func IslandTradeOp(buffer *[]byte, client *connection.Client) (int, int, error) 
 			response.Result = proto.Uint32(islandTradeResultOK)
 		case islandTradeSellType:
 			if payload.GetIslandId() != client.Commander.CommanderID {
+				if _, err := orm.GetIslandSnapshot(payload.GetIslandId()); err != nil {
+					if db.IsNotFound(err) {
+						response.Result = proto.Uint32(islandTradeResultInvalid)
+						return nil
+					}
+					response.Result = proto.Uint32(islandTradeResultPersist)
+					return err
+				}
 				if state.SellCount(payload.GetIslandId())+payload.GetNum() > settings.SellLimit {
 					response.Result = proto.Uint32(islandTradeResultLimit)
 					return nil
@@ -220,6 +232,20 @@ func currentIslandTreasurePrice(state *orm.IslandTreasureState, fallback uint32)
 		return fallback
 	}
 	return price
+}
+
+func islandTreasureStateHasPriceInWeek(state *orm.IslandTreasureState, weekStartTimestamp uint32) bool {
+	if state == nil {
+		return false
+	}
+	weekEndTimestamp := weekStartTimestamp + uint32((7*24*time.Hour)/time.Second)
+	for i := range state.PriceList {
+		timestamp := state.PriceList[i].Timestamp
+		if timestamp >= weekStartTimestamp && timestamp < weekEndTimestamp {
+			return true
+		}
+	}
+	return false
 }
 
 func loadIslandTradeSettings() (islandTradeSettings, error) {

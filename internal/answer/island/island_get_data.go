@@ -93,6 +93,10 @@ func buildIslandPublicData(ownerID uint32, snapshot *orm.IslandSnapshot) *protob
 	}
 
 	inviteList, _ := orm.ListIslandShipInvites(ownerID)
+	tradeInviteList := []uint32{}
+	if tradeState, err := orm.GetCommanderIslandTradeInviteState(ownerID); err == nil {
+		tradeInviteList = append(tradeInviteList, tradeState.InvitedCommanderIDs...)
+	}
 	ships, _ := orm.ListIslandShips(ownerID)
 	shipList := make([]*protobuf.PB_ISLAND_SHIP, 0, len(ships))
 	for i := range ships {
@@ -139,6 +143,7 @@ func buildIslandPublicData(ownerID uint32, snapshot *orm.IslandSnapshot) *protob
 			treasure.PriceList = append(treasure.PriceList, &protobuf.PB_TRE_HISTORY_PRICE{Timestamp: proto.Uint32(treasureState.PriceList[i].Timestamp), Price: proto.Uint32(treasureState.PriceList[i].Price)})
 		}
 	}
+	treasure.InviteList = tradeInviteList
 
 	return &protobuf.PB_ISLAND_PUBLIC{
 		Id:                 proto.Uint32(ownerID),

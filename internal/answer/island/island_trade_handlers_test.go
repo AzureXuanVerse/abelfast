@@ -3,6 +3,7 @@ package island
 import (
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/ggmolly/belfast/internal/consts"
 	"github.com/ggmolly/belfast/internal/orm"
@@ -74,6 +75,12 @@ func TestIslandTradeOpSellUpdatesForeignSellLimit(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed treasure state: %v", err)
 	}
+	if err := orm.CreateCommanderRoot(7788, 7788, "Trade Target", 0, 0); err != nil {
+		t.Fatalf("create target commander: %v", err)
+	}
+	if err := orm.UpsertIslandSnapshot(&orm.IslandSnapshot{CommanderID: 7788, Name: "Trade Target", Level: 5, StorageLevel: 1, AgoraLevel: 1}); err != nil {
+		t.Fatalf("seed target snapshot: %v", err)
+	}
 	execAnswerTestSQLT(t, "INSERT INTO island_inventories (commander_id, item_id, count) VALUES ($1, $2, $3)", int64(client.Commander.CommanderID), int64(islandTradePearlItemID), int64(6))
 
 	payload, _ := proto.Marshal(&protobuf.CS_21240{IslandId: proto.Uint32(7788), Type: proto.Uint32(islandTradeSellType), Num: proto.Uint32(2)})
@@ -110,7 +117,7 @@ func TestIslandTradeOpValidationAndFailurePaths(t *testing.T) {
 	client := setupHandlerCommander(t)
 	clearTable(t, &orm.IslandTreasureState{})
 	clearTable(t, &orm.IslandInventory{})
-	seedIslandTradeConfig(t, 10, 1, 80, 90)
+	seedIslandTradeConfig(t, 10, 10, 80, 90)
 
 	payloadZeroNum, _ := proto.Marshal(&protobuf.CS_21240{IslandId: proto.Uint32(client.Commander.CommanderID), Type: proto.Uint32(islandTradePurchaseType), Num: proto.Uint32(0)})
 	if _, _, err := IslandTradeOp(&payloadZeroNum, client); err != nil {
@@ -124,6 +131,12 @@ func TestIslandTradeOpValidationAndFailurePaths(t *testing.T) {
 
 	client.Buffer.Reset()
 	execAnswerTestSQLT(t, "INSERT INTO island_inventories (commander_id, item_id, count) VALUES ($1, $2, $3)", int64(client.Commander.CommanderID), int64(islandTradePearlItemID), int64(1))
+	if err := orm.CreateCommanderRoot(6611, 6611, "Lack Target", 0, 0); err != nil {
+		t.Fatalf("create lack target commander: %v", err)
+	}
+	if err := orm.UpsertIslandSnapshot(&orm.IslandSnapshot{CommanderID: 6611, Name: "Lack Target", Level: 4, StorageLevel: 1, AgoraLevel: 1}); err != nil {
+		t.Fatalf("seed lack target snapshot: %v", err)
+	}
 	payloadLack, _ := proto.Marshal(&protobuf.CS_21240{IslandId: proto.Uint32(6611), Type: proto.Uint32(islandTradeSellType), Num: proto.Uint32(2)})
 	if _, _, err := IslandTradeOp(&payloadLack, client); err != nil {
 		t.Fatalf("lack request should still ack: %v", err)
@@ -132,6 +145,54 @@ func TestIslandTradeOpValidationAndFailurePaths(t *testing.T) {
 	decodePacketAt(t, client, 0, 21241, &lackResponse)
 	if lackResponse.GetResult() != islandTradeResultLack {
 		t.Fatalf("expected lack result, got %d", lackResponse.GetResult())
+	}
+
+	client.Buffer.Reset()
+	execAnswerTestSQLT(t, "UPDATE island_inventories SET count = $1 WHERE commander_id = $2 AND item_id = $3", int64(3), int64(client.Commander.CommanderID), int64(islandTradePearlItemID))
+	payloadInvalidIsland, _ := proto.Marshal(&protobuf.CS_21240{IslandId: proto.Uint32(99999999), Type: proto.Uint32(islandTradeSellType), Num: proto.Uint32(1)})
+	if _, _, err := IslandTradeOp(&payloadInvalidIsland, client); err != nil {
+		t.Fatalf("invalid island request should still ack: %v", err)
+	}
+	var invalidIslandResponse protobuf.SC_21241
+	decodePacketAt(t, client, 0, 21241, &invalidIslandResponse)
+	if invalidIslandResponse.GetResult() != islandTradeResultInvalid {
+		t.Fatalf("expected invalid result for unknown target island, got %d", invalidIslandResponse.GetResult())
+	}
+}
+
+func TestIslandTradeOpPurchaseResetsWeeklyBuyCounter(t *testing.T) {
+	client := setupHandlerCommander(t)
+	clearTable(t, &orm.IslandTreasureState{})
+	clearTable(t, &orm.IslandInventory{})
+	seedIslandTradeConfig(t, 1, 5, 80, 100)
+
+	weekStart := orm.CurrentWeeklyResetUnix(time.Now().UTC())
+	if err := orm.UpsertIslandTreasureState(&orm.IslandTreasureState{
+		CommanderID: client.Commander.CommanderID,
+		WeekBuyNum:  1,
+		PriceList:   []orm.IslandTreasurePriceState{{Timestamp: weekStart - 86400, Price: 100}},
+	}); err != nil {
+		t.Fatalf("seed treasure state: %v", err)
+	}
+	execAnswerTestSQLT(t, "INSERT INTO island_inventories (commander_id, item_id, count) VALUES ($1, $2, $3)", int64(client.Commander.CommanderID), int64(islandTradeGoldItemID), int64(200))
+
+	payload, _ := proto.Marshal(&protobuf.CS_21240{IslandId: proto.Uint32(client.Commander.CommanderID), Type: proto.Uint32(islandTradePurchaseType), Num: proto.Uint32(1)})
+	if _, _, err := IslandTradeOp(&payload, client); err != nil {
+		t.Fatalf("trade purchase failed: %v", err)
+	}
+
+	var response protobuf.SC_21241
+	decodePacketAt(t, client, 0, 21241, &response)
+	if response.GetResult() != islandTradeResultOK {
+		t.Fatalf("expected weekly reset purchase to succeed, got %d", response.GetResult())
+	}
+
+	state, err := orm.GetIslandTreasureState(client.Commander.CommanderID)
+	if err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if state.WeekBuyNum != 1 {
+		t.Fatalf("expected week buy num reset to 1, got %d", state.WeekBuyNum)
 	}
 }
 
@@ -144,7 +205,9 @@ func TestIslandGetFriendTradeRankReturnsSnapshotAndPrice(t *testing.T) {
 	if err := orm.CreateCommanderRoot(targetID, targetID, "Rank Target", 0, 0); err != nil {
 		t.Fatalf("create target commander: %v", err)
 	}
-	execAnswerTestSQLT(t, "UPDATE island_snapshots SET level = $1 WHERE commander_id = $2", int64(15), int64(targetID))
+	if err := orm.UpsertIslandSnapshot(&orm.IslandSnapshot{CommanderID: targetID, Name: "Rank Target", Level: 15, StorageLevel: 1, AgoraLevel: 1}); err != nil {
+		t.Fatalf("seed target snapshot: %v", err)
+	}
 	if err := orm.UpsertIslandTreasureState(&orm.IslandTreasureState{CommanderID: targetID, PriceList: []orm.IslandTreasurePriceState{{Timestamp: 5000, Price: 135}}}); err != nil {
 		t.Fatalf("seed target treasure state: %v", err)
 	}
