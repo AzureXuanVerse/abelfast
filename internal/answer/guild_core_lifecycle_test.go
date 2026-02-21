@@ -293,3 +293,79 @@ func TestGuildImpeach(t *testing.T) {
 		t.Fatalf("expected kick_leader_cd in future")
 	}
 }
+
+func TestGuildCreateBlockedByWaitCooldown(t *testing.T) {
+	orm.InitDatabase()
+	seedGuildCoreConfig(t)
+	commanderID := uint32(86301)
+	cleanupGuildCoreData(t, commanderID)
+	defer cleanupGuildCoreData(t, commanderID)
+
+	client := &connection.Client{Commander: createGuildCommander(t, commanderID)}
+	if err := orm.SetCommanderGuildWaitTime(commanderID, uint32(time.Now().Unix())+3600); err != nil {
+		t.Fatalf("SetCommanderGuildWaitTime failed: %v", err)
+	}
+
+	payload, err := proto.Marshal(&protobuf.CS_60001{
+		Faction:   proto.Uint32(1),
+		Policy:    proto.Uint32(1),
+		Name:      proto.String(fmt.Sprintf("WAIT-%d", commanderID)),
+		Manifesto: proto.String("cooldown check"),
+	})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if _, _, err := answer.CreateGuild(&payload, client); err != nil {
+		t.Fatalf("CreateGuild failed: %v", err)
+	}
+	resp := &protobuf.SC_60002{}
+	decodeTestPacket(t, client, 60002, resp)
+	if resp.GetResult() != 1 {
+		t.Fatalf("expected create blocked by cooldown, got %d", resp.GetResult())
+	}
+}
+
+func TestGuildImpeachRejectsFutureLastLogin(t *testing.T) {
+	orm.InitDatabase()
+	seedGuildCoreConfig(t)
+	leaderID := uint32(86311)
+	deputyID := uint32(86312)
+	cleanupGuildCoreData(t, leaderID, deputyID)
+	defer cleanupGuildCoreData(t, leaderID, deputyID)
+
+	leader := createGuildCommander(t, leaderID)
+	deputy := createGuildCommander(t, deputyID)
+	leaderClient := &connection.Client{Commander: leader}
+	deputyClient := &connection.Client{Commander: deputy}
+
+	createBuf, _ := proto.Marshal(&protobuf.CS_60001{
+		Faction:   proto.Uint32(1),
+		Policy:    proto.Uint32(1),
+		Name:      proto.String(fmt.Sprintf("FUT-%d", leaderID)),
+		Manifesto: proto.String("test"),
+	})
+	if _, _, err := answer.CreateGuild(&createBuf, leaderClient); err != nil {
+		t.Fatalf("create guild: %v", err)
+	}
+	createResp := &protobuf.SC_60002{}
+	decodeTestPacket(t, leaderClient, 60002, createResp)
+	if createResp.GetResult() != 0 {
+		t.Fatalf("expected create success, got %d", createResp.GetResult())
+	}
+	guildID := createResp.GetId()
+
+	nowUnix := uint32(time.Now().Unix())
+	execAnswerExternalTestSQLT(t, "INSERT INTO guild_members (guild_id, commander_id, duty, liveness, pre_online_time, join_time) VALUES ($1, $2, 2, 0, $3, $3)", int64(guildID), int64(deputyID), int64(nowUnix))
+	execAnswerExternalTestSQLT(t, "INSERT INTO guild_user_infos (commander_id, guild_id) VALUES ($1, $2) ON CONFLICT (commander_id) DO UPDATE SET guild_id = EXCLUDED.guild_id", int64(deputyID), int64(guildID))
+	execAnswerExternalTestSQLT(t, "UPDATE commanders SET last_login = NOW() + INTERVAL '1 day' WHERE commander_id = $1", int64(leaderID))
+
+	impeachBuf, _ := proto.Marshal(&protobuf.CS_60016{PlayerId: proto.Uint32(leaderID)})
+	if _, _, err := answer.GuildImpeach(&impeachBuf, deputyClient); err != nil {
+		t.Fatalf("GuildImpeach failed: %v", err)
+	}
+	impeachResp := &protobuf.SC_60017{}
+	decodeTestPacket(t, deputyClient, 60017, impeachResp)
+	if impeachResp.GetResult() != 1 {
+		t.Fatalf("expected impeach reject for future login, got %d", impeachResp.GetResult())
+	}
+}

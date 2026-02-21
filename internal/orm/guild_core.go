@@ -203,6 +203,23 @@ LIMIT 1
 	return &member, nil
 }
 
+func commanderGuildWaitTimeTx(ctx context.Context, tx pgx.Tx, commanderID uint32) (uint32, error) {
+	row := tx.QueryRow(ctx, `
+SELECT guild_wait_time
+FROM commander_guild_states
+WHERE commander_id = $1
+`, int64(commanderID))
+	var waitTime uint32
+	err := row.Scan(&waitTime)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	return waitTime, nil
+}
+
 func consumeResourceTx(ctx context.Context, tx pgx.Tx, commanderID uint32, resourceID uint32, amount uint32) error {
 	if amount == 0 {
 		return nil
@@ -251,6 +268,14 @@ func CreateGuild(commander *Commander, faction uint32, policy uint32, name strin
 		} else if !errors.Is(err, db.ErrNotFound) {
 			return err
 		}
+		nowUnix := uint32(time.Now().Unix())
+		waitTime, err := commanderGuildWaitTimeTx(ctx, tx, commander.CommanderID)
+		if err != nil {
+			return err
+		}
+		if waitTime > nowUnix {
+			return ErrGuildPermission
+		}
 		exists, err := guildNameExistsTx(ctx, tx, name, 0)
 		if err != nil {
 			return err
@@ -258,7 +283,6 @@ func CreateGuild(commander *Commander, faction uint32, policy uint32, name strin
 		if exists {
 			return ErrGuildNameExists
 		}
-		nowUnix := uint32(time.Now().Unix())
 		row := tx.QueryRow(ctx, `
 INSERT INTO guilds (policy, faction, name, level, announce, manifesto, exp, member_count, change_faction_cd, kick_leader_cd, capital, tech_id)
 VALUES ($1, $2, $3, 1, '', $4, 0, 1, 0, 0, $5, $6)
@@ -705,7 +729,10 @@ func GuildImpeach(commanderID uint32, targetCommanderID uint32, now time.Time) e
 		if err := tx.QueryRow(ctx, `SELECT last_login FROM commanders WHERE commander_id = $1`, int64(targetCommanderID)).Scan(&lastLogin); err != nil {
 			return err
 		}
-		if nowUnix-uint32(lastLogin.Unix()) <= impeachOfflineSeconds {
+		if !lastLogin.Before(now) {
+			return ErrGuildPermission
+		}
+		if now.Sub(lastLogin) <= time.Duration(impeachOfflineSeconds)*time.Second {
 			return ErrGuildPermission
 		}
 		if _, err := tx.Exec(ctx, `UPDATE guilds SET kick_leader_cd = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1`, int64(actor.GuildID), int64(nowUnix+impeachCooldownSeconds)); err != nil {
