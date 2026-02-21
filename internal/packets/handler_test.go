@@ -1,18 +1,28 @@
 package packets
 
 import (
+	"bytes"
 	"net"
 	"testing"
 	"time"
 
 	"github.com/ggmolly/belfast/internal/connection"
+	"github.com/ggmolly/belfast/internal/protobuf"
 	"github.com/ggmolly/belfast/internal/region"
+	"google.golang.org/protobuf/proto"
 )
 
-type mockConn struct{}
+type bufferedTestClient struct {
+	client *connection.Client
+	conn   *mockConn
+}
+
+type mockConn struct {
+	writes bytes.Buffer
+}
 
 func (m *mockConn) Read(b []byte) (int, error)         { return 0, nil }
-func (m *mockConn) Write(b []byte) (int, error)        { return len(b), nil }
+func (m *mockConn) Write(b []byte) (int, error)        { return m.writes.Write(b) }
 func (m *mockConn) Close() error                       { return nil }
 func (m *mockConn) LocalAddr() net.Addr                { return &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 1} }
 func (m *mockConn) RemoteAddr() net.Addr               { return &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 2} }
@@ -23,6 +33,15 @@ func (m *mockConn) SetWriteDeadline(t time.Time) error { return nil }
 func newTestClient() *connection.Client {
 	var conn net.Conn = &mockConn{}
 	return &connection.Client{Connection: &conn}
+}
+
+func newBufferedTestClient() bufferedTestClient {
+	m := &mockConn{}
+	var conn net.Conn = m
+	return bufferedTestClient{
+		client: &connection.Client{Connection: &conn},
+		conn:   m,
+	}
 }
 
 func initPacketTests(t *testing.T) {
@@ -349,9 +368,103 @@ func TestDispatchWithoutHandler(t *testing.T) {
 		0x01, 0x02, 0x03, 0x04, 0x05,
 	}
 
-	client := newTestClient()
+	tc := newBufferedTestClient()
 
-	Dispatch(&buffer, client, len(buffer))
+	Dispatch(&buffer, tc.client, len(buffer))
+
+	written := tc.conn.writes.Bytes()
+	if len(written) == 0 {
+		t.Fatalf("expected SC_10998 response for missing handler")
+	}
+
+	if packetID := GetPacketId(0, &written); packetID != 10998 {
+		t.Fatalf("expected packet ID 10998, got %d", packetID)
+	}
+
+	payload := written[HEADER_SIZE:]
+	var response protobuf.SC_10998
+	if err := proto.Unmarshal(payload, &response); err != nil {
+		t.Fatalf("failed to unmarshal SC_10998: %v", err)
+	}
+
+	if response.GetCmd() != 10008 {
+		t.Fatalf("expected cmd 10008, got %d", response.GetCmd())
+	}
+	if response.GetResult() == 0 {
+		t.Fatalf("expected non-zero result for missing handler")
+	}
+}
+
+func TestDispatchWithHandlerDoesNotEmitSC10998(t *testing.T) {
+	initPacketTests(t)
+
+	PacketDecisionFn[10996] = []PacketHandler{
+		func(pkt *[]byte, c *connection.Client) (int, int, error) {
+			response := protobuf.SC_10997{
+				Version1:    proto.Uint32(1),
+				Version2:    proto.Uint32(2),
+				Version3:    proto.Uint32(3),
+				Version4:    proto.Uint32(4),
+				GatewayIp:   proto.String("127.0.0.1"),
+				GatewayPort: proto.Uint32(80),
+				Url:         proto.String("https://example.invalid"),
+			}
+			return c.SendMessage(10997, &response)
+		},
+	}
+
+	buffer := []byte{
+		0x00, 0x0A,
+		0x00,
+		0x2A, 0xF4,
+		0x00, 0x00,
+		0x08, 0x01, 0x10, 0x02, 0x18,
+	}
+
+	tc := newBufferedTestClient()
+	Dispatch(&buffer, tc.client, len(buffer))
+
+	written := tc.conn.writes.Bytes()
+	if len(written) == 0 {
+		t.Fatalf("expected SC_10997 response")
+	}
+
+	if packetID := GetPacketId(0, &written); packetID != 10997 {
+		t.Fatalf("expected packet ID 10997, got %d", packetID)
+	}
+}
+
+func TestDispatchDisconnectPacketUnaffected(t *testing.T) {
+	initPacketTests(t)
+
+	PacketDecisionFn[41000] = []PacketHandler{
+		func(pkt *[]byte, c *connection.Client) (int, int, error) {
+			if err := c.Disconnect(3); err != nil {
+				return 0, 10999, err
+			}
+			return 0, 10999, nil
+		},
+	}
+
+	buffer := []byte{
+		0x00, 0x07,
+		0x00,
+		0xA0, 0x28,
+		0x00, 0x00,
+		0x01, 0x02,
+	}
+
+	tc := newBufferedTestClient()
+	Dispatch(&buffer, tc.client, len(buffer))
+
+	written := tc.conn.writes.Bytes()
+	if len(written) == 0 {
+		t.Fatalf("expected SC_10999 response")
+	}
+
+	if packetID := GetPacketId(0, &written); packetID != 10999 {
+		t.Fatalf("expected packet ID 10999, got %d", packetID)
+	}
 }
 
 func TestDispatchMultiplePackets(t *testing.T) {

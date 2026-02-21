@@ -7,11 +7,14 @@ import (
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/debug"
 	"github.com/ggmolly/belfast/internal/logger"
+	"github.com/ggmolly/belfast/internal/protobuf"
 	"github.com/ggmolly/belfast/internal/region"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
-	HEADER_SIZE = 7
+	HEADER_SIZE                                  = 7
+	missingPacketResultUnsupportedCommand uint32 = 1
 )
 
 type PacketHandler func(*[]byte, *connection.Client) (int, int, error)
@@ -93,6 +96,14 @@ func Dispatch(buffer *[]byte, client *connection.Client, n int) {
 		if !ok {
 			logger.LogEvent("Handler", "Missing", fmt.Sprintf("CS_%d", packetId), logger.LOG_LEVEL_ERROR)
 			debug.InsertPacket(packetId, &headerlessBuffer)
+			_, _, err := client.SendMessage(10998, &protobuf.SC_10998{
+				Cmd:    proto.Uint32(uint32(packetId)),
+				Result: proto.Uint32(missingPacketResultUnsupportedCommand),
+			})
+			if err != nil {
+				logger.LogEvent("Handler", "Error", fmt.Sprintf("SC_10998 - %v", err), logger.LOG_LEVEL_ERROR)
+				return
+			}
 		} else {
 			debug.InsertPacket(packetId, &headerlessBuffer)
 			for _, handler := range handlers {
