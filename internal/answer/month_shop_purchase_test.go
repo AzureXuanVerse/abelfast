@@ -48,6 +48,11 @@ func seedMonthShopTemplateCore(t *testing.T, ids []uint32) {
 	seedConfigEntry(t, "ShareCfg/month_shop_template.json", "0", payload)
 }
 
+func seedMonthShopTemplateRows(t *testing.T, payload string) {
+	t.Helper()
+	seedConfigEntry(t, "ShareCfg/month_shop_template.json", "0", payload)
+}
+
 func seedActivityShopGood(t *testing.T, id uint32, resourceCategory uint32, resourceType uint32, resourceNum uint32, commodityType uint32, commodityID uint32, num uint32, numLimit uint32) {
 	t.Helper()
 	payload := fmt.Sprintf(`{"id":%d,"resource_category":%d,"resource_type":%d,"resource_num":%d,"commodity_type":%d,"commodity_id":%d,"num":%d,"num_limit":%d}`,
@@ -213,5 +218,29 @@ func TestMonthShopPurchaseFurniturePersistsToDormData(t *testing.T) {
 	}
 	if dormResp.GetFurnitureIdList()[0].GetId() != 20001 || dormResp.GetFurnitureIdList()[0].GetCount() != 1 {
 		t.Fatalf("expected furniture 20001 count 1")
+	}
+}
+
+func TestLoadMonthShopTemplateSelectsCurrentMonthEntry(t *testing.T) {
+	setupMonthShopPurchaseTest(t, 0)
+	month := uint32(time.Now().Month())
+	prev := uint32(12)
+	if month > 1 {
+		prev = month - 1
+	}
+	seedMonthShopTemplateRows(t, fmt.Sprintf(`[
+		{"id":%d,"core_shop_goods":[10001],"blueprint_shop_goods":[],"blueprint_shop_limit_goods":[],"honormedal_shop_goods":[],"blueprint_shop_limit_goods_2":[],"blueprint_shop_goods_2":[],"blueprint_shop_limit_goods_3":[],"blueprint_shop_goods_3":[],"blueprint_shop_goods_4":[],"blueprint_shop_limit_goods_4":[]},
+		{"id":%d,"core_shop_goods":[10031],"blueprint_shop_goods":[],"blueprint_shop_limit_goods":[],"honormedal_shop_goods":[],"blueprint_shop_limit_goods_2":[],"blueprint_shop_goods_2":[],"blueprint_shop_limit_goods_3":[],"blueprint_shop_goods_3":[],"blueprint_shop_goods_4":[],"blueprint_shop_limit_goods_4":[]}
+	]`, prev, month))
+
+	template, ok, err := loadMonthShopTemplate(time.Now())
+	if err != nil {
+		t.Fatalf("loadMonthShopTemplate: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected template")
+	}
+	if len(template.CoreShopGoods) != 1 || template.CoreShopGoods[0] != 10031 {
+		t.Fatalf("expected current month goods, got %v", template.CoreShopGoods)
 	}
 }

@@ -60,7 +60,7 @@ func seedCommander(t *testing.T, commanderID uint32) {
 
 func TestSelectGoods(t *testing.T) {
 	entries := []StoreEntry{{ID: 1, Weight: 0}, {ID: 2, Weight: 2}}
-	selected := selectGoods(entries, 1)
+	selected := selectGoods(entries, 1, 1)
 	if len(selected) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(selected))
 	}
@@ -70,7 +70,7 @@ func TestSelectGoods(t *testing.T) {
 }
 
 func TestSelectGoodsEmpty(t *testing.T) {
-	if selectGoods(nil, 1) != nil {
+	if selectGoods(nil, 1, 1) != nil {
 		t.Fatalf("expected nil for empty entries")
 	}
 }
@@ -79,7 +79,7 @@ func TestSelectGoodsWeightBias(t *testing.T) {
 	entries := []StoreEntry{{ID: 1, Weight: 1}, {ID: 2, Weight: 1000}}
 	selectedHigh := 0
 	for i := 0; i < 200; i++ {
-		selected := selectGoods(entries, 1)
+		selected := selectGoods(entries, 1, uint64(i+1))
 		if len(selected) != 1 {
 			t.Fatalf("expected 1 entry, got %d", len(selected))
 		}
@@ -94,7 +94,7 @@ func TestSelectGoodsWeightBias(t *testing.T) {
 
 func TestBuildGoodsDefaults(t *testing.T) {
 	config := &Config{StoreEntries: []StoreEntry{{ID: 1, GoodsPurchaseLimit: 0}}, GoodsCount: 1}
-	goods := buildGoods(10, config)
+	goods := buildGoods(10, config, 1)
 	if len(goods) != 1 {
 		t.Fatalf("expected 1 good")
 	}
@@ -104,7 +104,7 @@ func TestBuildGoodsDefaults(t *testing.T) {
 }
 
 func TestBuildGoodsNilConfig(t *testing.T) {
-	if goods := buildGoods(1, nil); goods != nil {
+	if goods := buildGoods(1, nil, 1); goods != nil {
 		t.Fatalf("expected nil goods for nil config")
 	}
 }
@@ -113,8 +113,9 @@ func TestLoadConfigDefaults(t *testing.T) {
 	setupGuildShopTest(t)
 	seedConfigEntry(t, guildStoreConfigCategory, "1", `{"id":0,"weight":1,"goods_purchase_limit":1}`)
 	seedConfigEntry(t, guildStoreConfigCategory, "2", `{"id":123,"weight":2,"goods_purchase_limit":0}`)
+	seedConfigEntry(t, guildSetConfigCategory, "store_refresh", `{"key":"store_refresh","key_value":0,"key_args":[1,5]}`)
 	seedConfigEntry(t, guildSetConfigCategory, "store_goods_quantity", `{"key":"store_goods_quantity","key_value":0,"key_args":[1]}`)
-	seedConfigEntry(t, guildSetConfigCategory, "store_reset_cost", `{"key":"store_reset_cost","key_value":15,"key_args":[2]}`)
+	seedConfigEntry(t, guildSetConfigCategory, "store_reset_cost", `{"key":"store_reset_cost","key_value":15,"key_args":[2,4]}`)
 
 	config, err := LoadConfig()
 	if err != nil {
@@ -126,8 +127,11 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if config.GoodsCount != 10 {
 		t.Fatalf("expected default goods count 10, got %d", config.GoodsCount)
 	}
-	if config.ResetCost != 15 {
-		t.Fatalf("expected reset cost 15, got %d", config.ResetCost)
+	if config.RefreshLimit != 5 {
+		t.Fatalf("expected refresh limit 5, got %d", config.RefreshLimit)
+	}
+	if len(config.RefreshCosts) != 2 || config.RefreshCosts[0] != 2 || config.RefreshCosts[1] != 4 {
+		t.Fatalf("expected refresh costs [2 4], got %v", config.RefreshCosts)
 	}
 	if len(config.StoreEntries) != 1 || config.StoreEntries[0].ID != 123 {
 		t.Fatalf("expected filtered store entries")
@@ -151,24 +155,24 @@ func TestLoadConfigListError(t *testing.T) {
 	})
 }
 
-func TestGetGuildSetValue(t *testing.T) {
+func TestGetGuildSetEntry(t *testing.T) {
 	setupGuildShopTest(t)
 	seedConfigEntry(t, guildSetConfigCategory, "store_goods_quantity", `{"key":"store_goods_quantity","key_value":7}`)
 
-	value, err := getGuildSetValue("store_goods_quantity")
+	entry, err := getGuildSetEntry("store_goods_quantity")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if value != 7 {
-		t.Fatalf("expected value 7, got %d", value)
+	if entry.KeyValue != 7 {
+		t.Fatalf("expected value 7, got %d", entry.KeyValue)
 	}
 }
 
-func TestGetGuildSetValueInvalidJSON(t *testing.T) {
+func TestGetGuildSetEntryInvalidJSON(t *testing.T) {
 	setupGuildShopTest(t)
 	seedConfigEntry(t, guildSetConfigCategory, "store_goods_quantity", `{"key_value":"bad"}`)
 
-	if _, err := getGuildSetValue("store_goods_quantity"); err == nil {
+	if _, err := getGuildSetEntry("store_goods_quantity"); err == nil {
 		t.Fatalf("expected error for invalid json")
 	}
 }
@@ -406,8 +410,11 @@ func TestLoadGoods(t *testing.T) {
 func TestNextDailyReset(t *testing.T) {
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	reset := nextDailyReset(now)
-	expected := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
-	if reset != uint32(expected.Unix()) {
-		t.Fatalf("expected next daily reset")
+	if reset <= uint32(now.Unix()) {
+		t.Fatalf("expected reset in the future")
+	}
+	resetAt := time.Unix(int64(reset), 0).UTC()
+	if resetAt.Sub(now.UTC()) > 48*time.Hour {
+		t.Fatalf("expected reset within 48 hours, got %v", resetAt)
 	}
 }

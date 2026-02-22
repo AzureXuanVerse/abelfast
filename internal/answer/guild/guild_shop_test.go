@@ -31,8 +31,9 @@ type guildStoreEntry struct {
 }
 
 type guildSetEntry struct {
-	Key      string `json:"key"`
-	KeyValue uint32 `json:"key_value"`
+	Key      string   `json:"key"`
+	KeyValue uint32   `json:"key_value"`
+	KeyArgs  []uint32 `json:"key_args,omitempty"`
 }
 
 func seedGuildShopConfig(t *testing.T) {
@@ -46,7 +47,11 @@ func seedGuildShopConfig(t *testing.T) {
 		}
 		execAnswerExternalTestSQLT(t, "INSERT INTO config_entries (category, key, data) VALUES ($1, $2, $3::jsonb)", guildStoreConfigCategory, fmt.Sprintf("%d", store.ID), string(payload))
 	}
-	setEntries := []guildSetEntry{{Key: "store_goods_quantity", KeyValue: 2}, {Key: "store_reset_cost", KeyValue: 50}}
+	setEntries := []guildSetEntry{
+		{Key: "store_goods_quantity", KeyValue: 2},
+		{Key: "store_refresh", KeyValue: 0, KeyArgs: []uint32{1, 2}},
+		{Key: "store_reset_cost", KeyValue: 0, KeyArgs: []uint32{50, 80}},
+	}
 	for _, setEntry := range setEntries {
 		payload, err := json.Marshal(setEntry)
 		if err != nil {
@@ -143,5 +148,35 @@ func TestGuildShopManualRefreshConsumesCoins(t *testing.T) {
 	}
 	if client.Commander.GetResourceCount(8) != 150 {
 		t.Fatalf("expected guild coin count 150, got %d", client.Commander.GetResourceCount(8))
+	}
+}
+
+func TestGuildShopManualRefreshUsesCostLadder(t *testing.T) {
+	commanderID := uint32(7003)
+	cleanupGuildShopData(t, commanderID)
+	seedGuildShopConfig(t)
+	client := &connection.Client{Commander: setupGuildShopCommander(t, commanderID)}
+	defer cleanupGuildShopData(t, commanderID)
+
+	execAnswerExternalTestSQLT(t, "INSERT INTO guild_shop_states (commander_id, refresh_count, next_refresh_time) VALUES ($1, $2, $3)", int64(commanderID), int64(1), int64(time.Now().Add(time.Hour).Unix()))
+
+	payload := &protobuf.CS_60033{Type: proto.Uint32(2)}
+	buf, err := proto.Marshal(payload)
+	if err != nil {
+		t.Fatalf("failed to marshal payload: %v", err)
+	}
+	if _, _, err := answer.GetGuildShop(&buf, client); err != nil {
+		t.Fatalf("GetGuildShop failed: %v", err)
+	}
+	response := &protobuf.SC_60034{}
+	decodeTestPacket(t, client, 60034, response)
+	if response.GetResult() != 0 {
+		t.Fatalf("expected result 0, got %d", response.GetResult())
+	}
+	if response.GetInfo().GetRefreshCount() != 2 {
+		t.Fatalf("expected refresh_count 2, got %d", response.GetInfo().GetRefreshCount())
+	}
+	if client.Commander.GetResourceCount(8) != 120 {
+		t.Fatalf("expected guild coin count 120, got %d", client.Commander.GetResourceCount(8))
 	}
 }
