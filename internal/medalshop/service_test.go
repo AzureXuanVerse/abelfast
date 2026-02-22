@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ggmolly/belfast/internal/orm"
+	"github.com/ggmolly/belfast/internal/shopreset"
 )
 
 func TestBuildGoods(t *testing.T) {
@@ -25,24 +26,27 @@ func TestBuildGoods(t *testing.T) {
 func TestNextDailyReset(t *testing.T) {
 	now := time.Date(2026, 1, 15, 12, 0, 0, 0, time.UTC)
 	reset := nextMonthlyReset(now)
-	if reset <= uint32(now.Unix()) {
-		t.Fatalf("expected reset in the future")
+	expected := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	if window, err := shopreset.MonthlyWindow(now); err == nil {
+		expected = window.End
 	}
-	resetAt := time.Unix(int64(reset), 0).UTC()
-	if resetAt.Day() != 1 {
-		t.Fatalf("expected reset to land on first day of month, got %v", resetAt)
+	if reset != uint32(expected.Unix()) {
+		t.Fatalf("expected reset to match monthly window end, got %v", time.Unix(int64(reset), 0).UTC())
 	}
 }
 
 func TestNextDailyResetAtExactMonthBoundary(t *testing.T) {
 	now := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
 	reset := nextMonthlyReset(now)
-	resetAt := time.Unix(int64(reset), 0).UTC()
-	if !resetAt.After(now) {
-		t.Fatalf("expected reset after boundary instant, got %v", resetAt)
+	if reset <= uint32(now.Unix()) {
+		t.Fatalf("expected reset after boundary instant, got %v", time.Unix(int64(reset), 0).UTC())
 	}
-	if resetAt.Day() != 1 {
-		t.Fatalf("expected monthly boundary to land on day 1, got %v", resetAt)
+	expected := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	if window, err := shopreset.MonthlyWindow(now); err == nil {
+		expected = window.End
+	}
+	if reset != uint32(expected.Unix()) {
+		t.Fatalf("expected reset to match next monthly window end, got %v", time.Unix(int64(reset), 0).UTC())
 	}
 }
 
