@@ -6,6 +6,7 @@ import (
 
 	"github.com/ggmolly/belfast/internal/orm"
 	"github.com/ggmolly/belfast/internal/protobuf"
+	"github.com/ggmolly/belfast/internal/scheduler"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -119,6 +120,52 @@ func TestWorldMapOperationMoveAndInsufficientPower(t *testing.T) {
 	}
 }
 
+func TestWorldMapOperationNaturalRegenerationBeforeActionPowerCheck(t *testing.T) {
+	client := setupPlayerUpdateTest(t)
+	seedConfigEntry(t, worldChapterRandomCategory, "4101", `{"id":4101,"map":66}`)
+
+	runtime, err := orm.LoadOrCreateWorldRuntime(client.Commander.CommanderID)
+	if err != nil {
+		t.Fatalf("load runtime: %v", err)
+	}
+	runtime.ActionPower = 198
+	runtime.LastRecoverTimestamp = uint32(time.Now().Add(-20 * time.Minute).Unix())
+	runtime.MapID = 4101
+	runtime.EnterMapID = 4101
+	runtime.SetMapTemplate(4101, 66)
+	if err := orm.SaveWorldRuntime(runtime); err != nil {
+		t.Fatalf("save runtime: %v", err)
+	}
+
+	payload := protobuf.CS_33103{Act: proto.Uint32(13), GroupId: proto.Uint32(1), ActArg_1: proto.Uint32(4101)}
+	buf, err := proto.Marshal(&payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+
+	client.Buffer.Reset()
+	if _, _, err := WorldMapOperation(&buf, client); err != nil {
+		t.Fatalf("WorldMapOperation failed: %v", err)
+	}
+
+	var response protobuf.SC_33104
+	decodePacketAt(t, client, 0, 33104, &response)
+	if response.GetResult() != worldResultSuccess {
+		t.Fatalf("expected map operation success, got %d", response.GetResult())
+	}
+	if response.GetActionPower() != 200 {
+		t.Fatalf("expected regenerated action power in response, got %d", response.GetActionPower())
+	}
+
+	runtime, err = orm.LoadWorldRuntime(client.Commander.CommanderID)
+	if err != nil {
+		t.Fatalf("load runtime after operation: %v", err)
+	}
+	if runtime.ActionPower != 200 {
+		t.Fatalf("expected persisted regenerated action power, got %d", runtime.ActionPower)
+	}
+}
+
 func TestWorldStaminaExchangeUsesTierCosts(t *testing.T) {
 	client := setupPlayerUpdateTest(t)
 	if err := client.Commander.SetResource(2, 100); err != nil {
@@ -170,6 +217,98 @@ func TestWorldStaminaExchangeUsesTierCosts(t *testing.T) {
 	}
 	if runtime.ActionPower != 212 || runtime.StaminaExchangeTimes != 2 {
 		t.Fatalf("unexpected stamina exchange state: %+v", runtime)
+	}
+}
+
+func TestWorldStaminaExchangeResetsWeeklyLadder(t *testing.T) {
+	client := setupPlayerUpdateTest(t)
+	if err := client.Commander.SetResource(2, 5000); err != nil {
+		t.Fatalf("seed oil: %v", err)
+	}
+
+	seedConfigEntry(t, worldGamesetCategory, "world_supply_value", `{"description":[[100],[100],[200],[200],[400]],"key_value":0}`)
+	seedConfigEntry(t, worldGamesetCategory, "world_supply_price", `{"description":[[1,2,1000],[1,2,1000],[1,2,2000],[1,2,2000],[1,2,4000]],"key_value":0}`)
+
+	runtime, err := orm.LoadOrCreateWorldRuntime(client.Commander.CommanderID)
+	if err != nil {
+		t.Fatalf("load runtime: %v", err)
+	}
+	runtime.StaminaExchangeTimes = 5
+	runtime.WeekStartUnix = 1
+	if err := orm.SaveWorldRuntime(runtime); err != nil {
+		t.Fatalf("save runtime: %v", err)
+	}
+
+	payload := protobuf.CS_33108{Type: proto.Uint32(1)}
+	buf, err := proto.Marshal(&payload)
+	if err != nil {
+		t.Fatalf("marshal stamina payload: %v", err)
+	}
+
+	client.Buffer.Reset()
+	if _, _, err := WorldStaminaExchange(&buf, client); err != nil {
+		t.Fatalf("WorldStaminaExchange call failed: %v", err)
+	}
+
+	var response protobuf.SC_33109
+	decodePacketAt(t, client, 0, 33109, &response)
+	if response.GetResult() != worldResultSuccess {
+		t.Fatalf("expected weekly-reset exchange success, got %d", response.GetResult())
+	}
+
+	runtime, err = orm.LoadWorldRuntime(client.Commander.CommanderID)
+	if err != nil {
+		t.Fatalf("reload runtime: %v", err)
+	}
+	if runtime.StaminaExchangeTimes != 1 {
+		t.Fatalf("expected ladder to restart at first tier after weekly reset, got %d", runtime.StaminaExchangeTimes)
+	}
+}
+
+func TestWorldMapRequestSignalsMonthlyResetAndResetsWeeklyPurchaseState(t *testing.T) {
+	client := setupPlayerUpdateTest(t)
+	seedConfigEntry(t, worldChapterRandomCategory, "5005", `{"id":5005,"map":88}`)
+
+	runtime, err := orm.LoadOrCreateWorldRuntime(client.Commander.CommanderID)
+	if err != nil {
+		t.Fatalf("load runtime: %v", err)
+	}
+	clock, err := scheduler.NewCurrentRegionResetClock()
+	if err != nil {
+		t.Fatalf("create reset clock: %v", err)
+	}
+	runtime.MonthKey = clock.CurrentMonthKey(time.Now().UTC()) - 1
+	runtime.StaminaExchangeTimes = 4
+	if err := orm.SaveWorldRuntime(runtime); err != nil {
+		t.Fatalf("save runtime: %v", err)
+	}
+
+	payload := protobuf.CS_33106{Id: proto.Uint32(5005)}
+	buf, err := proto.Marshal(&payload)
+	if err != nil {
+		t.Fatalf("marshal request payload: %v", err)
+	}
+
+	client.Buffer.Reset()
+	if _, _, err := WorldMapRequest(&buf, client); err != nil {
+		t.Fatalf("WorldMapRequest failed: %v", err)
+	}
+
+	var response protobuf.SC_33107
+	decodePacketAt(t, client, 0, 33107, &response)
+	if response.GetResult() != worldResultSuccess {
+		t.Fatalf("expected map request success, got %d", response.GetResult())
+	}
+	if response.GetIsReset() != 1 {
+		t.Fatalf("expected monthly reset flag to be set")
+	}
+
+	runtime, err = orm.LoadWorldRuntime(client.Commander.CommanderID)
+	if err != nil {
+		t.Fatalf("reload runtime: %v", err)
+	}
+	if runtime.StaminaExchangeTimes != 0 {
+		t.Fatalf("expected weekly purchase counter to reset on monthly reset, got %d", runtime.StaminaExchangeTimes)
 	}
 }
 

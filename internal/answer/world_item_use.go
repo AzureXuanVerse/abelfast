@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"time"
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
@@ -58,6 +60,15 @@ func WorldItemUse(buffer *[]byte, client *connection.Client) (int, int, error) {
 		return connection.SendProtoMessage(33302, client, response)
 	}
 
+	recoverAPGain := uint32(0)
+	if config.Usage == worldUsageRecoverAP {
+		recoverAPGain, err = resolveWorldItemRecoverAPGain(config.UsageArg, payload.GetCount())
+		if err != nil || recoverAPGain == 0 {
+			return connection.SendProtoMessage(33302, client, response)
+		}
+	}
+
+	now := time.Now().UTC()
 	err = orm.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
 		consumed, txErr := consumeCommanderItemTx(context.Background(), tx, client.Commander.CommanderID, payload.GetId(), payload.GetCount())
 		if txErr != nil {
@@ -65,6 +76,11 @@ func WorldItemUse(buffer *[]byte, client *connection.Client) (int, int, error) {
 		}
 		if !consumed {
 			return errWorldItemUseInsufficient
+		}
+		if recoverAPGain > 0 {
+			if txErr := applyWorldItemRecoverAPTx(context.Background(), tx, client.Commander.CommanderID, recoverAPGain, now); txErr != nil {
+				return txErr
+			}
 		}
 		if len(drops) == 0 {
 			return nil
@@ -180,4 +196,101 @@ func normalizeWorldDropType(dropType uint32) uint32 {
 		return 2
 	}
 	return dropType
+}
+
+func resolveWorldItemRecoverAPGain(usageArg json.RawMessage, count uint32) (uint32, error) {
+	if count == 0 {
+		return 0, nil
+	}
+	var values []uint32
+	if err := decodeUsageArg(usageArg, &values); err != nil {
+		return 0, err
+	}
+	if len(values) == 0 || values[0] == 0 {
+		return 0, nil
+	}
+	return values[0] * count, nil
+}
+
+func applyWorldItemRecoverAPTx(ctx context.Context, tx pgx.Tx, commanderID uint32, recoverAPGain uint32, now time.Time) error {
+	runtime, err := loadOrCreateWorldRuntimeTx(ctx, tx, commanderID)
+	if err != nil {
+		return err
+	}
+	if _, _, err = orm.SyncWorldRuntime(runtime, now); err != nil {
+		return err
+	}
+	runtime.ActionPower += recoverAPGain
+	maxMovePower, _, err := orm.LoadWorldMovePowerSettings()
+	if err != nil {
+		return err
+	}
+	if runtime.ActionPower >= maxMovePower {
+		runtime.LastRecoverTimestamp = uint32(now.Unix())
+	}
+	return saveWorldRuntimeTx(ctx, tx, runtime)
+}
+
+func loadOrCreateWorldRuntimeTx(ctx context.Context, tx pgx.Tx, commanderID uint32) (*orm.WorldRuntime, error) {
+	key := strconv.FormatUint(uint64(commanderID), 10)
+	var payload []byte
+	err := tx.QueryRow(ctx, "SELECT data FROM config_entries WHERE category = $1 AND key = $2", "Runtime/world_runtime.json", key).Scan(&payload)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return &orm.WorldRuntime{
+				CommanderID:              commanderID,
+				ActionPower:              200,
+				ActionPowerExtra:         0,
+				ActionPowerFetchCount:    0,
+				LastRecoverTimestamp:     0,
+				LastChangeGroupTimestamp: 0,
+				Progress:                 0,
+				TaskFinishCount:          0,
+				StaminaExchangeTimes:     0,
+				Round:                    0,
+				SairenChapter:            []uint32{},
+				MapTemplateByRandomID:    map[string]uint32{},
+				FleetShipIDs:             []uint32{},
+				CommanderIDs:             []uint32{},
+			}, nil
+		}
+		return nil, err
+	}
+	runtime := &orm.WorldRuntime{}
+	if err := json.Unmarshal(payload, runtime); err != nil {
+		return nil, err
+	}
+	runtime.CommanderID = commanderID
+	if runtime.MapTemplateByRandomID == nil {
+		runtime.MapTemplateByRandomID = map[string]uint32{}
+	}
+	if runtime.SairenChapter == nil {
+		runtime.SairenChapter = []uint32{}
+	}
+	if runtime.FleetShipIDs == nil {
+		runtime.FleetShipIDs = []uint32{}
+	}
+	if runtime.CommanderIDs == nil {
+		runtime.CommanderIDs = []uint32{}
+	}
+	return runtime, nil
+}
+
+func saveWorldRuntimeTx(ctx context.Context, tx pgx.Tx, runtime *orm.WorldRuntime) error {
+	if runtime == nil {
+		return fmt.Errorf("world runtime is nil")
+	}
+	if runtime.MapTemplateByRandomID == nil {
+		runtime.MapTemplateByRandomID = map[string]uint32{}
+	}
+	if runtime.SairenChapter == nil {
+		runtime.SairenChapter = []uint32{}
+	}
+	payload, err := json.Marshal(runtime)
+	if err != nil {
+		return err
+	}
+	key := strconv.FormatUint(uint64(runtime.CommanderID), 10)
+	_, err = tx.Exec(ctx, "INSERT INTO config_entries (category, key, data) VALUES ($1, $2, $3::jsonb) ON CONFLICT (category, key) DO UPDATE SET data = EXCLUDED.data", "Runtime/world_runtime.json", key, payload)
+	return err
 }

@@ -139,6 +139,13 @@ func WorldMapOperation(buffer *[]byte, client *connection.Client) (int, int, err
 	if err != nil {
 		return 0, 33104, err
 	}
+	if changed, _, err := orm.SyncWorldRuntime(runtime, time.Now().UTC()); err != nil {
+		return 0, 33104, err
+	} else if changed {
+		if err := orm.SaveWorldRuntime(runtime); err != nil {
+			return 0, 33104, err
+		}
+	}
 
 	result := worldResultFailed
 	saveRuntime := false
@@ -238,6 +245,11 @@ func WorldMapRequest(buffer *[]byte, client *connection.Client) (int, int, error
 	if err != nil {
 		return 0, 33107, err
 	}
+	changed, monthReset, err := orm.SyncWorldRuntime(runtime, time.Now().UTC())
+	if err != nil {
+		return 0, 33107, err
+	}
+	templateKnown := runtime.MapTemplate(payload.GetId()) != 0
 	templateID := runtime.MapTemplate(payload.GetId())
 	if templateID == 0 {
 		templateID, err = resolveWorldMapTemplateID(payload.GetId())
@@ -245,13 +257,18 @@ func WorldMapRequest(buffer *[]byte, client *connection.Client) (int, int, error
 			return 0, 33107, err
 		}
 		runtime.SetMapTemplate(payload.GetId(), templateID)
+		changed = true
 	}
 	if templateID == 0 {
 		return client.SendMessage(33107, &response)
 	}
 
 	response.Result = proto.Uint32(worldResultSuccess)
-	response.IsReset = proto.Uint32(0)
+	if monthReset {
+		response.IsReset = proto.Uint32(1)
+	} else {
+		response.IsReset = proto.Uint32(0)
+	}
 	response.Map = &protobuf.MAPINFO{
 		Id:        &protobuf.WORLDMAPID{RandomId: proto.Uint32(payload.GetId()), TemplateId: proto.Uint32(templateID)},
 		CellList:  []*protobuf.CHAPTERCELLINFO_P33{},
@@ -259,8 +276,10 @@ func WorldMapRequest(buffer *[]byte, client *connection.Client) (int, int, error
 		LandList:  []*protobuf.LANDINFO{},
 		PosList:   []*protobuf.WORLDPOSINFO{},
 	}
-	if err := orm.SaveWorldRuntime(runtime); err != nil {
-		return 0, 33107, err
+	if changed || !templateKnown {
+		if err := orm.SaveWorldRuntime(runtime); err != nil {
+			return 0, 33107, err
+		}
 	}
 	return client.SendMessage(33107, &response)
 }
@@ -290,6 +309,19 @@ func WorldStaminaExchange(buffer *[]byte, client *connection.Client) (int, int, 
 	if err != nil {
 		return 0, 33109, err
 	}
+	now := time.Now().UTC()
+	if changed, _, err := orm.SyncWorldRuntime(runtime, now); err != nil {
+		return 0, 33109, err
+	} else if changed {
+		if err := orm.SaveWorldRuntime(runtime); err != nil {
+			return 0, 33109, err
+		}
+	}
+	maxMovePower, _, err := orm.LoadWorldMovePowerSettings()
+	if err != nil {
+		return 0, 33109, err
+	}
+
 	if int(runtime.StaminaExchangeTimes) >= len(costs) {
 		response.Result = proto.Uint32(worldResultUnsupported)
 		return client.SendMessage(33109, &response)
@@ -308,6 +340,9 @@ func WorldStaminaExchange(buffer *[]byte, client *connection.Client) (int, int, 
 	}
 
 	runtime.ActionPower += gain
+	if runtime.ActionPower >= maxMovePower {
+		runtime.LastRecoverTimestamp = uint32(now.Unix())
+	}
 	runtime.StaminaExchangeTimes++
 	if err := orm.SaveWorldRuntime(runtime); err != nil {
 		return 0, 33109, err
