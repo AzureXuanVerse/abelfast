@@ -10,11 +10,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type oilfieldTemplate struct {
-	Level uint32 `json:"level"`
-	Time  uint32 `json:"time"`
-}
-
 type classUpgradeTemplate struct {
 	Level uint32 `json:"level"`
 	Time  uint32 `json:"time"`
@@ -38,20 +33,14 @@ func ResourcesInfo(buffer *[]byte, client *connection.Client) (int, int, error) 
 			Proficiency: proto.Uint32(0),
 		},
 	}
-	oilfieldEntries, err := orm.ListConfigEntries("ShareCfg/oilfield_template.json")
+	runtime, err := loadNavalAcademyRuntimeSnapshot(client.Commander.CommanderID, time.Now().UTC())
 	if err != nil {
 		return 0, 22001, err
 	}
-	if len(oilfieldEntries) > 0 {
-		var template oilfieldTemplate
-		if err := json.Unmarshal(oilfieldEntries[0].Data, &template); err != nil {
-			return 0, 22001, err
-		}
-		response.OilWellLevel = proto.Uint32(template.Level)
-		response.OilWellLvUpTime = proto.Uint32(template.Time)
-		response.GoldWellLevel = proto.Uint32(template.Level)
-		response.GoldWellLvUpTime = proto.Uint32(template.Time)
-	}
+	response.OilWellLevel = proto.Uint32(runtime.OilWellLevel)
+	response.OilWellLvUpTime = proto.Uint32(runtime.OilUpgradeCompleteTime)
+	response.GoldWellLevel = proto.Uint32(runtime.GoldWellLevel)
+	response.GoldWellLvUpTime = proto.Uint32(runtime.GoldUpgradeCompleteTime)
 	classEntries, err := orm.ListConfigEntries("ShareCfg/class_upgrade_template.json")
 	if err != nil {
 		return 0, 22001, err
