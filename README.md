@@ -33,8 +33,18 @@ Belfast currently has:
 
 - `cmd/belfast` defaults to `server.toml` (game server config).
 - `cmd/gateway` defaults to `gateway.toml` (gateway config).
+- Region is configured via `[region].default` (`CN`, `EN`, `JP`, `KR`, `TW`) and defaults to `EN`.
 - Gateway server list is defined in `[[servers]]`; set optional `name` per server for display text, and gateway probes each game server over the game protocol (`CS_10022` -> `SC_10023`) to resolve server state and load.
 - To embed the git commit in status, build with `-ldflags "-X github.com/ggmolly/belfast/internal/buildinfo.Commit=$(git rev-parse --short HEAD)"`.
+
+# 🐛 Reporting Issues
+
+- Use the GitHub issue forms for bug reports and feature requests.
+- Bug reports support region selection and optional debugging attachments:
+  - `.pcap` captures
+  - ADB logcat output from the ADB watcher (`-a` / `--adb`)
+- Useful local command when collecting ADB logs:
+  - `go run ./cmd/belfast -a`
 
 # 🌠 State
 
@@ -46,7 +56,3 @@ Belfast reimplements all features from the game (except for background tasks).
 2. Reach 100% coverage on packet reimplementation
 3. Implement game tracking (opt-in in server config for administrators)
 4. Maintain more [belfast-web](https://github.com/ggmolly/belfast-web)
-
-# 📧 Contact
-
-You can contact me (Molly) [here](mailto:molly@molly.sh).
