@@ -348,7 +348,7 @@ func TestMetaQuickTacticsUseBooksRejectsMaxLevel(t *testing.T) {
 	seedCommanderItem(t, client, 16031, 1)
 	seedConfigEntry(t, "sharecfgdata/ship_data_template.json", "9703011", `{"id":9703011,"group_type":970301,"max_level":70,"buff_list_display":[800041]}`)
 	seedConfigEntry(t, "ShareCfg/ship_meta_skilltask.json", "11", `{"id":11,"level":1,"need_exp":100,"skill_ID":800041,"skill_levelup_task":[],"skill_unlock":[]}`)
-	seedConfigEntry(t, "sharecfgdata/skill_data_template.json", "800041", `{"id":800041,"max_level":2}`)
+	seedConfigEntry(t, "ShareCfg/skill_data_template.json", "800041", `{"id":800041,"max_level":2}`)
 	seedConfigEntry(t, "sharecfgdata/item_data_statistics.json", "16031", `{"id":16031,"type":25,"usage_arg":"100"}`)
 	execAnswerTestSQLT(t, `
 INSERT INTO commander_meta_tactics_skill_states (commander_id, ship_id, skill_id, skill_pos, level, exp)

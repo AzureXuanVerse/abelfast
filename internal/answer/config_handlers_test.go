@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 	"unicode"
 
 	"github.com/ggmolly/belfast/internal/connection"
@@ -613,10 +614,13 @@ func TestDormDataUsesDormTemplate(t *testing.T) {
 
 func TestResourcesInfoUsesTemplates(t *testing.T) {
 	client := setupConfigTest(t)
-	seedConfigEntry(t, "ShareCfg/oilfield_template.json", "1", `{"level":2,"time":30}`)
+	seedConfigEntry(t, "ShareCfg/oilfield_template.json", "1", `{"level":1,"time":30}`)
+	seedConfigEntry(t, "ShareCfg/oilfield_template.json", "2", `{"level":2,"time":60}`)
 	seedConfigEntry(t, "ShareCfg/class_upgrade_template.json", "1", `{"level":3,"time":40}`)
 	seedConfigEntry(t, "ShareCfg/navalacademy_data_template.json", "1", `{"id":1}`)
 	seedConfigEntry(t, "ShareCfg/navalacademy_shoppingstreet_template.json", "1", `{"special_goods_num":9}`)
+	now := uint32(time.Now().UTC().Unix())
+	seedConfigEntry(t, "Runtime/naval_academy_runtime.json", "1", fmt.Sprintf(`{"commander_id":1,"oil_well_level":2,"gold_well_level":1,"oil_upgrade_complete_time":%d,"gold_upgrade_complete_time":%d}`, now+123, now+456))
 
 	buffer := []byte{}
 	if _, _, err := ResourcesInfo(&buffer, client); err != nil {
@@ -628,8 +632,100 @@ func TestResourcesInfoUsesTemplates(t *testing.T) {
 	if response.GetOilWellLevel() != 2 || response.GetClassLv() != 3 {
 		t.Fatalf("expected oil level 2 and class level 3")
 	}
+	if response.GetOilWellLvUpTime() != now+123 || response.GetGoldWellLvUpTime() != now+456 {
+		t.Fatalf("expected upgrade timers from runtime")
+	}
 	if response.GetSkillClassNum() != 1 || response.GetDailyFinishBuffCnt() != 9 {
 		t.Fatalf("expected academy counts to be set")
+	}
+}
+
+func TestResourcesInfoClampsNavalAcademyRuntimeLevels(t *testing.T) {
+	client := setupConfigTest(t)
+	seedConfigEntry(t, "ShareCfg/oilfield_template.json", "1", `{"level":1,"production":20,"store":300,"hour_time":3,"time":10}`)
+	seedConfigEntry(t, "ShareCfg/oilfield_template.json", "2", `{"level":2,"production":21,"store":600,"hour_time":3,"time":900}`)
+	seedConfigEntry(t, "Runtime/naval_academy_runtime.json", "1", `{"commander_id":1,"oil_well_level":99,"gold_well_level":0}`)
+
+	buffer := []byte{}
+	if _, _, err := ResourcesInfo(&buffer, client); err != nil {
+		t.Fatalf("resources info failed: %v", err)
+	}
+
+	var response protobuf.SC_22001
+	decodeResponse(t, client, &response)
+	if response.GetOilWellLevel() != 2 {
+		t.Fatalf("expected oil level clamped to 2, got %d", response.GetOilWellLevel())
+	}
+	if response.GetGoldWellLevel() != 1 {
+		t.Fatalf("expected gold level clamped to 1, got %d", response.GetGoldWellLevel())
+	}
+}
+
+func TestLastLoginCatchesUpNavalAcademyResources(t *testing.T) {
+	client := setupConfigTest(t)
+	seedConfigEntry(t, "ShareCfg/oilfield_template.json", "1", `{"level":1,"production":120,"store":9999,"hour_time":1,"time":10}`)
+
+	now := time.Now().UTC()
+	collectAt := uint32(now.Unix()) - 7200
+	seedConfigEntry(t, "Runtime/naval_academy_runtime.json", "1", fmt.Sprintf(`{"commander_id":1,"oil_well_level":1,"gold_well_level":1,"oil_collect_timestamp":%d,"gold_collect_timestamp":%d}`, collectAt, collectAt))
+
+	oilBefore := queryAnswerTestInt64(t, "SELECT COALESCE((SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = $2), 0)", int64(client.Commander.CommanderID), int64(2))
+	coinBefore := queryAnswerTestInt64(t, "SELECT COALESCE((SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = $2), 0)", int64(client.Commander.CommanderID), int64(1))
+
+	buffer := []byte{}
+	if _, _, err := LastLogin(&buffer, client); err != nil {
+		t.Fatalf("last login failed: %v", err)
+	}
+
+	oilAfter := queryAnswerTestInt64(t, "SELECT COALESCE((SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = $2), 0)", int64(client.Commander.CommanderID), int64(2))
+	coinAfter := queryAnswerTestInt64(t, "SELECT COALESCE((SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = $2), 0)", int64(client.Commander.CommanderID), int64(1))
+
+	oilDelta := oilAfter - oilBefore
+	coinDelta := coinAfter - coinBefore
+	if oilDelta < 240 || oilDelta > 241 {
+		t.Fatalf("expected oil catch-up in [240,241], got %d", oilDelta)
+	}
+	if coinDelta < 240 || coinDelta > 241 {
+		t.Fatalf("expected coin catch-up in [240,241], got %d", coinDelta)
+	}
+}
+
+func TestLastLoginPreservesPreUpgradeNavalAcademyAccrual(t *testing.T) {
+	client := setupConfigTest(t)
+	seedConfigEntry(t, "ShareCfg/oilfield_template.json", "1", `{"level":1,"production":120,"store":9999,"hour_time":1,"time":10}`)
+	seedConfigEntry(t, "ShareCfg/oilfield_template.json", "2", `{"level":2,"production":120,"store":9999,"hour_time":1,"time":10}`)
+
+	now := time.Now().UTC()
+	collectAt := uint32(now.Unix()) - 4*3600
+	upgradeStart := uint32(now.Unix()) - 3*3600
+	upgradeFinish := uint32(now.Unix()) - 2*3600
+	seedConfigEntry(t, "Runtime/naval_academy_runtime.json", "1", fmt.Sprintf(`{"commander_id":1,"oil_well_level":1,"gold_well_level":1,"oil_collect_timestamp":%d,"gold_collect_timestamp":%d,"oil_upgrade_start_time":%d,"oil_upgrade_complete_time":%d,"gold_upgrade_start_time":%d,"gold_upgrade_complete_time":%d}`,
+		collectAt,
+		collectAt,
+		upgradeStart,
+		upgradeFinish,
+		upgradeStart,
+		upgradeFinish,
+	))
+
+	oilBefore := queryAnswerTestInt64(t, "SELECT COALESCE((SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = $2), 0)", int64(client.Commander.CommanderID), int64(2))
+	coinBefore := queryAnswerTestInt64(t, "SELECT COALESCE((SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = $2), 0)", int64(client.Commander.CommanderID), int64(1))
+
+	buffer := []byte{}
+	if _, _, err := LastLogin(&buffer, client); err != nil {
+		t.Fatalf("last login failed: %v", err)
+	}
+
+	oilAfter := queryAnswerTestInt64(t, "SELECT COALESCE((SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = $2), 0)", int64(client.Commander.CommanderID), int64(2))
+	coinAfter := queryAnswerTestInt64(t, "SELECT COALESCE((SELECT amount FROM owned_resources WHERE commander_id = $1 AND resource_id = $2), 0)", int64(client.Commander.CommanderID), int64(1))
+
+	oilDelta := oilAfter - oilBefore
+	coinDelta := coinAfter - coinBefore
+	if oilDelta < 359 || oilDelta > 360 {
+		t.Fatalf("expected oil catch-up in [359,360], got %d", oilDelta)
+	}
+	if coinDelta < 359 || coinDelta > 360 {
+		t.Fatalf("expected coin catch-up in [359,360], got %d", coinDelta)
 	}
 }
 
