@@ -38,46 +38,15 @@ Belfast currently has:
 
 # 🌠 State
 
-Belfast reimplements these features from the game:
-
-- Custom server list
-- Player bans
-- Commander's dock (owned ships).
-- Commander's depot (owned items).
-- Build (you can start / end / edit builds).
-- Resources (collection / consuming).
-- Mails (along with custom sender, body, title, attachments, read / important states).
-- Retire ships.
-- Buying / equipping skins.
-- Propose ships.
-- Game's public chatroom.
-- Secretaries (add, remove, moving is buggy but 'works').
-- Lock / unlock ships.
-- Rename proposed ships (features the 30d cooldown too).
-- Custom notices
-- Fleets management (add / remove / move ships & rename)
-- Arena shop.
-- Medal shop.
-- Minigame shop.
-- Guild shop.
-- Juustagram activity + chat operations.
-- Educate/TB flows and state.
-- Compensations (notifications + reward claims).
-- Commander buffs.
-- Shopping street shop.
-- Dorm3D apartment state (persisted on reconnect).
-- Build queue snapshot.
-- Random flagship selection updates.
-- Remaster tickets, progress, and rewards.
+Belfast reimplements all features from the game (except for background tasks).
 
 # 🚀 Roadmap
 
-As I just started opening this project to the public I want to do these things:
-
-1. Add unit tests.
-2. Make a roadmap.
-
-Before continuting the implementation of the game's protocol.
+1. Implement background tasks (stable release blocker)
+2. Clean up the code
+3. Reach 100% coverage on packet reimplementation
+4. Implement game tracking (opt-in in server config for administrators)
+5. Maintain more [belfast-web](https://github.com/ggmolly/belfast-web)
 
 # 📧 Contact
 
