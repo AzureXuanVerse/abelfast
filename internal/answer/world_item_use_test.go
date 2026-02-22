@@ -106,6 +106,31 @@ func TestWorldItemUseFailurePaths(t *testing.T) {
 			t.Fatalf("expected item count unchanged, got %d", remaining)
 		}
 	})
+
+	t.Run("recover ap runtime failure keeps item", func(t *testing.T) {
+		client := setupWorldItemUseTestClient(t)
+		seedWorldItemConfig(t, 251, `{"id":251,"usage":"usage_world_recoverAP","usage_arg":[20]}`)
+		if err := client.Commander.AddItem(251, 1); err != nil {
+			t.Fatalf("seed item: %v", err)
+		}
+		if err := orm.UpsertConfigEntry("ShareCfg/gameset.json", "world_movepower_maxvalue", []byte(`{"key_value":"bad"}`)); err != nil {
+			t.Fatalf("seed invalid gameset: %v", err)
+		}
+
+		payload := marshalPacketRequest(t, &protobuf.CS_33301{Id: proto.Uint32(251), Count: proto.Uint32(1), Arg: []uint32{}})
+		if _, _, err := WorldItemUse(&payload, client); err != nil {
+			t.Fatalf("world item use failed: %v", err)
+		}
+		response := &protobuf.SC_33302{}
+		decodeLoveLetterPacketMessage(t, client, 33302, response)
+		if response.GetResult() != worldItemUseResultFailure {
+			t.Fatalf("expected failure result, got %d", response.GetResult())
+		}
+		remaining := queryAnswerTestInt64(t, "SELECT count FROM commander_items WHERE commander_id = $1 AND item_id = $2", int64(client.Commander.CommanderID), int64(251))
+		if remaining != 1 {
+			t.Fatalf("expected item count unchanged, got %d", remaining)
+		}
+	})
 }
 
 func TestWorldItemUseDropAndAppointedFlows(t *testing.T) {
