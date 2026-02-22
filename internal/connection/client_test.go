@@ -675,6 +675,12 @@ func TestClientCreateCommander(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
+	if client.Commander == nil {
+		t.Fatalf("expected created commander to be loaded")
+	}
+	if client.Commander.CommanderID != accountID {
+		t.Fatalf("expected loaded commander id %d, got %d", accountID, client.Commander.CommanderID)
+	}
 
 	mapping, err := orm.GetYostarusMapByArg2(321)
 	if err != nil {
@@ -764,6 +770,12 @@ func TestClientCreateCommanderWithStarter(t *testing.T) {
 	accountID, err := client.CreateCommanderWithStarter(654, "Test", 101)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
+	}
+	if client.Commander == nil {
+		t.Fatalf("expected created commander to be loaded")
+	}
+	if client.Commander.CommanderID != accountID {
+		t.Fatalf("expected loaded commander id %d, got %d", accountID, client.Commander.CommanderID)
 	}
 
 	mapping, err := orm.GetYostarusMapByArg2(654)

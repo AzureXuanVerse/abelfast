@@ -245,6 +245,14 @@ func (client *Client) CreateCommander(arg2 uint32) (uint32, error) {
 		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to create default fleet for account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
 		return 0, err
 	}
+	if err := client.GetCommander(accountId); err != nil {
+		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to fetch created commander for account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
+		return 0, err
+	}
+	if err := client.Commander.Load(); err != nil {
+		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to load created commander for account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
+		return 0, err
+	}
 
 	logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("created new commander for account %d", accountId), logger.LOG_LEVEL_INFO)
 	return accountId, nil
@@ -301,6 +309,14 @@ func (client *Client) CreateCommanderWithStarter(arg2 uint32, nickname string, s
 	}
 	if err := orm.CreateFleet(owner, 1, "", []uint32{starterShip.ID, belfast.ID, longIsland.ID}); err != nil {
 		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to create default fleet for account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
+		return 0, err
+	}
+	if err := client.GetCommander(accountId); err != nil {
+		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to fetch created commander for account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
+		return 0, err
+	}
+	if err := client.Commander.Load(); err != nil {
+		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to load created commander for account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
 		return 0, err
 	}
 	logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("created new commander for account %d", accountId), logger.LOG_LEVEL_INFO)

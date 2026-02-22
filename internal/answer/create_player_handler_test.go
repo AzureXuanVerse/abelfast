@@ -133,6 +133,21 @@ func TestCreateNewPlayerSuccess(t *testing.T) {
 	if starterCount != 1 {
 		t.Fatalf("expected starter ship to exist")
 	}
+	if client.Commander == nil {
+		t.Fatalf("expected client commander to be loaded")
+	}
+	if client.Commander.CommanderID != response.GetUserId() {
+		t.Fatalf("expected client commander id %d, got %d", response.GetUserId(), client.Commander.CommanderID)
+	}
+	empty := []byte{}
+	if _, _, err := answer.LastLogin(&empty, client); err != nil {
+		t.Fatalf("LastLogin failed after create: %v", err)
+	}
+	loginResponse := &protobuf.SC_11000{}
+	decodeResponsePacket(t, client, 11000, loginResponse)
+	if loginResponse.GetTimestamp() == 0 {
+		t.Fatalf("expected last login timestamp")
+	}
 	starterSecretaryCount := queryAnswerExternalTestInt64(t, "SELECT COUNT(*) FROM owned_ships WHERE owner_id = $1 AND ship_id = $2 AND is_secretary = TRUE", int64(response.GetUserId()), int64(201211))
 	if starterSecretaryCount != 0 {
 		t.Fatalf("expected starter ship to not be secretary")
