@@ -42,11 +42,10 @@ Belfast reimplements all features from the game (except for background tasks).
 
 # 🚀 Roadmap
 
-1. Implement background tasks (stable release blocker)
-2. Clean up the code
-3. Reach 100% coverage on packet reimplementation
-4. Implement game tracking (opt-in in server config for administrators)
-5. Maintain more [belfast-web](https://github.com/ggmolly/belfast-web)
+1. Clean up the code
+2. Reach 100% coverage on packet reimplementation
+3. Implement game tracking (opt-in in server config for administrators)
+4. Maintain more [belfast-web](https://github.com/ggmolly/belfast-web)
 
 # 📧 Contact
 
