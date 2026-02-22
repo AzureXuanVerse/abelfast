@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
@@ -58,6 +59,14 @@ func WorldItemUse(buffer *[]byte, client *connection.Client) (int, int, error) {
 		return connection.SendProtoMessage(33302, client, response)
 	}
 
+	recoverAPGain := uint32(0)
+	if config.Usage == worldUsageRecoverAP {
+		recoverAPGain, err = resolveWorldItemRecoverAPGain(config.UsageArg, payload.GetCount())
+		if err != nil || recoverAPGain == 0 {
+			return connection.SendProtoMessage(33302, client, response)
+		}
+	}
+
 	err = orm.WithPGXTx(context.Background(), func(tx pgx.Tx) error {
 		consumed, txErr := consumeCommanderItemTx(context.Background(), tx, client.Commander.CommanderID, payload.GetId(), payload.GetCount())
 		if txErr != nil {
@@ -73,6 +82,27 @@ func WorldItemUse(buffer *[]byte, client *connection.Client) (int, int, error) {
 	})
 	if err != nil {
 		return connection.SendProtoMessage(33302, client, response)
+	}
+	if recoverAPGain > 0 {
+		runtime, runtimeErr := orm.LoadOrCreateWorldRuntime(client.Commander.CommanderID)
+		if runtimeErr != nil {
+			return 0, 33302, runtimeErr
+		}
+		now := time.Now().UTC()
+		if _, _, runtimeErr = orm.SyncWorldRuntime(runtime, now); runtimeErr != nil {
+			return 0, 33302, runtimeErr
+		}
+		runtime.ActionPower += recoverAPGain
+		maxMovePower, _, runtimeErr := orm.LoadWorldMovePowerSettings()
+		if runtimeErr != nil {
+			return 0, 33302, runtimeErr
+		}
+		if runtime.ActionPower >= maxMovePower {
+			runtime.LastRecoverTimestamp = uint32(now.Unix())
+		}
+		if runtimeErr := orm.SaveWorldRuntime(runtime); runtimeErr != nil {
+			return 0, 33302, runtimeErr
+		}
 	}
 	decrementWorldItemUseCache(client, payload.GetId(), payload.GetCount())
 
@@ -180,4 +210,18 @@ func normalizeWorldDropType(dropType uint32) uint32 {
 		return 2
 	}
 	return dropType
+}
+
+func resolveWorldItemRecoverAPGain(usageArg json.RawMessage, count uint32) (uint32, error) {
+	if count == 0 {
+		return 0, nil
+	}
+	var values []uint32
+	if err := decodeUsageArg(usageArg, &values); err != nil {
+		return 0, err
+	}
+	if len(values) == 0 || values[0] == 0 {
+		return 0, nil
+	}
+	return values[0] * count, nil
 }

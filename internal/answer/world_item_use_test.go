@@ -42,6 +42,13 @@ func TestWorldItemUseConsumesRecoverAPItem(t *testing.T) {
 	if client.Commander.GetItemCount(251) != 1 {
 		t.Fatalf("expected in-memory item count to be refreshed")
 	}
+	runtime, err := orm.LoadWorldRuntime(client.Commander.CommanderID)
+	if err != nil {
+		t.Fatalf("load world runtime: %v", err)
+	}
+	if runtime.ActionPower != 240 {
+		t.Fatalf("expected action power to increase from recover AP item, got %d", runtime.ActionPower)
+	}
 }
 
 func TestWorldItemUseFailurePaths(t *testing.T) {
