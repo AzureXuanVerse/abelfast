@@ -275,7 +275,7 @@ func TestMetaTacticsUnlockAndLevelUpFlow(t *testing.T) {
 	seedConfigEntry(t, "sharecfgdata/ship_data_template.json", "9701011", `{"id":9701011,"group_type":970101,"max_level":70,"buff_list_display":[800040]}`)
 	seedConfigEntry(t, "ShareCfg/ship_meta_skilltask.json", "1", `{"id":1,"level":1,"need_exp":100,"skill_ID":800040,"skill_levelup_task":[],"skill_unlock":[[2,16003,5]]}`)
 	seedConfigEntry(t, "ShareCfg/ship_meta_skilltask.json", "2", `{"id":2,"level":2,"need_exp":200,"skill_ID":800040,"skill_levelup_task":[],"skill_unlock":[]}`)
-	seedConfigEntry(t, "sharecfgdata/skill_data_template.json", "800040", `{"id":800040,"max_level":10}`)
+	seedConfigEntry(t, "ShareCfg/skill_data_template.json", "800040", `{"id":800040,"max_level":10}`)
 	seedConfigEntry(t, "sharecfgdata/item_data_statistics.json", "16031", `{"id":16031,"type":25,"usage_arg":"100"}`)
 
 	unlockPayload := protobuf.CS_63311{ShipId: proto.Uint32(7101), SkillId: proto.Uint32(800040), Index: proto.Uint32(2)}
@@ -348,7 +348,7 @@ func TestMetaQuickTacticsUseBooksRejectsMaxLevel(t *testing.T) {
 	seedCommanderItem(t, client, 16031, 1)
 	seedConfigEntry(t, "sharecfgdata/ship_data_template.json", "9703011", `{"id":9703011,"group_type":970301,"max_level":70,"buff_list_display":[800041]}`)
 	seedConfigEntry(t, "ShareCfg/ship_meta_skilltask.json", "11", `{"id":11,"level":1,"need_exp":100,"skill_ID":800041,"skill_levelup_task":[],"skill_unlock":[]}`)
-	seedConfigEntry(t, "sharecfgdata/skill_data_template.json", "800041", `{"id":800041,"max_level":2}`)
+	seedConfigEntry(t, "ShareCfg/skill_data_template.json", "800041", `{"id":800041,"max_level":2}`)
 	seedConfigEntry(t, "sharecfgdata/item_data_statistics.json", "16031", `{"id":16031,"type":25,"usage_arg":"100"}`)
 	execAnswerTestSQLT(t, `
 INSERT INTO commander_meta_tactics_skill_states (commander_id, ship_id, skill_id, skill_pos, level, exp)
