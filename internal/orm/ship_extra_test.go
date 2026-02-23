@@ -69,3 +69,22 @@ func TestGetRandomPoolShip(t *testing.T) {
 		t.Fatalf("expected pool id %d", poolID)
 	}
 }
+
+func TestIsPlayableShipTemplateID(t *testing.T) {
+	tests := []struct {
+		id       uint32
+		playable bool
+	}{
+		{id: 202124, playable: true},
+		{id: 901011, playable: true},
+		{id: 900340, playable: false},
+		{id: 900437, playable: false},
+		{id: 900469, playable: false},
+	}
+
+	for _, tc := range tests {
+		if got := IsPlayableShipTemplateID(tc.id); got != tc.playable {
+			t.Fatalf("IsPlayableShipTemplateID(%d) = %v, want %v", tc.id, got, tc.playable)
+		}
+	}
+}

@@ -127,6 +127,11 @@ func ValidateShipID(shipID uint32) error {
 	return nil
 }
 
+func IsPlayableShipTemplateID(shipID uint32) bool {
+	stage := shipID % 10
+	return stage >= 1 && stage <= 4
+}
+
 var (
 	shipRng = rng.NewLockedRand()
 )

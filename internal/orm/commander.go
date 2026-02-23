@@ -130,6 +130,9 @@ func (c *Commander) AddShip(shipId uint32) (*OwnedShip, error) {
 	if db.DefaultStore == nil {
 		return nil, errors.New("db not initialized")
 	}
+	if !IsPlayableShipTemplateID(shipId) {
+		return nil, db.ErrNotFound
+	}
 	// Validate ship exists.
 	var templateID int64
 	if err := db.DefaultStore.Pool.QueryRow(ctx, `SELECT template_id FROM ships WHERE template_id = $1`, int64(shipId)).Scan(&templateID); err != nil {
@@ -196,6 +199,9 @@ RETURNING id, level, exp, surplus_exp, max_level, intimacy, is_locked, propose, 
 }
 
 func (c *Commander) AddShipTx(ctx context.Context, tx pgx.Tx, shipId uint32) (*OwnedShip, error) {
+	if !IsPlayableShipTemplateID(shipId) {
+		return nil, db.ErrNotFound
+	}
 	// Validate ship exists.
 	var templateID int64
 	if err := tx.QueryRow(ctx, `SELECT template_id FROM ships WHERE template_id = $1`, int64(shipId)).Scan(&templateID); err != nil {

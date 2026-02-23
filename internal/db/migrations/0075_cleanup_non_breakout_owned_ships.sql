@@ -1,0 +1,2 @@
+DELETE FROM owned_ships
+WHERE MOD(ship_id, 10) NOT BETWEEN 1 AND 4;
