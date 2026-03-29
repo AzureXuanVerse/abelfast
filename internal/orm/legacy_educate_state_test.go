@@ -26,6 +26,7 @@ func TestLegacyEducateStateRoundTrip(t *testing.T) {
 	state.TaskProgress[101] = 3
 	state.Resources[3] = 7
 	state.Endings = []uint32{11}
+	state.Qualifieds = []uint32{21}
 	if err := SaveLegacyEducateState(state); err != nil {
 		t.Fatalf("save state: %v", err)
 	}
@@ -48,5 +49,8 @@ func TestLegacyEducateStateRoundTrip(t *testing.T) {
 	}
 	if len(reloaded.Endings) != 1 || reloaded.Endings[0] != 11 {
 		t.Fatalf("expected endings [11], got %v", reloaded.Endings)
+	}
+	if len(reloaded.Qualifieds) != 1 || reloaded.Qualifieds[0] != 21 {
+		t.Fatalf("expected qualifieds [21], got %v", reloaded.Qualifieds)
 	}
 }

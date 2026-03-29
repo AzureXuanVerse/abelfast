@@ -15,10 +15,7 @@ func NewEducateGetEndings(buffer *[]byte, client *connection.Client) (int, int, 
 	if err != nil {
 		return 0, 29004, err
 	}
-	endings := state.Permanent.ActiveEndings
-	if len(endings) == 0 {
-		endings = state.Permanent.Endings
-	}
+	endings := append([]uint32{}, state.Permanent.Endings...)
 	cache := ensureEducateCache(state.Info)
 	cache.CacheEnd[0].Ends = append([]uint32{}, endings...)
 	cache.CacheEnd[0].Select = proto.Uint32(0)
@@ -42,7 +39,7 @@ func NewEducateSelectEnding(buffer *[]byte, client *connection.Client) (int, int
 	if err != nil {
 		return 0, 29006, err
 	}
-	state.Permanent.Endings = appendUniqueUint32(state.Permanent.Endings, payload.GetEndingId())
+	state.Permanent.ActiveEndings = appendUniqueUint32(state.Permanent.ActiveEndings, payload.GetEndingId())
 	cache := ensureEducateCache(state.Info)
 	cache.CacheEnd[0].Select = proto.Uint32(payload.GetEndingId())
 	response := protobuf.SC_29006{Result: proto.Uint32(0)}
@@ -63,6 +60,7 @@ func NewEducateReset(buffer *[]byte, client *connection.Client) (int, int, error
 	}
 	state.Info = ensureTBInfoDefaults(tbInfoPlaceholder())
 	state.Info.Id = proto.Uint32(payload.GetId())
+	state.Info.Difficulty = proto.Uint32(payload.GetDifficulty())
 	state.Permanent.NgPlusCount = proto.Uint32(state.Permanent.GetNgPlusCount() + 1)
 	response := protobuf.SC_29008{
 		Result: proto.Uint32(0),
@@ -128,6 +126,7 @@ func NewEducateAssess(buffer *[]byte, client *connection.Client) (int, int, erro
 	response := protobuf.SC_29014{
 		Result:    proto.Uint32(0),
 		FirstNode: proto.Uint32(firstNode),
+		Drop:      emptyTBDrops(),
 	}
 	if err := saveEducateState(state); err != nil {
 		return 0, 29014, err
@@ -192,6 +191,19 @@ func NewEducateGetTalents(buffer *[]byte, client *connection.Client) (int, int, 
 		return 0, 29020, err
 	}
 	cache := ensureEducateCache(state.Info)
+	if len(cache.CacheTalent[0].Talents) == 0 {
+		roundConfig, ok, err := loadCurrentNewEducateRoundConfig(state.Info)
+		if err != nil {
+			return 0, 29020, err
+		}
+		if ok {
+			talents, err := parseNewEducateUint32List(roundConfig.BenefitSelect)
+			if err != nil {
+				return 0, 29020, err
+			}
+			cache.CacheTalent[0].Talents = append([]uint32{}, talents...)
+		}
+	}
 	state.Info.Fsm.SystemNo = proto.Uint32(newEducateSystemTalent)
 	response := protobuf.SC_29020{
 		Result:  proto.Uint32(0),
@@ -213,10 +225,28 @@ func NewEducateRefreshTalent(buffer *[]byte, client *connection.Client) (int, in
 		return 0, 29022, err
 	}
 	cache := ensureEducateCache(state.Info)
+	newTalent := payload.GetTalent()
+	roundConfig, ok, err := loadCurrentNewEducateRoundConfig(state.Info)
+	if err != nil {
+		return 0, 29022, err
+	}
+	if ok {
+		available, err := parseNewEducateUint32List(roundConfig.BenefitSelect)
+		if err != nil {
+			return 0, 29022, err
+		}
+		newTalent = chooseNewEducateTalentCandidate(cache.CacheTalent[0].Talents, cache.CacheTalent[0].Retalents, available, payload.GetTalent())
+	}
+	for idx, talent := range cache.CacheTalent[0].Talents {
+		if talent == payload.GetTalent() {
+			cache.CacheTalent[0].Talents[idx] = newTalent
+			break
+		}
+	}
 	cache.CacheTalent[0].Retalents = appendUniqueUint32(cache.CacheTalent[0].Retalents, payload.GetTalent())
 	response := protobuf.SC_29022{
 		Result: proto.Uint32(0),
-		Talent: proto.Uint32(payload.GetTalent()),
+		Talent: proto.Uint32(newTalent),
 	}
 	if err := saveEducateState(state); err != nil {
 		return 0, 29022, err
@@ -237,7 +267,7 @@ func NewEducateSelectTalent(buffer *[]byte, client *connection.Client) (int, int
 	cache := ensureEducateCache(state.Info)
 	cache.CacheTalent[0].Talents = appendUniqueUint32(cache.CacheTalent[0].Talents, payload.GetTalent())
 	cache.CacheTalent[0].Finished = proto.Uint32(1)
-	response := protobuf.SC_29024{Result: proto.Uint32(0)}
+	response := protobuf.SC_29024{Result: proto.Uint32(0), Drop: applyNewEducateTalentSelection(state, payload.GetTalent())}
 	if err := saveEducateState(state); err != nil {
 		return 0, 29024, err
 	}
@@ -253,9 +283,7 @@ func NewEducateChangePhase(buffer *[]byte, client *connection.Client) (int, int,
 	if err != nil {
 		return 0, 29026, err
 	}
-	state.Info.Round.Round = proto.Uint32(state.Info.Round.GetRound() + 1)
-	state.Info.Fsm.SystemNo = proto.Uint32(newEducateSystemPhase)
-	state.Info.Fsm.CurrentNode = proto.Uint32(0)
+	advanceNewEducateRound(state)
 	response := protobuf.SC_29026{
 		Result:    proto.Uint32(0),
 		FirstNode: proto.Uint32(0),
@@ -466,8 +494,16 @@ func NewEducateMapNormal(buffer *[]byte, client *connection.Client) (int, int, e
 	if err != nil {
 		return 0, 29063, err
 	}
+	config, ok, err := loadNewEducateConfigByID[newEducateSiteNormalConfig](newEducateSiteNormalCategory, payload.GetWorkId())
+	if err != nil {
+		return 0, 29063, err
+	}
+	if ok {
+		applyNewEducateConfigDrops(state, config.Cost, 1)
+	}
 	cache := ensureEducateCache(state.Info)
 	cache.CacheSite[0].State = &protobuf.KVDATA{Key: proto.Uint32(newEducateSiteStateNormal), Value: proto.Uint32(payload.GetWorkId())}
+	state.Info.Site.WorkCounter = upsertKVDATACount(state.Info.Site.WorkCounter, payload.GetWorkId(), 1)
 	state.Info.Fsm.SystemNo = proto.Uint32(newEducateSystemMap)
 	response := protobuf.SC_29063{
 		Result:    proto.Uint32(0),
@@ -489,9 +525,17 @@ func NewEducateMapEvent(buffer *[]byte, client *connection.Client) (int, int, er
 	if err != nil {
 		return 0, 29065, err
 	}
+	config, ok, err := loadNewEducateConfigByID[newEducateSiteEventGroupConfig](newEducateSiteEventGroupCategory, payload.GetEvent())
+	if err != nil {
+		return 0, 29065, err
+	}
+	if ok {
+		applyNewEducateConfigDrops(state, config.EventCost, 1)
+	}
 	cache := ensureEducateCache(state.Info)
 	cache.CacheSite[0].State = &protobuf.KVDATA{Key: proto.Uint32(newEducateSiteStateEvent), Value: proto.Uint32(payload.GetEvent())}
-	cache.CacheSite[0].Events = appendUniqueUint32(cache.CacheSite[0].Events, payload.GetEvent())
+	cache.CacheSite[0].Events = removeUint32(cache.CacheSite[0].Events, payload.GetEvent())
+	state.Info.Site.EventCounter = upsertKVDATACount(state.Info.Site.EventCounter, payload.GetEvent(), 1)
 	state.Info.Fsm.SystemNo = proto.Uint32(newEducateSystemMap)
 	response := protobuf.SC_29065{
 		Result:    proto.Uint32(0),
@@ -513,9 +557,21 @@ func NewEducateShopping(buffer *[]byte, client *connection.Client) (int, int, er
 	if err != nil {
 		return 0, 29067, err
 	}
+	shopConfig, ok, err := loadNewEducateConfigByID[newEducateShopConfig](newEducateShopCategory, payload.GetShop())
+	if err != nil {
+		return 0, 29067, err
+	}
+	if ok {
+		resourceID, found, err := resolveNewEducateResourceID(state, shopConfig.ResourceType)
+		if err != nil {
+			return 0, 29067, err
+		}
+		if found {
+			state.Info.Res.Resource = upsertKVDATAWithDelta(state.Info.Res.Resource, resourceID, -int32(shopConfig.ResourceNum*payload.GetNum()))
+		}
+	}
 	cache := ensureEducateCache(state.Info)
 	cache.CacheSite[0].Buys = upsertKVDATACount(cache.CacheSite[0].Buys, payload.GetShop(), payload.GetNum())
-	cache.CacheSite[0].Shops = appendUniqueUint32(cache.CacheSite[0].Shops, payload.GetShop())
 	response := protobuf.SC_29067{
 		Result: proto.Uint32(0),
 		Drop:   emptyTBDrops(),
@@ -535,9 +591,35 @@ func NewEducateMapShip(buffer *[]byte, client *connection.Client) (int, int, err
 	if err != nil {
 		return 0, 29069, err
 	}
+	var nextCharacterID uint32
+	config, ok, err := loadNewEducateConfigByID[newEducateSiteCharacterConfig](newEducateSiteCharacterCategory, payload.GetCharacter())
+	if err != nil {
+		return 0, 29069, err
+	}
+	if ok {
+		applyNewEducateConfigDrops(state, config.Cost, 1)
+		characters, err := listNewEducateConfigs[newEducateSiteCharacterConfig](newEducateSiteCharacterCategory)
+		if err != nil {
+			return 0, 29069, err
+		}
+		for _, candidate := range characters {
+			if candidate.Group == config.Group && candidate.Level == config.Level+1 {
+				nextCharacterID = candidate.ID
+				break
+			}
+		}
+	}
 	cache := ensureEducateCache(state.Info)
 	cache.CacheSite[0].State = &protobuf.KVDATA{Key: proto.Uint32(newEducateSiteStateShip), Value: proto.Uint32(payload.GetCharacter())}
-	cache.CacheSite[0].CharacterThisRound = appendUniqueUint32(cache.CacheSite[0].CharacterThisRound, payload.GetCharacter())
+	if nextCharacterID != 0 {
+		for idx, characterID := range state.Info.Site.Characters {
+			if characterID == payload.GetCharacter() {
+				state.Info.Site.Characters[idx] = nextCharacterID
+				break
+			}
+		}
+		cache.CacheSite[0].CharacterThisRound = appendUniqueUint32(cache.CacheSite[0].CharacterThisRound, nextCharacterID)
+	}
 	state.Info.Fsm.SystemNo = proto.Uint32(newEducateSystemMap)
 	response := protobuf.SC_29069{
 		Result:    proto.Uint32(0),
@@ -597,9 +679,13 @@ func NewEducateRefresh(buffer *[]byte, client *connection.Client) (int, int, err
 	if err != nil {
 		return 0, 29093, err
 	}
+	state.Info.Difficulty = proto.Uint32(payload.GetDifficulty())
 	response := protobuf.SC_29093{
 		Result: proto.Uint32(0),
 		Tb:     state.Info,
+	}
+	if err := saveEducateState(state); err != nil {
+		return 0, 29093, err
 	}
 	return client.SendMessage(29093, &response)
 }
@@ -631,4 +717,60 @@ func upsertKVDATACount(values []*protobuf.KVDATA, key uint32, increment uint32) 
 		}
 	}
 	return append(values, &protobuf.KVDATA{Key: proto.Uint32(key), Value: proto.Uint32(increment)})
+}
+
+func applyNewEducateTalentSelection(state *educateState, talentID uint32) *protobuf.TBDROPS {
+	if state.Info.Benefit == nil {
+		state.Info.Benefit = &protobuf.TBBENEFIT{Actives: []*protobuf.TBBF{}}
+	}
+	state.Info.Benefit.Actives = upsertTBBF(state.Info.Benefit.Actives, talentID, state.Info.Round.GetRound(), 0)
+	state.Permanent.TarotArchive = appendUniqueUint32(state.Permanent.TarotArchive, talentID)
+
+	return &protobuf.TBDROPS{
+		BaseDrop: []*protobuf.TBDROP{{
+			Type:   proto.Uint32(4),
+			Id:     proto.Uint32(talentID),
+			Number: proto.Int32(1),
+		}},
+		BenefitDrop: []*protobuf.TBDROP{},
+		Display:     emptyTBDisplay(),
+	}
+}
+
+func advanceNewEducateRound(state *educateState) {
+	tempRounds := state.Info.Round.GetTempRound()
+	if tempRounds > 0 {
+		state.Info.Round.InTemp = proto.Uint32(1)
+		state.Info.Round.TempRound = proto.Uint32(tempRounds - 1)
+	} else {
+		state.Info.Round.InTemp = proto.Uint32(0)
+		state.Info.Round.Round = proto.Uint32(state.Info.Round.GetRound() + 1)
+	}
+	state.Info.EvalFail = proto.Uint32(0)
+	state.Permanent.MaxRound = proto.Uint32(maxUint32(state.Permanent.GetMaxRound(), state.Info.Round.GetRound()))
+	state.Info.Fsm = ensureTBInfoDefaults(tbInfoPlaceholder()).Fsm
+	state.Info.Site.Characters = []uint32{}
+}
+
+func upsertTBBF(values []*protobuf.TBBF, id uint32, round uint32, isPending uint32) []*protobuf.TBBF {
+	for _, entry := range values {
+		if entry.GetId() == id {
+			entry.Round = proto.Uint32(round)
+			entry.IsPending = proto.Uint32(isPending)
+			return values
+		}
+	}
+
+	return append(values, &protobuf.TBBF{
+		Id:        proto.Uint32(id),
+		Round:     proto.Uint32(round),
+		IsPending: proto.Uint32(isPending),
+	})
+}
+
+func maxUint32(left uint32, right uint32) uint32 {
+	if left > right {
+		return left
+	}
+	return right
 }

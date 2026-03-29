@@ -122,6 +122,9 @@ func EducateTriggerEnd(buffer *[]byte, client *connection.Client) (int, int, err
 		return client.SendMessage(27009, &response)
 	}
 	state.Endings = appendUniqueUint32(state.Endings, endingID)
+	for _, qualifiedID := range payload.GetQualifiedId() {
+		state.Qualifieds = appendUniqueUint32(state.Qualifieds, qualifiedID)
+	}
 	if err := orm.SaveLegacyEducateState(state); err != nil {
 		return client.SendMessage(27009, &response)
 	}
@@ -141,7 +144,10 @@ func EducateGetEndings(buffer *[]byte, client *connection.Client) (int, int, err
 		return 0, 27011, err
 	}
 
-	response := protobuf.SC_27011{Endings: append([]uint32{}, state.Endings...)}
+	response := protobuf.SC_27011{
+		Endings:    append([]uint32{}, state.Endings...),
+		Qualifieds: append([]uint32{}, state.Qualifieds...),
+	}
 	return client.SendMessage(27011, &response)
 }
 

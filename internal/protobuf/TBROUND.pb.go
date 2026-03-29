@@ -24,6 +24,8 @@ const (
 type TBROUND struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Round         *uint32                `protobuf:"varint,1,req,name=round" json:"round,omitempty"`
+	InTemp        *uint32                `protobuf:"varint,2,req,name=in_temp,json=inTemp" json:"in_temp,omitempty"`
+	TempRound     *uint32                `protobuf:"varint,3,req,name=temp_round,json=tempRound" json:"temp_round,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -65,13 +67,30 @@ func (x *TBROUND) GetRound() uint32 {
 	return 0
 }
 
+func (x *TBROUND) GetInTemp() uint32 {
+	if x != nil && x.InTemp != nil {
+		return *x.InTemp
+	}
+	return 0
+}
+
+func (x *TBROUND) GetTempRound() uint32 {
+	if x != nil && x.TempRound != nil {
+		return *x.TempRound
+	}
+	return 0
+}
+
 var File_TBROUND_proto protoreflect.FileDescriptor
 
 const file_TBROUND_proto_rawDesc = "" +
 	"\n" +
-	"\rTBROUND.proto\x12\abelfast\"\x1f\n" +
+	"\rTBROUND.proto\x12\abelfast\"W\n" +
 	"\aTBROUND\x12\x14\n" +
-	"\x05round\x18\x01 \x02(\rR\x05roundB\fZ\n" +
+	"\x05round\x18\x01 \x02(\rR\x05round\x12\x17\n" +
+	"\ain_temp\x18\x02 \x02(\rR\x06inTemp\x12\x1d\n" +
+	"\n" +
+	"temp_round\x18\x03 \x02(\rR\ttempRoundB\fZ\n" +
 	"./protobuf"
 
 var (

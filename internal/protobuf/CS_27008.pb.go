@@ -24,6 +24,7 @@ const (
 type CS_27008 struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	EndingId      *uint32                `protobuf:"varint,1,req,name=ending_id,json=endingId" json:"ending_id,omitempty"`
+	QualifiedId   []uint32               `protobuf:"varint,2,rep,name=qualified_id,json=qualifiedId" json:"qualified_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -65,13 +66,21 @@ func (x *CS_27008) GetEndingId() uint32 {
 	return 0
 }
 
+func (x *CS_27008) GetQualifiedId() []uint32 {
+	if x != nil {
+		return x.QualifiedId
+	}
+	return nil
+}
+
 var File_CS_27008_proto protoreflect.FileDescriptor
 
 const file_CS_27008_proto_rawDesc = "" +
 	"\n" +
-	"\x0eCS_27008.proto\x12\abelfast\"'\n" +
+	"\x0eCS_27008.proto\x12\abelfast\"J\n" +
 	"\bCS_27008\x12\x1b\n" +
-	"\tending_id\x18\x01 \x02(\rR\bendingIdB\fZ\n" +
+	"\tending_id\x18\x01 \x02(\rR\bendingId\x12!\n" +
+	"\fqualified_id\x18\x02 \x03(\rR\vqualifiedIdB\fZ\n" +
 	"./protobuf"
 
 var (

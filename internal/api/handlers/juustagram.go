@@ -1851,7 +1851,7 @@ func juustagramMessageFromProto(message *protobuf.INS_MESSAGE) types.JuustagramM
 			Time:     entry.GetTime(),
 			TextList: append([]string{}, entry.GetTextList()...),
 			Text:     entry.GetText(),
-			NpcReply: entry.GetNpcReply(),
+			NpcReply: append([]uint32{}, entry.GetNpcReply()...),
 		})
 	}
 	npcDiscuss := make([]types.JuustagramNpcComment, 0, len(message.GetNpcDiscuss()))
@@ -1877,6 +1877,7 @@ func juustagramMessageFromProto(message *protobuf.INS_MESSAGE) types.JuustagramM
 		Time:          message.GetTime(),
 		Text:          message.GetText(),
 		Picture:       message.GetPicture(),
+		OalistPic:     message.GetOalistPic(),
 		PlayerDiscuss: playerDiscuss,
 		NpcDiscuss:    npcDiscuss,
 		NpcReply:      npcReply,

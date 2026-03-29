@@ -26,6 +26,8 @@ type TBFSM struct {
 	SystemNo      *uint32                `protobuf:"varint,1,req,name=system_no,json=systemNo" json:"system_no,omitempty"`
 	CurrentNode   *uint32                `protobuf:"varint,2,req,name=current_node,json=currentNode" json:"current_node,omitempty"`
 	Cache         []*TBFSMCACHE          `protobuf:"bytes,3,rep,name=cache" json:"cache,omitempty"`
+	PriorityFsm   []*TBFSM               `protobuf:"bytes,4,rep,name=priority_fsm,json=priorityFsm" json:"priority_fsm,omitempty"`
+	TarotSelects  []uint32               `protobuf:"varint,5,rep,name=tarot_selects,json=tarotSelects" json:"tarot_selects,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -81,15 +83,31 @@ func (x *TBFSM) GetCache() []*TBFSMCACHE {
 	return nil
 }
 
+func (x *TBFSM) GetPriorityFsm() []*TBFSM {
+	if x != nil {
+		return x.PriorityFsm
+	}
+	return nil
+}
+
+func (x *TBFSM) GetTarotSelects() []uint32 {
+	if x != nil {
+		return x.TarotSelects
+	}
+	return nil
+}
+
 var File_TBFSM_proto protoreflect.FileDescriptor
 
 const file_TBFSM_proto_rawDesc = "" +
 	"\n" +
-	"\vTBFSM.proto\x12\abelfast\x1a\x10TBFSMCACHE.proto\"r\n" +
+	"\vTBFSM.proto\x12\abelfast\x1a\x10TBFSMCACHE.proto\"\xca\x01\n" +
 	"\x05TBFSM\x12\x1b\n" +
 	"\tsystem_no\x18\x01 \x02(\rR\bsystemNo\x12!\n" +
 	"\fcurrent_node\x18\x02 \x02(\rR\vcurrentNode\x12)\n" +
-	"\x05cache\x18\x03 \x03(\v2\x13.belfast.TBFSMCACHER\x05cacheB\fZ\n" +
+	"\x05cache\x18\x03 \x03(\v2\x13.belfast.TBFSMCACHER\x05cache\x121\n" +
+	"\fpriority_fsm\x18\x04 \x03(\v2\x0e.belfast.TBFSMR\vpriorityFsm\x12#\n" +
+	"\rtarot_selects\x18\x05 \x03(\rR\ftarotSelectsB\fZ\n" +
 	"./protobuf"
 
 var (
@@ -111,11 +129,12 @@ var file_TBFSM_proto_goTypes = []any{
 }
 var file_TBFSM_proto_depIdxs = []int32{
 	1, // 0: belfast.TBFSM.cache:type_name -> belfast.TBFSMCACHE
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	0, // 1: belfast.TBFSM.priority_fsm:type_name -> belfast.TBFSM
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_TBFSM_proto_init() }

@@ -29,6 +29,10 @@ type TBFSMCACHE struct {
 	CacheChat     []*TBFSMCACHECHAT      `protobuf:"bytes,4,rep,name=cache_chat,json=cacheChat" json:"cache_chat,omitempty"`
 	CacheEnd      []*TBFSMCACHEEND       `protobuf:"bytes,5,rep,name=cache_end,json=cacheEnd" json:"cache_end,omitempty"`
 	CacheMind     []*TBFSMCACHEMIND      `protobuf:"bytes,6,rep,name=cache_mind,json=cacheMind" json:"cache_mind,omitempty"`
+	CacheNin1     []*TBFSMCACHENIN1      `protobuf:"bytes,7,rep,name=cache_nin1,json=cacheNin1" json:"cache_nin1,omitempty"`
+	CacheAffixUp  []*TBFSMCACHEAFFIXUP   `protobuf:"bytes,8,rep,name=cache_affix_up,json=cacheAffixUp" json:"cache_affix_up,omitempty"`
+	CacheTarot    []*TBFSMCACHETAROT     `protobuf:"bytes,9,rep,name=cache_tarot,json=cacheTarot" json:"cache_tarot,omitempty"`
+	CacheEval     []*TBFSMCACHEEVAL      `protobuf:"bytes,10,rep,name=cache_eval,json=cacheEval" json:"cache_eval,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -105,11 +109,39 @@ func (x *TBFSMCACHE) GetCacheMind() []*TBFSMCACHEMIND {
 	return nil
 }
 
+func (x *TBFSMCACHE) GetCacheNin1() []*TBFSMCACHENIN1 {
+	if x != nil {
+		return x.CacheNin1
+	}
+	return nil
+}
+
+func (x *TBFSMCACHE) GetCacheAffixUp() []*TBFSMCACHEAFFIXUP {
+	if x != nil {
+		return x.CacheAffixUp
+	}
+	return nil
+}
+
+func (x *TBFSMCACHE) GetCacheTarot() []*TBFSMCACHETAROT {
+	if x != nil {
+		return x.CacheTarot
+	}
+	return nil
+}
+
+func (x *TBFSMCACHE) GetCacheEval() []*TBFSMCACHEEVAL {
+	if x != nil {
+		return x.CacheEval
+	}
+	return nil
+}
+
 var File_TBFSMCACHE_proto protoreflect.FileDescriptor
 
 const file_TBFSMCACHE_proto_rawDesc = "" +
 	"\n" +
-	"\x10TBFSMCACHE.proto\x12\abelfast\x1a\x14TBFSMCACHECHAT.proto\x1a\x13TBFSMCACHEEND.proto\x1a\x14TBFSMCACHEMIND.proto\x1a\x14TBFSMCACHEPLAN.proto\x1a\x14TBFSMCACHESITE.proto\x1a\x16TBFSMCACHETALENT.proto\"\xdf\x02\n" +
+	"\x10TBFSMCACHE.proto\x12\abelfast\x1a\x17TBFSMCACHEAFFIXUP.proto\x1a\x14TBFSMCACHECHAT.proto\x1a\x13TBFSMCACHEEND.proto\x1a\x14TBFSMCACHEEVAL.proto\x1a\x14TBFSMCACHEMIND.proto\x1a\x14TBFSMCACHENIN1.proto\x1a\x14TBFSMCACHEPLAN.proto\x1a\x14TBFSMCACHESITE.proto\x1a\x16TBFSMCACHETALENT.proto\x1a\x15TBFSMCACHETAROT.proto\"\xcc\x04\n" +
 	"\n" +
 	"TBFSMCACHE\x126\n" +
 	"\n" +
@@ -121,7 +153,15 @@ const file_TBFSMCACHE_proto_rawDesc = "" +
 	"cache_chat\x18\x04 \x03(\v2\x17.belfast.TBFSMCACHECHATR\tcacheChat\x123\n" +
 	"\tcache_end\x18\x05 \x03(\v2\x16.belfast.TBFSMCACHEENDR\bcacheEnd\x126\n" +
 	"\n" +
-	"cache_mind\x18\x06 \x03(\v2\x17.belfast.TBFSMCACHEMINDR\tcacheMindB\fZ\n" +
+	"cache_mind\x18\x06 \x03(\v2\x17.belfast.TBFSMCACHEMINDR\tcacheMind\x126\n" +
+	"\n" +
+	"cache_nin1\x18\a \x03(\v2\x17.belfast.TBFSMCACHENIN1R\tcacheNin1\x12@\n" +
+	"\x0ecache_affix_up\x18\b \x03(\v2\x1a.belfast.TBFSMCACHEAFFIXUPR\fcacheAffixUp\x129\n" +
+	"\vcache_tarot\x18\t \x03(\v2\x18.belfast.TBFSMCACHETAROTR\n" +
+	"cacheTarot\x126\n" +
+	"\n" +
+	"cache_eval\x18\n" +
+	" \x03(\v2\x17.belfast.TBFSMCACHEEVALR\tcacheEvalB\fZ\n" +
 	"./protobuf"
 
 var (
@@ -138,26 +178,34 @@ func file_TBFSMCACHE_proto_rawDescGZIP() []byte {
 
 var file_TBFSMCACHE_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_TBFSMCACHE_proto_goTypes = []any{
-	(*TBFSMCACHE)(nil),       // 0: belfast.TBFSMCACHE
-	(*TBFSMCACHEPLAN)(nil),   // 1: belfast.TBFSMCACHEPLAN
-	(*TBFSMCACHETALENT)(nil), // 2: belfast.TBFSMCACHETALENT
-	(*TBFSMCACHESITE)(nil),   // 3: belfast.TBFSMCACHESITE
-	(*TBFSMCACHECHAT)(nil),   // 4: belfast.TBFSMCACHECHAT
-	(*TBFSMCACHEEND)(nil),    // 5: belfast.TBFSMCACHEEND
-	(*TBFSMCACHEMIND)(nil),   // 6: belfast.TBFSMCACHEMIND
+	(*TBFSMCACHE)(nil),        // 0: belfast.TBFSMCACHE
+	(*TBFSMCACHEPLAN)(nil),    // 1: belfast.TBFSMCACHEPLAN
+	(*TBFSMCACHETALENT)(nil),  // 2: belfast.TBFSMCACHETALENT
+	(*TBFSMCACHESITE)(nil),    // 3: belfast.TBFSMCACHESITE
+	(*TBFSMCACHECHAT)(nil),    // 4: belfast.TBFSMCACHECHAT
+	(*TBFSMCACHEEND)(nil),     // 5: belfast.TBFSMCACHEEND
+	(*TBFSMCACHEMIND)(nil),    // 6: belfast.TBFSMCACHEMIND
+	(*TBFSMCACHENIN1)(nil),    // 7: belfast.TBFSMCACHENIN1
+	(*TBFSMCACHEAFFIXUP)(nil), // 8: belfast.TBFSMCACHEAFFIXUP
+	(*TBFSMCACHETAROT)(nil),   // 9: belfast.TBFSMCACHETAROT
+	(*TBFSMCACHEEVAL)(nil),    // 10: belfast.TBFSMCACHEEVAL
 }
 var file_TBFSMCACHE_proto_depIdxs = []int32{
-	1, // 0: belfast.TBFSMCACHE.cache_plan:type_name -> belfast.TBFSMCACHEPLAN
-	2, // 1: belfast.TBFSMCACHE.cache_talent:type_name -> belfast.TBFSMCACHETALENT
-	3, // 2: belfast.TBFSMCACHE.cache_site:type_name -> belfast.TBFSMCACHESITE
-	4, // 3: belfast.TBFSMCACHE.cache_chat:type_name -> belfast.TBFSMCACHECHAT
-	5, // 4: belfast.TBFSMCACHE.cache_end:type_name -> belfast.TBFSMCACHEEND
-	6, // 5: belfast.TBFSMCACHE.cache_mind:type_name -> belfast.TBFSMCACHEMIND
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	1,  // 0: belfast.TBFSMCACHE.cache_plan:type_name -> belfast.TBFSMCACHEPLAN
+	2,  // 1: belfast.TBFSMCACHE.cache_talent:type_name -> belfast.TBFSMCACHETALENT
+	3,  // 2: belfast.TBFSMCACHE.cache_site:type_name -> belfast.TBFSMCACHESITE
+	4,  // 3: belfast.TBFSMCACHE.cache_chat:type_name -> belfast.TBFSMCACHECHAT
+	5,  // 4: belfast.TBFSMCACHE.cache_end:type_name -> belfast.TBFSMCACHEEND
+	6,  // 5: belfast.TBFSMCACHE.cache_mind:type_name -> belfast.TBFSMCACHEMIND
+	7,  // 6: belfast.TBFSMCACHE.cache_nin1:type_name -> belfast.TBFSMCACHENIN1
+	8,  // 7: belfast.TBFSMCACHE.cache_affix_up:type_name -> belfast.TBFSMCACHEAFFIXUP
+	9,  // 8: belfast.TBFSMCACHE.cache_tarot:type_name -> belfast.TBFSMCACHETAROT
+	10, // 9: belfast.TBFSMCACHE.cache_eval:type_name -> belfast.TBFSMCACHEEVAL
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_TBFSMCACHE_proto_init() }
@@ -165,12 +213,16 @@ func file_TBFSMCACHE_proto_init() {
 	if File_TBFSMCACHE_proto != nil {
 		return
 	}
+	file_TBFSMCACHEAFFIXUP_proto_init()
 	file_TBFSMCACHECHAT_proto_init()
 	file_TBFSMCACHEEND_proto_init()
+	file_TBFSMCACHEEVAL_proto_init()
 	file_TBFSMCACHEMIND_proto_init()
+	file_TBFSMCACHENIN1_proto_init()
 	file_TBFSMCACHEPLAN_proto_init()
 	file_TBFSMCACHESITE_proto_init()
 	file_TBFSMCACHETALENT_proto_init()
+	file_TBFSMCACHETAROT_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

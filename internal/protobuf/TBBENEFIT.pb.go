@@ -24,7 +24,6 @@ const (
 type TBBENEFIT struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Actives       []*TBBF                `protobuf:"bytes,1,rep,name=actives" json:"actives,omitempty"`
-	Pendings      []uint32               `protobuf:"varint,2,rep,name=pendings" json:"pendings,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -66,22 +65,14 @@ func (x *TBBENEFIT) GetActives() []*TBBF {
 	return nil
 }
 
-func (x *TBBENEFIT) GetPendings() []uint32 {
-	if x != nil {
-		return x.Pendings
-	}
-	return nil
-}
-
 var File_TBBENEFIT_proto protoreflect.FileDescriptor
 
 const file_TBBENEFIT_proto_rawDesc = "" +
 	"\n" +
 	"\x0fTBBENEFIT.proto\x12\abelfast\x1a\n" +
-	"TBBF.proto\"P\n" +
+	"TBBF.proto\"4\n" +
 	"\tTBBENEFIT\x12'\n" +
-	"\aactives\x18\x01 \x03(\v2\r.belfast.TBBFR\aactives\x12\x1a\n" +
-	"\bpendings\x18\x02 \x03(\rR\bpendingsB\fZ\n" +
+	"\aactives\x18\x01 \x03(\v2\r.belfast.TBBFR\aactivesB\fZ\n" +
 	"./protobuf"
 
 var (

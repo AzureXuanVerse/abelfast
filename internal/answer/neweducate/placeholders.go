@@ -9,8 +9,10 @@ func tbInfoPlaceholder() *protobuf.TBINFO {
 	return &protobuf.TBINFO{
 		Id: proto.Uint32(0),
 		Fsm: &protobuf.TBFSM{
-			SystemNo:    proto.Uint32(0),
-			CurrentNode: proto.Uint32(0),
+			SystemNo:     proto.Uint32(0),
+			CurrentNode:  proto.Uint32(0),
+			PriorityFsm:  []*protobuf.TBFSM{},
+			TarotSelects: []uint32{},
 			Cache: []*protobuf.TBFSMCACHE{{
 				CachePlan: []*protobuf.TBFSMCACHEPLAN{{
 					CurIndex: proto.Uint32(0),
@@ -27,6 +29,7 @@ func tbInfoPlaceholder() *protobuf.TBINFO {
 					Buys:               []*protobuf.KVDATA{},
 					State:              &protobuf.KVDATA{Key: proto.Uint32(0), Value: proto.Uint32(0)},
 					CharacterThisRound: []uint32{},
+					RefreshCount:       proto.Uint32(0),
 				}},
 				CacheChat: []*protobuf.TBFSMCACHECHAT{{
 					Finished: proto.Uint32(0),
@@ -36,10 +39,14 @@ func tbInfoPlaceholder() *protobuf.TBINFO {
 					Ends:   []uint32{},
 					Select: proto.Uint32(0),
 				}},
-				CacheMind: []*protobuf.TBFSMCACHEMIND{{}},
+				CacheMind:    []*protobuf.TBFSMCACHEMIND{{}},
+				CacheNin1:    []*protobuf.TBFSMCACHENIN1{},
+				CacheAffixUp: []*protobuf.TBFSMCACHEAFFIXUP{},
+				CacheTarot:   []*protobuf.TBFSMCACHETAROT{},
+				CacheEval:    []*protobuf.TBFSMCACHEEVAL{},
 			}},
 		},
-		Round: &protobuf.TBROUND{Round: proto.Uint32(1)},
+		Round: &protobuf.TBROUND{Round: proto.Uint32(1), InTemp: proto.Uint32(0), TempRound: proto.Uint32(0)},
 		Res: &protobuf.TBRES{
 			Attrs:    []*protobuf.KVDATA{},
 			Resource: []*protobuf.KVDATA{},
@@ -55,10 +62,10 @@ func tbInfoPlaceholder() *protobuf.TBINFO {
 		Evaluations: []*protobuf.KVDATA{},
 		Name:        proto.String(""),
 		FavorLv:     proto.Uint32(0),
-		Benefit: &protobuf.TBBENEFIT{
-			Actives:  []*protobuf.TBBF{},
-			Pendings: []uint32{},
-		},
+		Benefit:     &protobuf.TBBENEFIT{Actives: []*protobuf.TBBF{}},
+		Difficulty:  proto.Uint32(0),
+		EvalFail:    proto.Uint32(0),
+		Display:     emptyTBDisplay(),
 	}
 }
 
@@ -68,5 +75,15 @@ func tbPermanentPlaceholder() *protobuf.TBPERMANENT {
 		Polaroids:     []uint32{},
 		Endings:       []uint32{},
 		ActiveEndings: []uint32{},
+		TarotArchive:  []uint32{},
+		MaxRound:      proto.Uint32(0),
+	}
+}
+
+func emptyTBDisplay() *protobuf.TBDISPLAY {
+	return &protobuf.TBDISPLAY{
+		BenefitDisplay:   []*protobuf.TBDROP{},
+		DollarNumDisplay: []*protobuf.TBBENEFITVAL{},
+		Counter:          []*protobuf.TBBFCOUNTER{},
 	}
 }

@@ -151,6 +151,77 @@ func TestChapterOpEnemyRoundUpdatesRound(t *testing.T) {
 	}
 }
 
+func TestChapterOpSupplyUpdatesPersistedAmmoAndCell(t *testing.T) {
+	client := setupPlayerUpdateTest(t)
+	clearTable(t, &orm.OwnedResource{})
+	clearTable(t, &orm.ChapterState{})
+	clearTable(t, &orm.ConfigEntry{})
+	if err := prepareChapterTrackingClient(t, client); err != nil {
+		t.Fatalf("prepare chapter tracking client: %v", err)
+	}
+	seedConfigEntry(t, "sharecfgdata/chapter_template.json", "104", `{"id":104,"grids":[[4,2,true,1],[4,3,true,3],[4,4,true,6],[4,5,true,8]],"ammo_total":5,"ammo_submarine":0,"group_num":1,"submarine_num":0,"support_group_num":0,"chapter_strategy":[],"boss_expedition_id":[9004],"expedition_id_weight_list":[[104010,160,0]],"elite_expedition_list":[],"ambush_expedition_list":[],"guarder_expedition_list":[],"progress_boss":100,"oil":0,"time":100}`)
+
+	payload := protobuf.CS_13101{Id: proto.Uint32(104), Fleet: &protobuf.FLEET_INFO{Id: proto.Uint32(1), MainTeam: []*protobuf.TEAM_INFO{{Id: proto.Uint32(1), ShipList: []uint32{101}}}}}
+	buffer, err := proto.Marshal(&payload)
+	if err != nil {
+		t.Fatalf("marshal tracking payload: %v", err)
+	}
+	if _, _, err := ChapterTracking(&buffer, client); err != nil {
+		t.Fatalf("chapter tracking failed: %v", err)
+	}
+	var tracking protobuf.SC_13102
+	decodeResponse(t, client, &tracking)
+	client.Buffer.Reset()
+
+	movePayload := protobuf.CS_13103{Act: proto.Uint32(1), GroupId: proto.Uint32(1), ActArg_1: proto.Uint32(4), ActArg_2: proto.Uint32(3)}
+	moveBuffer, err := proto.Marshal(&movePayload)
+	if err != nil {
+		t.Fatalf("marshal move payload: %v", err)
+	}
+	if _, _, err := HandleChapterAction(&moveBuffer, client); err != nil {
+		t.Fatalf("chapter move failed: %v", err)
+	}
+	var moveResponse protobuf.SC_13104
+	decodeResponse(t, client, &moveResponse)
+	client.Buffer.Reset()
+
+	supplyPayload := protobuf.CS_13103{Act: proto.Uint32(7), GroupId: proto.Uint32(1)}
+	supplyBuffer, err := proto.Marshal(&supplyPayload)
+	if err != nil {
+		t.Fatalf("marshal supply payload: %v", err)
+	}
+	if _, _, err := HandleChapterAction(&supplyBuffer, client); err != nil {
+		t.Fatalf("chapter supply failed: %v", err)
+	}
+	var response protobuf.SC_13104
+	decodeResponse(t, client, &response)
+	if response.GetResult() != 0 {
+		t.Fatalf("expected result 0, got %d", response.GetResult())
+	}
+
+	state, err := orm.GetChapterState(client.Commander.CommanderID)
+	if err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	var current protobuf.CURRENTCHAPTERINFO
+	if err := proto.Unmarshal(state.State, &current); err != nil {
+		t.Fatalf("unmarshal state: %v", err)
+	}
+	group := current.GetMainGroupList()[0]
+	if group.GetBullet() != 5 {
+		t.Fatalf("expected bullet restored to 5, got %d", group.GetBullet())
+	}
+	for _, cell := range current.GetCellList() {
+		if cell.GetItemType() == 3 {
+			if cell.GetItemId() != 0 {
+				t.Fatalf("expected depleted supply cell item_id 0, got %d", cell.GetItemId())
+			}
+			return
+		}
+	}
+	t.Fatalf("expected persisted supply cell")
+}
+
 func startChapterTracking(t *testing.T, client *connection.Client) error {
 	if err := prepareChapterTrackingClient(t, client); err != nil {
 		return err

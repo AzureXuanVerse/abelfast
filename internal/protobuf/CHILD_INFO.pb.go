@@ -52,6 +52,9 @@ type CHILD_INFO struct {
 	HadTargetStageAward     *uint32                `protobuf:"varint,27,req,name=had_target_stage_award,json=hadTargetStageAward" json:"had_target_stage_award,omitempty"`
 	HadAdjustment           *uint32                `protobuf:"varint,28,req,name=had_adjustment,json=hadAdjustment" json:"had_adjustment,omitempty"`
 	IsSpecialSecretaryValid *uint32                `protobuf:"varint,29,req,name=is_special_secretary_valid,json=isSpecialSecretaryValid" json:"is_special_secretary_valid,omitempty"`
+	EndingBuyCount          *uint32                `protobuf:"varint,30,req,name=ending_buy_count,json=endingBuyCount" json:"ending_buy_count,omitempty"`
+	MemoryBuyCount          *uint32                `protobuf:"varint,31,req,name=memory_buy_count,json=memoryBuyCount" json:"memory_buy_count,omitempty"`
+	PolaroidBuyCount        *uint32                `protobuf:"varint,32,req,name=polaroid_buy_count,json=polaroidBuyCount" json:"polaroid_buy_count,omitempty"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -289,11 +292,33 @@ func (x *CHILD_INFO) GetIsSpecialSecretaryValid() uint32 {
 	return 0
 }
 
+func (x *CHILD_INFO) GetEndingBuyCount() uint32 {
+	if x != nil && x.EndingBuyCount != nil {
+		return *x.EndingBuyCount
+	}
+	return 0
+}
+
+func (x *CHILD_INFO) GetMemoryBuyCount() uint32 {
+	if x != nil && x.MemoryBuyCount != nil {
+		return *x.MemoryBuyCount
+	}
+	return 0
+}
+
+func (x *CHILD_INFO) GetPolaroidBuyCount() uint32 {
+	if x != nil && x.PolaroidBuyCount != nil {
+		return *x.PolaroidBuyCount
+	}
+	return 0
+}
+
 var File_CHILD_INFO_proto protoreflect.FileDescriptor
 
 const file_CHILD_INFO_proto_rawDesc = "" +
 	"\n" +
-	"\x10CHILD_INFO.proto\x12\abelfast\x1a\x10CHILD_ATTR.proto\x1a\x10CHILD_BUFF.proto\x1a\x11CHILD_FAVOR.proto\x1a\x10CHILD_ITEM.proto\x1a\x19CHILD_OPTION_RECORD.proto\x1a\x15CHILD_PLAN_CELL.proto\x1a\x18CHILD_PLAN_HISTORY.proto\x1a\x14CHILD_POLAROID.proto\x1a\x15CHILD_SHOP_DATA.proto\x1a\x10CHILD_TASK.proto\x1a\x10CHILD_TIME.proto\"\xb7\t\n" +
+	"\x10CHILD_INFO.proto\x12\abelfast\x1a\x10CHILD_ATTR.proto\x1a\x10CHILD_BUFF.proto\x1a\x11CHILD_FAVOR.proto\x1a\x10CHILD_ITEM.proto\x1a\x19CHILD_OPTION_RECORD.proto\x1a\x15CHILD_PLAN_CELL.proto\x1a\x18CHILD_PLAN_HISTORY.proto\x1a\x14CHILD_POLAROID.proto\x1a\x15CHILD_SHOP_DATA.proto\x1a\x10CHILD_TASK.proto\x1a\x10CHILD_TIME.proto\"\xb9\n" +
+	"\n" +
 	"\n" +
 	"CHILD_INFO\x12\x10\n" +
 	"\x03tid\x18\x01 \x02(\rR\x03tid\x12.\n" +
@@ -328,7 +353,10 @@ const file_CHILD_INFO_proto_rawDesc = "" +
 	"\x13new_game_plus_count\x18\x1a \x02(\rR\x10newGamePlusCount\x123\n" +
 	"\x16had_target_stage_award\x18\x1b \x02(\rR\x13hadTargetStageAward\x12%\n" +
 	"\x0ehad_adjustment\x18\x1c \x02(\rR\rhadAdjustment\x12;\n" +
-	"\x1ais_special_secretary_valid\x18\x1d \x02(\rR\x17isSpecialSecretaryValidB\fZ\n" +
+	"\x1ais_special_secretary_valid\x18\x1d \x02(\rR\x17isSpecialSecretaryValid\x12(\n" +
+	"\x10ending_buy_count\x18\x1e \x02(\rR\x0eendingBuyCount\x12(\n" +
+	"\x10memory_buy_count\x18\x1f \x02(\rR\x0ememoryBuyCount\x12,\n" +
+	"\x12polaroid_buy_count\x18  \x02(\rR\x10polaroidBuyCountB\fZ\n" +
 	"./protobuf"
 
 var (

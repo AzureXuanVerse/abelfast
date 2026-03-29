@@ -34,6 +34,9 @@ type TBINFO struct {
 	Name          *string                `protobuf:"bytes,9,req,name=name" json:"name,omitempty"`
 	FavorLv       *uint32                `protobuf:"varint,10,req,name=favor_lv,json=favorLv" json:"favor_lv,omitempty"`
 	Benefit       *TBBENEFIT             `protobuf:"bytes,11,req,name=benefit" json:"benefit,omitempty"`
+	Difficulty    *uint32                `protobuf:"varint,12,req,name=difficulty" json:"difficulty,omitempty"`
+	EvalFail      *uint32                `protobuf:"varint,13,req,name=eval_fail,json=evalFail" json:"eval_fail,omitempty"`
+	Display       *TBDISPLAY             `protobuf:"bytes,14,req,name=display" json:"display,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -145,11 +148,32 @@ func (x *TBINFO) GetBenefit() *TBBENEFIT {
 	return nil
 }
 
+func (x *TBINFO) GetDifficulty() uint32 {
+	if x != nil && x.Difficulty != nil {
+		return *x.Difficulty
+	}
+	return 0
+}
+
+func (x *TBINFO) GetEvalFail() uint32 {
+	if x != nil && x.EvalFail != nil {
+		return *x.EvalFail
+	}
+	return 0
+}
+
+func (x *TBINFO) GetDisplay() *TBDISPLAY {
+	if x != nil {
+		return x.Display
+	}
+	return nil
+}
+
 var File_TBINFO_proto protoreflect.FileDescriptor
 
 const file_TBINFO_proto_rawDesc = "" +
 	"\n" +
-	"\fTBINFO.proto\x12\abelfast\x1a\fKVDATA.proto\x1a\x0fTBBENEFIT.proto\x1a\vTBFSM.proto\x1a\fTBPLAN.proto\x1a\vTBRES.proto\x1a\rTBROUND.proto\x1a\fTBSITE.proto\x1a\x0eTBTALENT.proto\"\x89\x03\n" +
+	"\fTBINFO.proto\x12\abelfast\x1a\fKVDATA.proto\x1a\x0fTBBENEFIT.proto\x1a\x0fTBDISPLAY.proto\x1a\vTBFSM.proto\x1a\fTBPLAN.proto\x1a\vTBRES.proto\x1a\rTBROUND.proto\x1a\fTBSITE.proto\x1a\x0eTBTALENT.proto\"\xf4\x03\n" +
 	"\x06TBINFO\x12\x0e\n" +
 	"\x02id\x18\x01 \x02(\rR\x02id\x12 \n" +
 	"\x03fsm\x18\x02 \x02(\v2\x0e.belfast.TBFSMR\x03fsm\x12&\n" +
@@ -162,7 +186,12 @@ const file_TBINFO_proto_rawDesc = "" +
 	"\x04name\x18\t \x02(\tR\x04name\x12\x19\n" +
 	"\bfavor_lv\x18\n" +
 	" \x02(\rR\afavorLv\x12,\n" +
-	"\abenefit\x18\v \x02(\v2\x12.belfast.TBBENEFITR\abenefitB\fZ\n" +
+	"\abenefit\x18\v \x02(\v2\x12.belfast.TBBENEFITR\abenefit\x12\x1e\n" +
+	"\n" +
+	"difficulty\x18\f \x02(\rR\n" +
+	"difficulty\x12\x1b\n" +
+	"\teval_fail\x18\r \x02(\rR\bevalFail\x12,\n" +
+	"\adisplay\x18\x0e \x02(\v2\x12.belfast.TBDISPLAYR\adisplayB\fZ\n" +
 	"./protobuf"
 
 var (
@@ -188,6 +217,7 @@ var file_TBINFO_proto_goTypes = []any{
 	(*TBSITE)(nil),    // 6: belfast.TBSITE
 	(*KVDATA)(nil),    // 7: belfast.KVDATA
 	(*TBBENEFIT)(nil), // 8: belfast.TBBENEFIT
+	(*TBDISPLAY)(nil), // 9: belfast.TBDISPLAY
 }
 var file_TBINFO_proto_depIdxs = []int32{
 	1, // 0: belfast.TBINFO.fsm:type_name -> belfast.TBFSM
@@ -198,11 +228,12 @@ var file_TBINFO_proto_depIdxs = []int32{
 	6, // 5: belfast.TBINFO.site:type_name -> belfast.TBSITE
 	7, // 6: belfast.TBINFO.evaluations:type_name -> belfast.KVDATA
 	8, // 7: belfast.TBINFO.benefit:type_name -> belfast.TBBENEFIT
-	8, // [8:8] is the sub-list for method output_type
-	8, // [8:8] is the sub-list for method input_type
-	8, // [8:8] is the sub-list for extension type_name
-	8, // [8:8] is the sub-list for extension extendee
-	0, // [0:8] is the sub-list for field type_name
+	9, // 8: belfast.TBINFO.display:type_name -> belfast.TBDISPLAY
+	9, // [9:9] is the sub-list for method output_type
+	9, // [9:9] is the sub-list for method input_type
+	9, // [9:9] is the sub-list for extension type_name
+	9, // [9:9] is the sub-list for extension extendee
+	0, // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_TBINFO_proto_init() }
@@ -212,6 +243,7 @@ func file_TBINFO_proto_init() {
 	}
 	file_KVDATA_proto_init()
 	file_TBBENEFIT_proto_init()
+	file_TBDISPLAY_proto_init()
 	file_TBFSM_proto_init()
 	file_TBPLAN_proto_init()
 	file_TBRES_proto_init()

@@ -22,7 +22,7 @@ func JuustagramMessageRange(buffer *[]byte, client *connection.Client) (int, int
 	}
 	// SC_11700 remains intentionally unsupported because current client bootstrap
 	// flow requests Juustagram messages via CS_11705 and consumes SC_11706.
-	messages, err := buildJuustagramMessagesForRange(client.Commander.CommanderID, payload.GetIndexBegin(), payload.GetIndexEnd())
+	messages, err := buildJuustagramMessagesForIDs(client.Commander.CommanderID, payload.GetIdList())
 	if err != nil {
 		return 0, consts.JuustagramPacketRangeResp, err
 	}
@@ -30,23 +30,17 @@ func JuustagramMessageRange(buffer *[]byte, client *connection.Client) (int, int
 	return client.SendMessage(consts.JuustagramPacketRangeResp, &response)
 }
 
-func buildJuustagramMessagesForRange(commanderID uint32, indexBegin uint32, indexEnd uint32) ([]*protobuf.INS_MESSAGE, error) {
-	templates := make([]orm.JuustagramTemplate, 0)
-	for id := indexBegin; id <= indexEnd; id++ {
+func buildJuustagramMessagesForIDs(commanderID uint32, ids []uint32) ([]*protobuf.INS_MESSAGE, error) {
+	templates := make([]orm.JuustagramTemplate, 0, len(ids))
+	for _, id := range ids {
 		template, err := orm.GetJuustagramTemplate(id)
 		if err != nil {
 			if errors.Is(err, db.ErrNotFound) {
-				if id == indexEnd {
-					break
-				}
 				continue
 			}
 			return nil, err
 		}
 		templates = append(templates, *template)
-		if id == indexEnd {
-			break
-		}
 	}
 	now := uint32(time.Now().Unix())
 	messages := make([]*protobuf.INS_MESSAGE, 0, len(templates))

@@ -153,7 +153,7 @@ func buildJuustagramPlayerDiscuss(commanderID uint32, messageID uint32, options 
 				Time:     proto.Uint32(selectionTime(selection.CommentTime, now)),
 				TextList: []string{},
 				Text:     proto.String(text),
-				NpcReply: proto.Uint32(npcReplyID),
+				NpcReply: uint32SliceOrEmpty(npcReplyID),
 			})
 			if npcReplyID != 0 {
 				opReplyIDs = append(opReplyIDs, npcReplyID)
@@ -167,12 +167,13 @@ func buildJuustagramPlayerDiscuss(commanderID uint32, messageID uint32, options 
 				opReplyIDs = append(opReplyIDs, option.NpcReplyID)
 			}
 		}
+		replies := uniqueUint32(opReplyIDs)
 		playerDiscuss = append(playerDiscuss, &protobuf.INS_PLAYER{
 			Id:       proto.Uint32(discussID),
 			Time:     proto.Uint32(now),
 			TextList: textList,
 			Text:     proto.String(""),
-			NpcReply: proto.Uint32(0),
+			NpcReply: replies,
 		})
 	}
 	return playerDiscuss, uniqueUint32(opReplyIDs), nil
@@ -195,6 +196,7 @@ func buildJuustagramMessagePayload(template *orm.JuustagramTemplate, state *orm.
 		Time:          proto.Uint32(messageTime),
 		Text:          proto.String(messageText),
 		Picture:       proto.String(template.PicturePersist),
+		OalistPic:     proto.String(""),
 		PlayerDiscuss: playerDiscuss,
 		NpcDiscuss:    npcDiscuss,
 		NpcReply:      npcReply,
@@ -316,6 +318,13 @@ func selectionOptionText(options []JuustagramDiscussOption, index uint32) string
 		}
 	}
 	return ""
+}
+
+func uint32SliceOrEmpty(value uint32) []uint32 {
+	if value == 0 {
+		return []uint32{}
+	}
+	return []uint32{value}
 }
 
 func resolveJuustagramText(key string) (string, error) {

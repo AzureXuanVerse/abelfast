@@ -33,6 +33,7 @@ type INS_MESSAGE struct {
 	Good          *uint32                `protobuf:"varint,8,req,name=good" json:"good,omitempty"`
 	IsGood        *uint32                `protobuf:"varint,9,req,name=is_good,json=isGood" json:"is_good,omitempty"`
 	IsRead        *uint32                `protobuf:"varint,10,req,name=is_read,json=isRead" json:"is_read,omitempty"`
+	OalistPic     *string                `protobuf:"bytes,11,opt,name=oalist_pic,json=oalistPic" json:"oalist_pic,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -137,11 +138,18 @@ func (x *INS_MESSAGE) GetIsRead() uint32 {
 	return 0
 }
 
+func (x *INS_MESSAGE) GetOalistPic() string {
+	if x != nil && x.OalistPic != nil {
+		return *x.OalistPic
+	}
+	return ""
+}
+
 var File_INS_MESSAGE_proto protoreflect.FileDescriptor
 
 const file_INS_MESSAGE_proto_rawDesc = "" +
 	"\n" +
-	"\x11INS_MESSAGE.proto\x12\abelfast\x1a\rINS_NPC.proto\x1a\x10INS_PLAYER.proto\"\xc3\x02\n" +
+	"\x11INS_MESSAGE.proto\x12\abelfast\x1a\rINS_NPC.proto\x1a\x10INS_PLAYER.proto\"\xe2\x02\n" +
 	"\vINS_MESSAGE\x12\x0e\n" +
 	"\x02id\x18\x01 \x02(\rR\x02id\x12\x12\n" +
 	"\x04time\x18\x02 \x02(\rR\x04time\x12\x12\n" +
@@ -154,7 +162,9 @@ const file_INS_MESSAGE_proto_rawDesc = "" +
 	"\x04good\x18\b \x02(\rR\x04good\x12\x17\n" +
 	"\ais_good\x18\t \x02(\rR\x06isGood\x12\x17\n" +
 	"\ais_read\x18\n" +
-	" \x02(\rR\x06isReadB\fZ\n" +
+	" \x02(\rR\x06isRead\x12\x1d\n" +
+	"\n" +
+	"oalist_pic\x18\v \x01(\tR\toalistPicB\fZ\n" +
 	"./protobuf"
 
 var (

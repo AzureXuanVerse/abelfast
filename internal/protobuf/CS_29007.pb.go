@@ -24,6 +24,7 @@ const (
 type CS_29007 struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            *uint32                `protobuf:"varint,1,req,name=id" json:"id,omitempty"`
+	Difficulty    *uint32                `protobuf:"varint,2,req,name=difficulty" json:"difficulty,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -65,13 +66,23 @@ func (x *CS_29007) GetId() uint32 {
 	return 0
 }
 
+func (x *CS_29007) GetDifficulty() uint32 {
+	if x != nil && x.Difficulty != nil {
+		return *x.Difficulty
+	}
+	return 0
+}
+
 var File_CS_29007_proto protoreflect.FileDescriptor
 
 const file_CS_29007_proto_rawDesc = "" +
 	"\n" +
-	"\x0eCS_29007.proto\x12\abelfast\"\x1a\n" +
+	"\x0eCS_29007.proto\x12\abelfast\":\n" +
 	"\bCS_29007\x12\x0e\n" +
-	"\x02id\x18\x01 \x02(\rR\x02idB\fZ\n" +
+	"\x02id\x18\x01 \x02(\rR\x02id\x12\x1e\n" +
+	"\n" +
+	"difficulty\x18\x02 \x02(\rR\n" +
+	"difficultyB\fZ\n" +
 	"./protobuf"
 
 var (

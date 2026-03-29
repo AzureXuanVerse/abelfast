@@ -111,8 +111,7 @@ func TestJuustagramMessageRange(t *testing.T) {
 	commander := &orm.Commander{CommanderID: 1001}
 	client := &connection.Client{Commander: commander}
 	payload := protobuf.CS_11705{
-		IndexBegin: proto.Uint32(1),
-		IndexEnd:   proto.Uint32(1),
+		IdList: []uint32{1},
 	}
 	buffer, err := proto.Marshal(&payload)
 	if err != nil {
@@ -158,8 +157,7 @@ func TestJuustagramMessageRangeSkipsUnpublished(t *testing.T) {
 	commander := &orm.Commander{CommanderID: 1001}
 	client := &connection.Client{Commander: commander}
 	payload := protobuf.CS_11705{
-		IndexBegin: proto.Uint32(620),
-		IndexEnd:   proto.Uint32(620),
+		IdList: []uint32{620},
 	}
 	buffer, err := proto.Marshal(&payload)
 	if err != nil {

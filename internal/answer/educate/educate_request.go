@@ -66,6 +66,9 @@ func EducateRequest(buffer *[]byte, client *connection.Client) (int, int, error)
 			HadTargetStageAward:     proto.Uint32(0),
 			HadAdjustment:           proto.Uint32(boolToUint32(state.HadAdjustment)),
 			IsSpecialSecretaryValid: proto.Uint32(0),
+			EndingBuyCount:          proto.Uint32(0),
+			MemoryBuyCount:          proto.Uint32(0),
+			PolaroidBuyCount:        proto.Uint32(0),
 		},
 	}
 	if client.Commander != nil {

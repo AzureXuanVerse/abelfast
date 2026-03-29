@@ -17,11 +17,17 @@ const (
 	chapterTemplateLoopCategory = "sharecfgdata/chapter_template_loop.json"
 	itemDataStatsCategory       = "sharecfgdata/item_data_statistics.json"
 	benefitBuffCategory         = "ShareCfg/benefit_buff_template.json"
+	friendlyDataCategory        = "ShareCfg/friendly_data_template.json"
+	friendlyDataShareCategory   = "sharecfgdata/friendly_data_template.json"
 )
 
 type chapterTemplate struct {
 	ID                 uint32     `json:"id"`
 	Grids              [][]any    `json:"grids"`
+	BoxList            [][]any    `json:"box_list"`
+	RandomBoxList      []uint32   `json:"random_box_list"`
+	LandBased          [][]any    `json:"land_based"`
+	FriendlyID         uint32     `json:"friendly_id"`
 	AmmoTotal          uint32     `json:"ammo_total"`
 	AmmoSubmarine      uint32     `json:"ammo_submarine"`
 	GroupNum           uint32     `json:"group_num"`
@@ -59,6 +65,11 @@ type benefitBuffEntry struct {
 	BenefitType      string `json:"benefit_type"`
 	BenefitEffect    string `json:"benefit_effect"`
 	BenefitCondition string `json:"benefit_condition"`
+}
+
+type friendlyDataEntry struct {
+	ID uint32 `json:"id"`
+	HP uint32 `json:"hp"`
 }
 
 func loadChapterTemplate(chapterID uint32, loopFlag uint32) (*chapterTemplate, error) {
@@ -161,6 +172,24 @@ func loadBenefitBuff(buffID uint32) (*benefitBuffEntry, error) {
 		return nil, err
 	}
 	return &buff, nil
+}
+
+func loadFriendlyData(friendlyID uint32) (*friendlyDataEntry, error) {
+	for _, category := range []string{friendlyDataCategory, friendlyDataShareCategory} {
+		entry, err := orm.GetConfigEntry(category, fmt.Sprintf("%d", friendlyID))
+		if err != nil {
+			if errors.Is(err, db.ErrNotFound) {
+				continue
+			}
+			return nil, err
+		}
+		var friendly friendlyDataEntry
+		if err := json.Unmarshal(entry.Data, &friendly); err != nil {
+			return nil, err
+		}
+		return &friendly, nil
+	}
+	return nil, nil
 }
 
 func decodeUsageArgUint32(raw json.RawMessage) ([]uint32, error) {

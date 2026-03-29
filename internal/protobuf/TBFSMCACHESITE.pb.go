@@ -28,6 +28,7 @@ type TBFSMCACHESITE struct {
 	Buys               []*KVDATA              `protobuf:"bytes,3,rep,name=buys" json:"buys,omitempty"`
 	State              *KVDATA                `protobuf:"bytes,4,req,name=state" json:"state,omitempty"`
 	CharacterThisRound []uint32               `protobuf:"varint,5,rep,name=character_this_round,json=characterThisRound" json:"character_this_round,omitempty"`
+	RefreshCount       *uint32                `protobuf:"varint,6,req,name=refresh_count,json=refreshCount" json:"refresh_count,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -97,17 +98,25 @@ func (x *TBFSMCACHESITE) GetCharacterThisRound() []uint32 {
 	return nil
 }
 
+func (x *TBFSMCACHESITE) GetRefreshCount() uint32 {
+	if x != nil && x.RefreshCount != nil {
+		return *x.RefreshCount
+	}
+	return 0
+}
+
 var File_TBFSMCACHESITE_proto protoreflect.FileDescriptor
 
 const file_TBFSMCACHESITE_proto_rawDesc = "" +
 	"\n" +
-	"\x14TBFSMCACHESITE.proto\x12\abelfast\x1a\fKVDATA.proto\"\xbc\x01\n" +
+	"\x14TBFSMCACHESITE.proto\x12\abelfast\x1a\fKVDATA.proto\"\xe1\x01\n" +
 	"\x0eTBFSMCACHESITE\x12\x16\n" +
 	"\x06events\x18\x01 \x03(\rR\x06events\x12\x14\n" +
 	"\x05shops\x18\x02 \x03(\rR\x05shops\x12#\n" +
 	"\x04buys\x18\x03 \x03(\v2\x0f.belfast.KVDATAR\x04buys\x12%\n" +
 	"\x05state\x18\x04 \x02(\v2\x0f.belfast.KVDATAR\x05state\x120\n" +
-	"\x14character_this_round\x18\x05 \x03(\rR\x12characterThisRoundB\fZ\n" +
+	"\x14character_this_round\x18\x05 \x03(\rR\x12characterThisRound\x12#\n" +
+	"\rrefresh_count\x18\x06 \x02(\rR\frefreshCountB\fZ\n" +
 	"./protobuf"
 
 var (

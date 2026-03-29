@@ -27,6 +27,8 @@ type TBPERMANENT struct {
 	Polaroids     []uint32               `protobuf:"varint,2,rep,name=polaroids" json:"polaroids,omitempty"`
 	Endings       []uint32               `protobuf:"varint,3,rep,name=endings" json:"endings,omitempty"`
 	ActiveEndings []uint32               `protobuf:"varint,4,rep,name=active_endings,json=activeEndings" json:"active_endings,omitempty"`
+	TarotArchive  []uint32               `protobuf:"varint,5,rep,name=tarot_archive,json=tarotArchive" json:"tarot_archive,omitempty"`
+	MaxRound      *uint32                `protobuf:"varint,6,req,name=max_round,json=maxRound" json:"max_round,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -89,16 +91,32 @@ func (x *TBPERMANENT) GetActiveEndings() []uint32 {
 	return nil
 }
 
+func (x *TBPERMANENT) GetTarotArchive() []uint32 {
+	if x != nil {
+		return x.TarotArchive
+	}
+	return nil
+}
+
+func (x *TBPERMANENT) GetMaxRound() uint32 {
+	if x != nil && x.MaxRound != nil {
+		return *x.MaxRound
+	}
+	return 0
+}
+
 var File_TBPERMANENT_proto protoreflect.FileDescriptor
 
 const file_TBPERMANENT_proto_rawDesc = "" +
 	"\n" +
-	"\x11TBPERMANENT.proto\x12\abelfast\"\x90\x01\n" +
+	"\x11TBPERMANENT.proto\x12\abelfast\"\xd2\x01\n" +
 	"\vTBPERMANENT\x12\"\n" +
 	"\rng_plus_count\x18\x01 \x02(\rR\vngPlusCount\x12\x1c\n" +
 	"\tpolaroids\x18\x02 \x03(\rR\tpolaroids\x12\x18\n" +
 	"\aendings\x18\x03 \x03(\rR\aendings\x12%\n" +
-	"\x0eactive_endings\x18\x04 \x03(\rR\ractiveEndingsB\fZ\n" +
+	"\x0eactive_endings\x18\x04 \x03(\rR\ractiveEndings\x12#\n" +
+	"\rtarot_archive\x18\x05 \x03(\rR\ftarotArchive\x12\x1b\n" +
+	"\tmax_round\x18\x06 \x02(\rR\bmaxRoundB\fZ\n" +
 	"./protobuf"
 
 var (

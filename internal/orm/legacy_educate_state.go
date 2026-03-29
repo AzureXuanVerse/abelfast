@@ -21,6 +21,7 @@ type LegacyEducateState struct {
 	OptionRecords map[uint32]uint32 `json:"option_records"`
 	Resources     map[uint32]int32  `json:"resources"`
 	Endings       []uint32          `json:"endings"`
+	Qualifieds    []uint32          `json:"qualifieds"`
 }
 
 func GetOrCreateLegacyEducateState(commanderID uint32) (*LegacyEducateState, error) {
@@ -64,6 +65,7 @@ func defaultLegacyEducateState(commanderID uint32) *LegacyEducateState {
 		OptionRecords: map[uint32]uint32{},
 		Resources:     map[uint32]int32{3: 10},
 		Endings:       []uint32{},
+		Qualifieds:    []uint32{},
 	}
 }
 
@@ -101,5 +103,8 @@ func normalizeLegacyEducateState(state *LegacyEducateState, commanderID uint32) 
 	}
 	if state.Endings == nil {
 		state.Endings = []uint32{}
+	}
+	if state.Qualifieds == nil {
+		state.Qualifieds = []uint32{}
 	}
 }

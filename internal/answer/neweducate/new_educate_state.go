@@ -90,8 +90,17 @@ func ensureTBInfoDefaults(info *protobuf.TBINFO) *protobuf.TBINFO {
 	if len(cache.CacheMind) == 0 {
 		cache.CacheMind = defaults.Fsm.Cache[0].CacheMind
 	}
+	if cache.CacheSite[0].RefreshCount == nil {
+		cache.CacheSite[0].RefreshCount = defaults.Fsm.Cache[0].CacheSite[0].RefreshCount
+	}
 	if info.Round == nil {
 		info.Round = defaults.Round
+	}
+	if info.Round.InTemp == nil {
+		info.Round.InTemp = defaults.Round.InTemp
+	}
+	if info.Round.TempRound == nil {
+		info.Round.TempRound = defaults.Round.TempRound
 	}
 	if info.Res == nil {
 		info.Res = defaults.Res
@@ -107,6 +116,15 @@ func ensureTBInfoDefaults(info *protobuf.TBINFO) *protobuf.TBINFO {
 	}
 	if info.Benefit == nil {
 		info.Benefit = defaults.Benefit
+	}
+	if info.Difficulty == nil {
+		info.Difficulty = defaults.Difficulty
+	}
+	if info.EvalFail == nil {
+		info.EvalFail = defaults.EvalFail
+	}
+	if info.Display == nil {
+		info.Display = defaults.Display
 	}
 	if info.Evaluations == nil {
 		info.Evaluations = []*protobuf.KVDATA{}
@@ -127,6 +145,12 @@ func ensureTBPermanentDefaults(permanent *protobuf.TBPERMANENT) *protobuf.TBPERM
 	if permanent.ActiveEndings == nil {
 		permanent.ActiveEndings = []uint32{}
 	}
+	if permanent.TarotArchive == nil {
+		permanent.TarotArchive = []uint32{}
+	}
+	if permanent.MaxRound == nil {
+		permanent.MaxRound = proto.Uint32(0)
+	}
 	return permanent
 }
 
@@ -134,6 +158,7 @@ func emptyTBDrops() *protobuf.TBDROPS {
 	return &protobuf.TBDROPS{
 		BaseDrop:    []*protobuf.TBDROP{},
 		BenefitDrop: []*protobuf.TBDROP{},
+		Display:     emptyTBDisplay(),
 	}
 }
 

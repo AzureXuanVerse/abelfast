@@ -27,7 +27,7 @@ type INS_PLAYER struct {
 	Time          *uint32                `protobuf:"varint,2,req,name=time" json:"time,omitempty"`
 	TextList      []string               `protobuf:"bytes,3,rep,name=text_list,json=textList" json:"text_list,omitempty"`
 	Text          *string                `protobuf:"bytes,4,req,name=text" json:"text,omitempty"`
-	NpcReply      *uint32                `protobuf:"varint,5,req,name=npc_reply,json=npcReply" json:"npc_reply,omitempty"`
+	NpcReply      []uint32               `protobuf:"varint,5,rep,name=npc_reply,json=npcReply" json:"npc_reply,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -90,11 +90,11 @@ func (x *INS_PLAYER) GetText() string {
 	return ""
 }
 
-func (x *INS_PLAYER) GetNpcReply() uint32 {
-	if x != nil && x.NpcReply != nil {
-		return *x.NpcReply
+func (x *INS_PLAYER) GetNpcReply() []uint32 {
+	if x != nil {
+		return x.NpcReply
 	}
-	return 0
+	return nil
 }
 
 var File_INS_PLAYER_proto protoreflect.FileDescriptor
@@ -108,7 +108,7 @@ const file_INS_PLAYER_proto_rawDesc = "" +
 	"\x04time\x18\x02 \x02(\rR\x04time\x12\x1b\n" +
 	"\ttext_list\x18\x03 \x03(\tR\btextList\x12\x12\n" +
 	"\x04text\x18\x04 \x02(\tR\x04text\x12\x1b\n" +
-	"\tnpc_reply\x18\x05 \x02(\rR\bnpcReplyB\fZ\n" +
+	"\tnpc_reply\x18\x05 \x03(\rR\bnpcReplyB\fZ\n" +
 	"./protobuf"
 
 var (

@@ -39,6 +39,7 @@ type JuustagramMessage struct {
 	Time          uint32                    `json:"time"`
 	Text          string                    `json:"text"`
 	Picture       string                    `json:"picture"`
+	OalistPic     string                    `json:"oalist_pic"`
 	PlayerDiscuss []JuustagramPlayerDiscuss `json:"player_discuss"`
 	NpcDiscuss    []JuustagramNpcComment    `json:"npc_discuss"`
 	NpcReply      []JuustagramNpcComment    `json:"npc_reply"`
@@ -52,7 +53,7 @@ type JuustagramPlayerDiscuss struct {
 	Time     uint32   `json:"time"`
 	TextList []string `json:"text_list"`
 	Text     string   `json:"text"`
-	NpcReply uint32   `json:"npc_reply"`
+	NpcReply []uint32 `json:"npc_reply"`
 }
 
 type JuustagramNpcComment struct {

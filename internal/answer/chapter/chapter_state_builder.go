@@ -11,6 +11,8 @@ import (
 
 const (
 	chapterAttachBorn         = 1
+	chapterAttachBox          = 2
+	chapterAttachSupply       = 3
 	chapterAttachBornSub      = 16
 	chapterAttachBoss         = 8
 	chapterAttachElite        = 4
@@ -18,7 +20,10 @@ const (
 	chapterAttachEnemy        = 6
 	chapterAttachTorpedoEnemy = 7
 	chapterAttachChampion     = 12
+	chapterAttachTransport    = 17
+	chapterAttachTransportDst = 18
 	chapterAttachBombEnemy    = 24
+	chapterAttachLandbase     = 100
 	chapterCellActive         = 0
 	chapterCellDisabled       = 1
 	chapterCellAmbush         = 2
@@ -47,6 +52,10 @@ func buildCurrentChapterInfo(template *chapterTemplate, payload *protobuf.CS_131
 	mainGroups, mainCount := buildGroupsFromTeams(payload.GetFleet().GetMainTeam(), mainSpawns, template.AmmoTotal)
 	subGroups, subCount := buildGroupsFromTeams(payload.GetFleet().GetSubmarineTeam(), subSpawns, template.AmmoSubmarine)
 	supportGroups, supportCount := buildGroupsFromTeams(payload.GetFleet().GetSupportTeam(), mainSpawns, template.AmmoTotal)
+	escortList, err := buildEscortList(grids, template)
+	if err != nil {
+		return nil, 0, err
+	}
 	strategies := buildChapterStrategies(template.ChapterStrategy)
 	initShipCount := mainCount + subCount + supportCount
 	current := &protobuf.CURRENTCHAPTERINFO{
@@ -55,7 +64,7 @@ func buildCurrentChapterInfo(template *chapterTemplate, payload *protobuf.CS_131
 		CellList:              cellList,
 		MainGroupList:         mainGroups,
 		AiList:                []*protobuf.CHAPTERCELLINFO_P13{},
-		EscortList:            []*protobuf.CHAPTERCELLINFO_P13{},
+		EscortList:            escortList,
 		Round:                 proto.Uint32(0),
 		IsSubmarineAutoAttack: proto.Uint32(0),
 		OperationBuff:         buildOperationBuffList(operationBuffID),
@@ -266,6 +275,16 @@ func buildChapterCells(grids []chapterGrid, template *chapterTemplate) []*protob
 		}
 		if grid.Attachment == chapterAttachBoss && bossID != 0 {
 			cell.ItemId = proto.Uint32(bossID)
+		} else if grid.Attachment == chapterAttachBox && template != nil {
+			if attachmentID := selectBoxAttachmentID(chapterPos{Row: grid.Row, Column: grid.Column}, template); attachmentID != 0 {
+				cell.ItemId = proto.Uint32(attachmentID)
+			}
+		} else if grid.Attachment == chapterAttachSupply && template != nil {
+			cell.ItemId = proto.Uint32(selectSupplyAttachmentAmount(template))
+		} else if grid.Attachment == chapterAttachLandbase && template != nil {
+			if attachmentID := selectPositionAttachmentID(chapterPos{Row: grid.Row, Column: grid.Column}, template.LandBased); attachmentID != 0 {
+				cell.ItemId = proto.Uint32(attachmentID)
+			}
 		} else if template != nil {
 			attachmentID := selectAttachmentID(grid.Attachment, template)
 			if attachmentID != 0 {
@@ -286,6 +305,10 @@ func resolveCellFlag(attachment uint32) uint32 {
 
 func selectAttachmentID(attachment uint32, template *chapterTemplate) uint32 {
 	switch attachment {
+	case chapterAttachBox:
+		return selectFirst(template.RandomBoxList)
+	case chapterAttachSupply:
+		return selectSupplyAttachmentAmount(template)
 	case chapterAttachBoss:
 		return 0
 	case chapterAttachEnemy:
@@ -305,6 +328,49 @@ func selectAttachmentID(attachment uint32, template *chapterTemplate) uint32 {
 	default:
 		return 0
 	}
+}
+
+func selectSupplyAttachmentAmount(template *chapterTemplate) uint32 {
+	if template == nil {
+		return 1
+	}
+	if template.AmmoTotal != 0 {
+		return template.AmmoTotal
+	}
+	return 1
+}
+
+func selectBoxAttachmentID(pos chapterPos, template *chapterTemplate) uint32 {
+	if ids := selectPositionAttachmentIDs(pos, template.BoxList); len(ids) > 0 {
+		return ids[0]
+	}
+	return selectFirst(template.RandomBoxList)
+}
+
+func selectPositionAttachmentID(pos chapterPos, entries [][]any) uint32 {
+	ids := selectPositionAttachmentIDs(pos, entries)
+	if len(ids) == 0 {
+		return 0
+	}
+	return ids[0]
+}
+
+func selectPositionAttachmentIDs(pos chapterPos, entries [][]any) []uint32 {
+	for _, entry := range entries {
+		if len(entry) < 3 {
+			continue
+		}
+		row, err := parseUint32(entry[0])
+		if err != nil || row != pos.Row {
+			continue
+		}
+		column, err := parseUint32(entry[1])
+		if err != nil || column != pos.Column {
+			continue
+		}
+		return parseUint32List(entry[2])
+	}
+	return nil
 }
 
 func selectExpeditionFromWeights(weights [][]any) uint32 {
@@ -421,4 +487,51 @@ func parseBool(value any) (bool, error) {
 	default:
 		return false, fmt.Errorf("unsupported bool")
 	}
+}
+
+func parseUint32List(value any) []uint32 {
+	values, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+	parsed := make([]uint32, 0, len(values))
+	for _, entry := range values {
+		id, err := parseUint32(entry)
+		if err != nil {
+			continue
+		}
+		parsed = append(parsed, id)
+	}
+	return parsed
+}
+
+func buildEscortList(grids []chapterGrid, template *chapterTemplate) ([]*protobuf.CHAPTERCELLINFO_P13, error) {
+	if template == nil {
+		return []*protobuf.CHAPTERCELLINFO_P13{}, nil
+	}
+	if template.FriendlyID == 0 {
+		return []*protobuf.CHAPTERCELLINFO_P13{}, nil
+	}
+	friendly, err := loadFriendlyData(template.FriendlyID)
+	if err != nil {
+		return nil, err
+	}
+	hp := uint32(0)
+	if friendly != nil {
+		hp = friendly.HP
+	}
+	escorts := []*protobuf.CHAPTERCELLINFO_P13{}
+	for _, grid := range grids {
+		if grid.Attachment != chapterAttachTransport {
+			continue
+		}
+		escorts = append(escorts, &protobuf.CHAPTERCELLINFO_P13{
+			Pos:      buildPos(chapterPos{Row: grid.Row, Column: grid.Column}),
+			ItemType: proto.Uint32(chapterAttachTransport),
+			ItemId:   proto.Uint32(template.FriendlyID),
+			ItemFlag: proto.Uint32(chapterCellActive),
+			ItemData: proto.Uint32(hp),
+		})
+	}
+	return escorts, nil
 }

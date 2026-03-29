@@ -25,6 +25,7 @@ type TBDROPS struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	BaseDrop      []*TBDROP              `protobuf:"bytes,1,rep,name=base_drop,json=baseDrop" json:"base_drop,omitempty"`
 	BenefitDrop   []*TBDROP              `protobuf:"bytes,2,rep,name=benefit_drop,json=benefitDrop" json:"benefit_drop,omitempty"`
+	Display       *TBDISPLAY             `protobuf:"bytes,3,req,name=display" json:"display,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -73,14 +74,22 @@ func (x *TBDROPS) GetBenefitDrop() []*TBDROP {
 	return nil
 }
 
+func (x *TBDROPS) GetDisplay() *TBDISPLAY {
+	if x != nil {
+		return x.Display
+	}
+	return nil
+}
+
 var File_TBDROPS_proto protoreflect.FileDescriptor
 
 const file_TBDROPS_proto_rawDesc = "" +
 	"\n" +
-	"\rTBDROPS.proto\x12\abelfast\x1a\fTBDROP.proto\"k\n" +
+	"\rTBDROPS.proto\x12\abelfast\x1a\x0fTBDISPLAY.proto\x1a\fTBDROP.proto\"\x99\x01\n" +
 	"\aTBDROPS\x12,\n" +
 	"\tbase_drop\x18\x01 \x03(\v2\x0f.belfast.TBDROPR\bbaseDrop\x122\n" +
-	"\fbenefit_drop\x18\x02 \x03(\v2\x0f.belfast.TBDROPR\vbenefitDropB\fZ\n" +
+	"\fbenefit_drop\x18\x02 \x03(\v2\x0f.belfast.TBDROPR\vbenefitDrop\x12,\n" +
+	"\adisplay\x18\x03 \x02(\v2\x12.belfast.TBDISPLAYR\adisplayB\fZ\n" +
 	"./protobuf"
 
 var (
@@ -97,17 +106,19 @@ func file_TBDROPS_proto_rawDescGZIP() []byte {
 
 var file_TBDROPS_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_TBDROPS_proto_goTypes = []any{
-	(*TBDROPS)(nil), // 0: belfast.TBDROPS
-	(*TBDROP)(nil),  // 1: belfast.TBDROP
+	(*TBDROPS)(nil),   // 0: belfast.TBDROPS
+	(*TBDROP)(nil),    // 1: belfast.TBDROP
+	(*TBDISPLAY)(nil), // 2: belfast.TBDISPLAY
 }
 var file_TBDROPS_proto_depIdxs = []int32{
 	1, // 0: belfast.TBDROPS.base_drop:type_name -> belfast.TBDROP
 	1, // 1: belfast.TBDROPS.benefit_drop:type_name -> belfast.TBDROP
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	2, // 2: belfast.TBDROPS.display:type_name -> belfast.TBDISPLAY
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_TBDROPS_proto_init() }
@@ -115,6 +126,7 @@ func file_TBDROPS_proto_init() {
 	if File_TBDROPS_proto != nil {
 		return
 	}
+	file_TBDISPLAY_proto_init()
 	file_TBDROP_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{

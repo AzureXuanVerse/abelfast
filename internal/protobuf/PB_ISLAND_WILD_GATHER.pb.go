@@ -27,6 +27,7 @@ type PB_ISLAND_WILD_GATHER struct {
 	Pos           *uint32                `protobuf:"varint,2,req,name=pos" json:"pos,omitempty"`
 	State         *uint32                `protobuf:"varint,3,req,name=state" json:"state,omitempty"`
 	Mark          *uint32                `protobuf:"varint,4,req,name=mark" json:"mark,omitempty"`
+	RefreshTime   *uint32                `protobuf:"varint,5,req,name=refresh_time,json=refreshTime" json:"refresh_time,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -89,16 +90,24 @@ func (x *PB_ISLAND_WILD_GATHER) GetMark() uint32 {
 	return 0
 }
 
+func (x *PB_ISLAND_WILD_GATHER) GetRefreshTime() uint32 {
+	if x != nil && x.RefreshTime != nil {
+		return *x.RefreshTime
+	}
+	return 0
+}
+
 var File_PB_ISLAND_WILD_GATHER_proto protoreflect.FileDescriptor
 
 const file_PB_ISLAND_WILD_GATHER_proto_rawDesc = "" +
 	"\n" +
-	"\x1bPB_ISLAND_WILD_GATHER.proto\x12\abelfast\"c\n" +
+	"\x1bPB_ISLAND_WILD_GATHER.proto\x12\abelfast\"\x86\x01\n" +
 	"\x15PB_ISLAND_WILD_GATHER\x12\x0e\n" +
 	"\x02id\x18\x01 \x02(\rR\x02id\x12\x10\n" +
 	"\x03pos\x18\x02 \x02(\rR\x03pos\x12\x14\n" +
 	"\x05state\x18\x03 \x02(\rR\x05state\x12\x12\n" +
-	"\x04mark\x18\x04 \x02(\rR\x04markB\fZ\n" +
+	"\x04mark\x18\x04 \x02(\rR\x04mark\x12!\n" +
+	"\frefresh_time\x18\x05 \x02(\rR\vrefreshTimeB\fZ\n" +
 	"./protobuf"
 
 var (

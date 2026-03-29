@@ -25,6 +25,7 @@ type TBBF struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            *uint32                `protobuf:"varint,1,req,name=id" json:"id,omitempty"`
 	Round         *uint32                `protobuf:"varint,2,req,name=round" json:"round,omitempty"`
+	IsPending     *uint32                `protobuf:"varint,3,req,name=is_pending,json=isPending" json:"is_pending,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -73,15 +74,24 @@ func (x *TBBF) GetRound() uint32 {
 	return 0
 }
 
+func (x *TBBF) GetIsPending() uint32 {
+	if x != nil && x.IsPending != nil {
+		return *x.IsPending
+	}
+	return 0
+}
+
 var File_TBBF_proto protoreflect.FileDescriptor
 
 const file_TBBF_proto_rawDesc = "" +
 	"\n" +
 	"\n" +
-	"TBBF.proto\x12\abelfast\",\n" +
+	"TBBF.proto\x12\abelfast\"K\n" +
 	"\x04TBBF\x12\x0e\n" +
 	"\x02id\x18\x01 \x02(\rR\x02id\x12\x14\n" +
-	"\x05round\x18\x02 \x02(\rR\x05roundB\fZ\n" +
+	"\x05round\x18\x02 \x02(\rR\x05round\x12\x1d\n" +
+	"\n" +
+	"is_pending\x18\x03 \x02(\rR\tisPendingB\fZ\n" +
 	"./protobuf"
 
 var (

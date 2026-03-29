@@ -19,6 +19,7 @@ const (
 	chapterOpRetreat    = 0
 	chapterOpMove       = 1
 	chapterOpAmbush     = 4
+	chapterOpSupply     = 7
 	chapterOpEnemyRound = 8
 	chapterOpRequest    = 49
 )
@@ -149,6 +150,45 @@ func HandleChapterAction(buffer *[]byte, client *connection.Client) (int, int, e
 			BuffList:     current.GetBuffList(),
 			CellFlagList: current.GetCellFlagList(),
 		}
+		return client.SendMessage(13104, &response)
+	case chapterOpSupply:
+		group := findChapterGroup(&current, payload.GetGroupId())
+		if group == nil {
+			response := protobuf.SC_13104{Result: proto.Uint32(1)}
+			return client.SendMessage(13104, &response)
+		}
+		template, err := loadChapterTemplate(current.GetId(), current.GetLoopFlag())
+		if err != nil {
+			return 0, 13104, err
+		}
+		if template == nil {
+			response := protobuf.SC_13104{Result: proto.Uint32(1)}
+			return client.SendMessage(13104, &response)
+		}
+		_, cell := findChapterCellAt(&current, chapterPos{Row: group.GetPos().GetRow(), Column: group.GetPos().GetColumn()})
+		if cell == nil || cell.GetItemType() != chapterAttachSupply || cell.GetItemId() == 0 {
+			response := protobuf.SC_13104{Result: proto.Uint32(1)}
+			return client.SendMessage(13104, &response)
+		}
+		maxAmmo := template.AmmoTotal
+		if maxAmmo > group.GetBullet() {
+			refill := maxAmmo - group.GetBullet()
+			if refill > cell.GetItemId() {
+				refill = cell.GetItemId()
+			}
+			group.Bullet = proto.Uint32(group.GetBullet() + refill)
+			cell.ItemId = proto.Uint32(cell.GetItemId() - refill)
+		}
+		stateBytes, err := proto.Marshal(&current)
+		if err != nil {
+			return 0, 13104, err
+		}
+		state.State = stateBytes
+		state.ChapterID = current.GetId()
+		if err := orm.UpsertChapterState(state); err != nil {
+			return 0, 13104, err
+		}
+		response := protobuf.SC_13104{Result: proto.Uint32(0)}
 		return client.SendMessage(13104, &response)
 	case chapterOpRequest:
 		response := protobuf.SC_13104{

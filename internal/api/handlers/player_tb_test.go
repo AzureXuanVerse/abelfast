@@ -23,8 +23,10 @@ func buildTestTBInfoJSON(t *testing.T) string {
 	info := &protobuf.TBINFO{
 		Id: proto.Uint32(1),
 		Fsm: &protobuf.TBFSM{
-			SystemNo:    proto.Uint32(0),
-			CurrentNode: proto.Uint32(0),
+			SystemNo:     proto.Uint32(0),
+			CurrentNode:  proto.Uint32(0),
+			PriorityFsm:  []*protobuf.TBFSM{},
+			TarotSelects: []uint32{},
 			Cache: []*protobuf.TBFSMCACHE{
 				{
 					CachePlan: []*protobuf.TBFSMCACHEPLAN{{
@@ -42,6 +44,7 @@ func buildTestTBInfoJSON(t *testing.T) string {
 						Buys:               []*protobuf.KVDATA{},
 						State:              &protobuf.KVDATA{Key: proto.Uint32(0), Value: proto.Uint32(0)},
 						CharacterThisRound: []uint32{},
+						RefreshCount:       proto.Uint32(0),
 					}},
 					CacheChat: []*protobuf.TBFSMCACHECHAT{{
 						Finished: proto.Uint32(0),
@@ -51,11 +54,15 @@ func buildTestTBInfoJSON(t *testing.T) string {
 						Ends:   []uint32{},
 						Select: proto.Uint32(0),
 					}},
-					CacheMind: []*protobuf.TBFSMCACHEMIND{{}},
+					CacheMind:    []*protobuf.TBFSMCACHEMIND{{}},
+					CacheNin1:    []*protobuf.TBFSMCACHENIN1{},
+					CacheAffixUp: []*protobuf.TBFSMCACHEAFFIXUP{},
+					CacheTarot:   []*protobuf.TBFSMCACHETAROT{},
+					CacheEval:    []*protobuf.TBFSMCACHEEVAL{},
 				},
 			},
 		},
-		Round: &protobuf.TBROUND{Round: proto.Uint32(1)},
+		Round: &protobuf.TBROUND{Round: proto.Uint32(1), InTemp: proto.Uint32(0), TempRound: proto.Uint32(0)},
 		Res: &protobuf.TBRES{
 			Attrs:    []*protobuf.KVDATA{},
 			Resource: []*protobuf.KVDATA{},
@@ -71,9 +78,13 @@ func buildTestTBInfoJSON(t *testing.T) string {
 		Evaluations: []*protobuf.KVDATA{},
 		Name:        proto.String(""),
 		FavorLv:     proto.Uint32(0),
-		Benefit: &protobuf.TBBENEFIT{
-			Actives:  []*protobuf.TBBF{},
-			Pendings: []uint32{},
+		Benefit:     &protobuf.TBBENEFIT{Actives: []*protobuf.TBBF{}},
+		Difficulty:  proto.Uint32(0),
+		EvalFail:    proto.Uint32(0),
+		Display: &protobuf.TBDISPLAY{
+			BenefitDisplay:   []*protobuf.TBDROP{},
+			DollarNumDisplay: []*protobuf.TBBENEFITVAL{},
+			Counter:          []*protobuf.TBBFCOUNTER{},
 		},
 	}
 	data, err := protojson.Marshal(info)
@@ -90,6 +101,8 @@ func buildTestTBPermanentJSON(t *testing.T) string {
 		Polaroids:     []uint32{},
 		Endings:       []uint32{},
 		ActiveEndings: []uint32{},
+		TarotArchive:  []uint32{},
+		MaxRound:      proto.Uint32(0),
 	}
 	data, err := protojson.Marshal(permanent)
 	if err != nil {

@@ -24,6 +24,7 @@ const (
 type SC_29024 struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Result        *uint32                `protobuf:"varint,1,req,name=result" json:"result,omitempty"`
+	Drop          *TBDROPS               `protobuf:"bytes,2,req,name=drop" json:"drop,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -65,13 +66,21 @@ func (x *SC_29024) GetResult() uint32 {
 	return 0
 }
 
+func (x *SC_29024) GetDrop() *TBDROPS {
+	if x != nil {
+		return x.Drop
+	}
+	return nil
+}
+
 var File_SC_29024_proto protoreflect.FileDescriptor
 
 const file_SC_29024_proto_rawDesc = "" +
 	"\n" +
-	"\x0eSC_29024.proto\x12\abelfast\"\"\n" +
+	"\x0eSC_29024.proto\x12\abelfast\x1a\rTBDROPS.proto\"H\n" +
 	"\bSC_29024\x12\x16\n" +
-	"\x06result\x18\x01 \x02(\rR\x06resultB\fZ\n" +
+	"\x06result\x18\x01 \x02(\rR\x06result\x12$\n" +
+	"\x04drop\x18\x02 \x02(\v2\x10.belfast.TBDROPSR\x04dropB\fZ\n" +
 	"./protobuf"
 
 var (
@@ -89,13 +98,15 @@ func file_SC_29024_proto_rawDescGZIP() []byte {
 var file_SC_29024_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_SC_29024_proto_goTypes = []any{
 	(*SC_29024)(nil), // 0: belfast.SC_29024
+	(*TBDROPS)(nil),  // 1: belfast.TBDROPS
 }
 var file_SC_29024_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	1, // 0: belfast.SC_29024.drop:type_name -> belfast.TBDROPS
+	1, // [1:1] is the sub-list for method output_type
+	1, // [1:1] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_SC_29024_proto_init() }
@@ -103,6 +114,7 @@ func file_SC_29024_proto_init() {
 	if File_SC_29024_proto != nil {
 		return
 	}
+	file_TBDROPS_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

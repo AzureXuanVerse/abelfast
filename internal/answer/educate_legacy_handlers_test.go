@@ -89,7 +89,7 @@ func TestEducateTriggerEndAndGetEndings(t *testing.T) {
 	client := setupConfigTest(t)
 	seedConfigEntry(t, childEndingCategory, "11", `{"id":11}`)
 
-	payload := protobuf.CS_27008{EndingId: proto.Uint32(11)}
+	payload := protobuf.CS_27008{EndingId: proto.Uint32(11), QualifiedId: []uint32{21, 22}}
 	data, _ := proto.Marshal(&payload)
 	if _, _, err := EducateTriggerEnd(&data, client); err != nil {
 		t.Fatalf("trigger end failed: %v", err)
@@ -119,6 +119,9 @@ func TestEducateTriggerEndAndGetEndings(t *testing.T) {
 	decodeResponse(t, client, &getResp)
 	if len(getResp.GetEndings()) != 1 || getResp.GetEndings()[0] != 11 {
 		t.Fatalf("expected endings [11], got %v", getResp.GetEndings())
+	}
+	if len(getResp.GetQualifieds()) != 2 || getResp.GetQualifieds()[0] != 21 || getResp.GetQualifieds()[1] != 22 {
+		t.Fatalf("expected qualifieds [21 22], got %v", getResp.GetQualifieds())
 	}
 }
 

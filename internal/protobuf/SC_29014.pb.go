@@ -25,6 +25,7 @@ type SC_29014 struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Result        *uint32                `protobuf:"varint,1,req,name=result" json:"result,omitempty"`
 	FirstNode     *uint32                `protobuf:"varint,2,req,name=first_node,json=firstNode" json:"first_node,omitempty"`
+	Drop          *TBDROPS               `protobuf:"bytes,3,req,name=drop" json:"drop,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -73,15 +74,23 @@ func (x *SC_29014) GetFirstNode() uint32 {
 	return 0
 }
 
+func (x *SC_29014) GetDrop() *TBDROPS {
+	if x != nil {
+		return x.Drop
+	}
+	return nil
+}
+
 var File_SC_29014_proto protoreflect.FileDescriptor
 
 const file_SC_29014_proto_rawDesc = "" +
 	"\n" +
-	"\x0eSC_29014.proto\x12\abelfast\"A\n" +
+	"\x0eSC_29014.proto\x12\abelfast\x1a\rTBDROPS.proto\"g\n" +
 	"\bSC_29014\x12\x16\n" +
 	"\x06result\x18\x01 \x02(\rR\x06result\x12\x1d\n" +
 	"\n" +
-	"first_node\x18\x02 \x02(\rR\tfirstNodeB\fZ\n" +
+	"first_node\x18\x02 \x02(\rR\tfirstNode\x12$\n" +
+	"\x04drop\x18\x03 \x02(\v2\x10.belfast.TBDROPSR\x04dropB\fZ\n" +
 	"./protobuf"
 
 var (
@@ -99,13 +108,15 @@ func file_SC_29014_proto_rawDescGZIP() []byte {
 var file_SC_29014_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_SC_29014_proto_goTypes = []any{
 	(*SC_29014)(nil), // 0: belfast.SC_29014
+	(*TBDROPS)(nil),  // 1: belfast.TBDROPS
 }
 var file_SC_29014_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	1, // 0: belfast.SC_29014.drop:type_name -> belfast.TBDROPS
+	1, // [1:1] is the sub-list for method output_type
+	1, // [1:1] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_SC_29014_proto_init() }
@@ -113,6 +124,7 @@ func file_SC_29014_proto_init() {
 	if File_SC_29014_proto != nil {
 		return
 	}
+	file_TBDROPS_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

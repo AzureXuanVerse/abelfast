@@ -23,8 +23,7 @@ const (
 
 type CS_11705 struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	IndexBegin    *uint32                `protobuf:"varint,1,req,name=index_begin,json=indexBegin" json:"index_begin,omitempty"`
-	IndexEnd      *uint32                `protobuf:"varint,2,req,name=index_end,json=indexEnd" json:"index_end,omitempty"`
+	IdList        []uint32               `protobuf:"varint,1,rep,name=id_list,json=idList" json:"id_list,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -59,29 +58,20 @@ func (*CS_11705) Descriptor() ([]byte, []int) {
 	return file_CS_11705_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *CS_11705) GetIndexBegin() uint32 {
-	if x != nil && x.IndexBegin != nil {
-		return *x.IndexBegin
+func (x *CS_11705) GetIdList() []uint32 {
+	if x != nil {
+		return x.IdList
 	}
-	return 0
-}
-
-func (x *CS_11705) GetIndexEnd() uint32 {
-	if x != nil && x.IndexEnd != nil {
-		return *x.IndexEnd
-	}
-	return 0
+	return nil
 }
 
 var File_CS_11705_proto protoreflect.FileDescriptor
 
 const file_CS_11705_proto_rawDesc = "" +
 	"\n" +
-	"\x0eCS_11705.proto\x12\abelfast\"H\n" +
-	"\bCS_11705\x12\x1f\n" +
-	"\vindex_begin\x18\x01 \x02(\rR\n" +
-	"indexBegin\x12\x1b\n" +
-	"\tindex_end\x18\x02 \x02(\rR\bindexEndB\fZ\n" +
+	"\x0eCS_11705.proto\x12\abelfast\"#\n" +
+	"\bCS_11705\x12\x17\n" +
+	"\aid_list\x18\x01 \x03(\rR\x06idListB\fZ\n" +
 	"./protobuf"
 
 var (

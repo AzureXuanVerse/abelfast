@@ -24,6 +24,7 @@ const (
 type SC_27011 struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Endings       []uint32               `protobuf:"varint,1,rep,name=endings" json:"endings,omitempty"`
+	Qualifieds    []uint32               `protobuf:"varint,2,rep,name=qualifieds" json:"qualifieds,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -65,13 +66,23 @@ func (x *SC_27011) GetEndings() []uint32 {
 	return nil
 }
 
+func (x *SC_27011) GetQualifieds() []uint32 {
+	if x != nil {
+		return x.Qualifieds
+	}
+	return nil
+}
+
 var File_SC_27011_proto protoreflect.FileDescriptor
 
 const file_SC_27011_proto_rawDesc = "" +
 	"\n" +
-	"\x0eSC_27011.proto\x12\abelfast\"$\n" +
+	"\x0eSC_27011.proto\x12\abelfast\"D\n" +
 	"\bSC_27011\x12\x18\n" +
-	"\aendings\x18\x01 \x03(\rR\aendingsB\fZ\n" +
+	"\aendings\x18\x01 \x03(\rR\aendings\x12\x1e\n" +
+	"\n" +
+	"qualifieds\x18\x02 \x03(\rR\n" +
+	"qualifiedsB\fZ\n" +
 	"./protobuf"
 
 var (

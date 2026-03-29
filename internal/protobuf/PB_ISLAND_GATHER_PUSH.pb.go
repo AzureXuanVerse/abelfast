@@ -27,7 +27,8 @@ type PB_ISLAND_GATHER_PUSH struct {
 	Pos           *uint32                `protobuf:"varint,2,req,name=pos" json:"pos,omitempty"`
 	State         *uint32                `protobuf:"varint,3,req,name=state" json:"state,omitempty"`
 	Mark          *uint32                `protobuf:"varint,4,req,name=mark" json:"mark,omitempty"`
-	PushType      *uint32                `protobuf:"varint,5,req,name=push_type,json=pushType" json:"push_type,omitempty"`
+	RefreshTime   *uint32                `protobuf:"varint,5,req,name=refresh_time,json=refreshTime" json:"refresh_time,omitempty"`
+	PushType      *uint32                `protobuf:"varint,6,req,name=push_type,json=pushType" json:"push_type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -90,6 +91,13 @@ func (x *PB_ISLAND_GATHER_PUSH) GetMark() uint32 {
 	return 0
 }
 
+func (x *PB_ISLAND_GATHER_PUSH) GetRefreshTime() uint32 {
+	if x != nil && x.RefreshTime != nil {
+		return *x.RefreshTime
+	}
+	return 0
+}
+
 func (x *PB_ISLAND_GATHER_PUSH) GetPushType() uint32 {
 	if x != nil && x.PushType != nil {
 		return *x.PushType
@@ -101,13 +109,14 @@ var File_PB_ISLAND_GATHER_PUSH_proto protoreflect.FileDescriptor
 
 const file_PB_ISLAND_GATHER_PUSH_proto_rawDesc = "" +
 	"\n" +
-	"\x1bPB_ISLAND_GATHER_PUSH.proto\x12\abelfast\"\x80\x01\n" +
+	"\x1bPB_ISLAND_GATHER_PUSH.proto\x12\abelfast\"\xa3\x01\n" +
 	"\x15PB_ISLAND_GATHER_PUSH\x12\x0e\n" +
 	"\x02id\x18\x01 \x02(\rR\x02id\x12\x10\n" +
 	"\x03pos\x18\x02 \x02(\rR\x03pos\x12\x14\n" +
 	"\x05state\x18\x03 \x02(\rR\x05state\x12\x12\n" +
-	"\x04mark\x18\x04 \x02(\rR\x04mark\x12\x1b\n" +
-	"\tpush_type\x18\x05 \x02(\rR\bpushTypeB\fZ\n" +
+	"\x04mark\x18\x04 \x02(\rR\x04mark\x12!\n" +
+	"\frefresh_time\x18\x05 \x02(\rR\vrefreshTime\x12\x1b\n" +
+	"\tpush_type\x18\x06 \x02(\rR\bpushTypeB\fZ\n" +
 	"./protobuf"
 
 var (
