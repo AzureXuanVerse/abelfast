@@ -17,11 +17,13 @@ func RemasterInfo(buffer *[]byte, client *connection.Client) (int, int, error) {
 	}
 	progress, err := orm.ListRemasterProgress(client.Commander.CommanderID)
 	if err != nil {
-		return 0, 13506, err
+		response := protobuf.SC_13506{RemapCountList: []*protobuf.REMAPCOUNT{}}
+		return client.SendMessage(13506, &response)
 	}
 	gains, err := listRemasterDropGains()
 	if err != nil {
-		return 0, 13506, err
+		response := protobuf.SC_13506{RemapCountList: []*protobuf.REMAPCOUNT{}}
+		return client.SendMessage(13506, &response)
 	}
 	progressMap := make(map[remasterDropKey]orm.RemasterProgress, len(progress))
 	for _, entry := range progress {

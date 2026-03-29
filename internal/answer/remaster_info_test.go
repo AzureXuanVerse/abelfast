@@ -47,3 +47,25 @@ func TestRemasterInfoReturnsProgress(t *testing.T) {
 		t.Fatalf("unexpected count/flag: %+v", entry)
 	}
 }
+
+func TestRemasterInfoReturnsEmptyListOnInvalidConfig(t *testing.T) {
+	client := setupPlayerUpdateTest(t)
+	clearTable(t, &orm.RemasterProgress{})
+	clearTable(t, &orm.ConfigEntry{})
+	seedConfigEntry(t, "ShareCfg/re_map_template.json", "1", `{"id":1,"drop_gain":[[1001,2,2001]]}`)
+
+	payload := protobuf.CS_13505{Type: proto.Uint32(0)}
+	buffer, err := proto.Marshal(&payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if _, _, err := RemasterInfo(&buffer, client); err != nil {
+		t.Fatalf("remaster info failed: %v", err)
+	}
+
+	var response protobuf.SC_13506
+	decodeResponse(t, client, &response)
+	if len(response.GetRemapCountList()) != 0 {
+		t.Fatalf("expected empty remap list, got %d", len(response.GetRemapCountList()))
+	}
+}

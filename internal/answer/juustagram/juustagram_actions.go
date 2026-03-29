@@ -1,7 +1,6 @@
 package juustagram
 
 import (
-	"errors"
 	"time"
 
 	"github.com/ggmolly/belfast/internal/connection"
@@ -17,12 +16,14 @@ func HandleJuustagramAction(buffer *[]byte, client *connection.Client) (int, int
 		return 0, consts.JuustagramPacketOpResponse, err
 	}
 	if client.Commander == nil {
-		return 0, consts.JuustagramPacketOpResponse, errors.New("missing commander")
+		response := protobuf.SC_11702{Result: proto.Uint32(1)}
+		return client.SendMessage(consts.JuustagramPacketOpResponse, &response)
 	}
 	now := uint32(time.Now().Unix())
 	state, err := orm.GetOrCreateJuustagramMessageState(client.Commander.CommanderID, payload.GetId(), now)
 	if err != nil {
-		return 0, consts.JuustagramPacketOpResponse, err
+		response := protobuf.SC_11702{Result: proto.Uint32(1)}
+		return client.SendMessage(consts.JuustagramPacketOpResponse, &response)
 	}
 	state.UpdatedAt = now
 	switch payload.GetCmd() {
@@ -36,14 +37,17 @@ func HandleJuustagramAction(buffer *[]byte, client *connection.Client) (int, int
 	case consts.JuustagramOpMarkRead:
 		state.IsRead = 1
 	default:
-		return 0, consts.JuustagramPacketOpResponse, errors.New("invalid juustagram op")
+		response := protobuf.SC_11702{Result: proto.Uint32(1)}
+		return client.SendMessage(consts.JuustagramPacketOpResponse, &response)
 	}
 	if err := orm.SaveJuustagramMessageState(state); err != nil {
-		return 0, consts.JuustagramPacketOpResponse, err
+		response := protobuf.SC_11702{Result: proto.Uint32(1)}
+		return client.SendMessage(consts.JuustagramPacketOpResponse, &response)
 	}
 	message, err := BuildJuustagramMessage(client.Commander.CommanderID, payload.GetId(), now)
 	if err != nil {
-		return 0, consts.JuustagramPacketOpResponse, err
+		response := protobuf.SC_11702{Result: proto.Uint32(1)}
+		return client.SendMessage(consts.JuustagramPacketOpResponse, &response)
 	}
 	response := protobuf.SC_11702{
 		Result: proto.Uint32(0),

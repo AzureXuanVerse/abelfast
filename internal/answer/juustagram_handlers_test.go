@@ -339,6 +339,57 @@ func TestJuustagramOpEmptyKeyUsesEmptyText(t *testing.T) {
 	}
 }
 
+func TestJuustagramOpMissingTemplateReturnsFailureResponse(t *testing.T) {
+	initJuustagramHandlerTestDB(t)
+	execAnswerTestSQLT(t, "DELETE FROM juustagram_message_states")
+	execAnswerTestSQLT(t, "DELETE FROM juustagram_templates")
+	execAnswerTestSQLT(t, "DELETE FROM juustagram_npc_templates")
+	execAnswerTestSQLT(t, "DELETE FROM juustagram_languages")
+	execAnswerTestSQLT(t, "DELETE FROM commanders")
+
+	commander := orm.Commander{
+		CommanderID: 2003,
+		AccountID:   4,
+		Level:       1,
+		Exp:         0,
+		Name:        "Tester",
+		LastLogin:   time.Now().UTC(),
+	}
+	if err := orm.CreateCommanderRoot(commander.CommanderID, commander.AccountID, commander.Name, 0, 0); err != nil {
+		t.Fatalf("create commander: %v", err)
+	}
+	execAnswerTestSQLT(t, "UPDATE commanders SET level = $1, exp = $2, last_login = $3 WHERE commander_id = $4", int64(commander.Level), int64(commander.Exp), commander.LastLogin, int64(commander.CommanderID))
+
+	client := &connection.Client{Commander: &commander}
+	payload := protobuf.CS_11701{Id: proto.Uint32(999999), Cmd: proto.Uint32(consts.JuustagramOpActive)}
+	buffer, err := proto.Marshal(&payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	_, packetID, err := HandleJuustagramAction(&buffer, client)
+	if err != nil {
+		t.Fatalf("juustagram op failed: %v", err)
+	}
+	if packetID != consts.JuustagramPacketOpResponse {
+		t.Fatalf("expected packet %d, got %d", consts.JuustagramPacketOpResponse, packetID)
+	}
+	data := client.Buffer.Bytes()
+	if len(data) < 7 {
+		t.Fatalf("expected response payload")
+	}
+	data = data[7:]
+	var response protobuf.SC_11702
+	if err := proto.Unmarshal(data, &response); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if response.GetResult() == 0 {
+		t.Fatalf("expected non-zero result for missing template")
+	}
+	if response.GetData() != nil {
+		t.Fatalf("expected no message data on failure")
+	}
+}
+
 func TestJuustagramComment(t *testing.T) {
 	initJuustagramHandlerTestDB(t)
 	seedJuustagramHandlerData(t)
