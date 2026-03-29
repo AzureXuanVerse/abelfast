@@ -35,3 +35,31 @@ func TestChapterTrackingAllowsNegativeAmbushRatioExtraValues(t *testing.T) {
 		t.Fatalf("expected result 0, got %d", response.GetResult())
 	}
 }
+
+func TestChapterTrackingAllowsEmptyStringLandBased(t *testing.T) {
+	client := setupPlayerUpdateTest(t)
+	clearTable(t, &orm.OwnedResource{})
+	clearTable(t, &orm.ChapterState{})
+	clearTable(t, &orm.ChapterProgress{})
+	clearTable(t, &orm.ConfigEntry{})
+	if err := prepareChapterTrackingClient(t, client); err != nil {
+		t.Fatalf("prepare chapter tracking client: %v", err)
+	}
+
+	seedConfigEntry(t, "sharecfgdata/chapter_template.json", "101", `{"id":101,"grids":[[1,1,true,1],[1,2,true,6],[1,3,true,8]],"land_based":"","ammo_total":5,"ammo_submarine":0,"group_num":1,"submarine_num":0,"support_group_num":0,"is_ambush":0,"investigation_ratio":0,"avoid_ratio":0,"chapter_strategy":[],"boss_expedition_id":[9001],"expedition_id_weight_list":[[101010,160,0]],"elite_expedition_list":[],"ambush_expedition_list":[],"guarder_expedition_list":[],"progress_boss":100,"oil":0,"time":100,"awards":[]}`)
+
+	payload := protobuf.CS_13101{Id: proto.Uint32(101), Fleet: &protobuf.FLEET_INFO{Id: proto.Uint32(1), MainTeam: []*protobuf.TEAM_INFO{{Id: proto.Uint32(1), ShipList: []uint32{101}}}}}
+	buffer, err := proto.Marshal(&payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if _, _, err := ChapterTracking(&buffer, client); err != nil {
+		t.Fatalf("chapter tracking failed: %v", err)
+	}
+
+	var response protobuf.SC_13102
+	decodeResponse(t, client, &response)
+	if response.GetResult() != 0 {
+		t.Fatalf("expected result 0, got %d", response.GetResult())
+	}
+}

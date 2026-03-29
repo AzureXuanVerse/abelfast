@@ -7,6 +7,26 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+func TestDefaultEducateStateBuildsUsablePlaceholder(t *testing.T) {
+	state := defaultEducateState(77, 3)
+
+	if state.Entry == nil || state.Entry.CommanderID != 77 {
+		t.Fatalf("expected placeholder entry for commander 77")
+	}
+	if state.Info == nil || state.Info.GetId() != 3 {
+		t.Fatalf("expected tb id 3, got %d", state.Info.GetId())
+	}
+	if state.Permanent == nil {
+		t.Fatalf("expected permanent state")
+	}
+	if state.Info.GetFsm() == nil || len(state.Info.GetFsm().GetCache()) == 0 {
+		t.Fatalf("expected placeholder FSM cache")
+	}
+	if state.Info.GetDisplay() == nil {
+		t.Fatalf("expected placeholder display")
+	}
+}
+
 func TestChooseNewEducateTalentCandidatePrefersUnusedOption(t *testing.T) {
 	selected := []uint32{11, 12, 13}
 	refreshed := []uint32{14}

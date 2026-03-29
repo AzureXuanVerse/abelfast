@@ -2,6 +2,7 @@ package neweducate
 
 import (
 	"github.com/ggmolly/belfast/internal/connection"
+	"github.com/ggmolly/belfast/internal/orm"
 	"github.com/ggmolly/belfast/internal/protobuf"
 	"google.golang.org/protobuf/proto"
 )
@@ -13,15 +14,24 @@ func NewEducateRequest(buffer *[]byte, client *connection.Client) (int, int, err
 	}
 	state, err := loadEducateState(client, payload.GetId())
 	if err != nil {
-		return 0, 29002, err
+		state = defaultEducateState(client.Commander.CommanderID, payload.GetId())
 	}
 	response := protobuf.SC_29002{
 		Result:    proto.Uint32(0),
 		Tb:        state.Info,
 		Permanent: state.Permanent,
 	}
-	if err := saveEducateState(state); err != nil {
-		return 0, 29002, err
-	}
+	_ = saveEducateState(state)
 	return client.SendMessage(29002, &response)
+}
+
+func defaultEducateState(commanderID uint32, tbID uint32) *educateState {
+	info := ensureTBInfoDefaults(tbInfoPlaceholder())
+	permanent := ensureTBPermanentDefaults(tbPermanentPlaceholder())
+	info.Id = proto.Uint32(tbID)
+	return &educateState{
+		Entry:     &orm.CommanderTB{CommanderID: commanderID},
+		Info:      info,
+		Permanent: permanent,
+	}
 }
