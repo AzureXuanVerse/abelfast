@@ -2,17 +2,6 @@
 
 Belfast is a private server reimplementation for the mobile game [Azur Lane](https://en.wikipedia.org/wiki/Azur_Lane), written in [Go](https://go.dev/) using [Iris](https://www.iris-go.com/) and [Gorm](https://gorm.io). It targets iOS and Android clients without requiring jailbreak or root access.
 
-# Production instance
-
-You can connect to a production instance of Belfast (EN region) by pointing `blhxusgate.yo-star.com` to `belfast-gateway-euw.molly.sh` (or `35.180.116.88`).
-
-Once your account is created (onboarding is skipped!) you can then [register your account](https://belfast-euw.molly.sh) to manage your resources, ships, skins, name, ...
-
-> [!WARNING]
-> Traffic is logged and stored for debugging purposes. Log off from your main account for security reasons.
-
-# 📊 Packet Progress
-
 ![Packet progress](https://cdn.molly.sh/belfast/implem.png)
 
 # 🌟 Features
