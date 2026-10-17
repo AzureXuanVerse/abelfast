@@ -216,7 +216,7 @@ var loginBurst = []loginPush{
 		return currentChapter(l.ctx, l.queries, l.commander.ID)
 	},
 	func(game *Game, l *login) (proto.Message, error) {
-		return commissionList(l.ctx, l.queries, l.commander.ID)
+		return commissionList(l.ctx, l.queries, l.commander.ID, l.commander.Level)
 	},
 	// DailyLevelProxy: no daily challenge played
 	empty[protobuf.SC_13201](),

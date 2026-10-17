@@ -61,3 +61,6 @@ ON CONFLICT (commander_id, furniture_id) DO UPDATE SET count = count + excluded.
 
 -- name: SetMailStoreroomLv :exec
 UPDATE commanders SET mail_storeroom_lv = ? WHERE id = ?;
+
+-- name: SetCommanderExp :exec
+UPDATE commanders SET level = ?, exp = ? WHERE id = ?;

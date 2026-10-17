@@ -89,8 +89,9 @@ const (
 
 // expeditionTemplate is an expedition_data_template row.
 type expeditionTemplate struct {
-	Exp  uint32 `json:"exp"` // base ship exp
-	Type uint32 `json:"type"`
+	Exp   uint32 `json:"exp"`   // base ship exp
+	Level uint32 `json:"level"` // the enemy's level
+	Type  uint32 `json:"type"`
 }
 
 var expeditionTemplates map[uint32]expeditionTemplate
@@ -125,6 +126,7 @@ var (
 	flagshipExpPercent  uint32 // flagship_exp_percent
 	mvpExpPercent       uint32 // mvp_exp_percent
 	battleConsumeEnergy uint32 // battle_consume_energy
+	expOverflowMax      uint32 // exp_overflow_max
 )
 
 // gamesetValues are the gameset settings loadChapterData reads.
@@ -132,20 +134,21 @@ var gamesetValues = map[string]*uint32{
 	"flagship_exp_percent":  &flagshipExpPercent,
 	"mvp_exp_percent":       &mvpExpPercent,
 	"battle_consume_energy": &battleConsumeEnergy,
+	"exp_overflow_max":      &expOverflowMax,
 }
 
 // energyHappy is the energy_template row of the highest morale, which
 // gives an exp bonus.
 const energyHappy = 4
 
-// happyEnergyFrom is the morale from which a ship is happy
-// (energy_template[energyHappy].lower_bound).
-var happyEnergyFrom uint32
-
 // energy_template row
 type energyConfig struct {
 	LowerBound uint32 `json:"lower_bound"`
+	UpperBound uint32 `json:"upper_bound"`
 }
+
+// energyStates are the morale brackets (energy_template) by id.
+var energyStates map[uint32]energyConfig
 
 // shipLevelExp is ship_level exp by level: shipLevelExp[n-1] takes a ship
 // from level n to n+1.
@@ -155,6 +158,7 @@ var shipLevelExp []uint32
 type shipLevelConfig struct {
 	Level uint32 `json:"level"`
 	Exp   uint32 `json:"exp"`
+	ExpUR uint32 `json:"exp_ur"`
 }
 
 // loadChapterData builds every chapter of chapter_template, the expeditions
@@ -163,14 +167,13 @@ func loadChapterData() error {
 	var chapters map[uint32]chapterConfig
 	var items map[uint32]virtualItemConfig
 	var levels map[uint32]shipLevelConfig
-	var energies map[uint32]energyConfig
 	var gameset map[string]uint32
 	err := gamedata.LoadAll(
 		gamedata.Load("chapter_template", &chapters),
 		gamedata.Load("expedition_data_template", &expeditionTemplates),
 		gamedata.Load("item_virtual_data_statistics", &items),
 		gamedata.Load("ship_level", &levels),
-		gamedata.Load("energy_template", &energies),
+		gamedata.Load("energy_template", &energyStates),
 		func() (err error) {
 			gameset, err = gamedata.Gameset()
 			return err
@@ -186,11 +189,9 @@ func loadChapterData() error {
 		}
 		*value = setting
 	}
-	energy, ok := energies[energyHappy]
-	if !ok {
+	if _, ok := energyStates[energyHappy]; !ok {
 		return gamedata.Missing("energy_template", "row %d", energyHappy)
 	}
-	happyEnergyFrom = energy.LowerBound
 	if itemSpecializedCore = items[vitemSpecializedCore].LinkID; itemSpecializedCore == 0 {
 		return gamedata.Missing("item_virtual_data_statistics", "link_id for %d", vitemSpecializedCore)
 	}
@@ -264,9 +265,11 @@ func loadChapterData() error {
 		maxLevel = max(maxLevel, row.Level)
 	}
 	shipLevelExp = make([]uint32, maxLevel)
+	shipLevelExpUR = make([]uint32, maxLevel)
 	for _, row := range levels {
 		if row.Level > 0 {
 			shipLevelExp[row.Level-1] = row.Exp
+			shipLevelExpUR[row.Level-1] = row.ExpUR
 		}
 	}
 	return nil

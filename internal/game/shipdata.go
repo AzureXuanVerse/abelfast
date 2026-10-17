@@ -22,6 +22,8 @@ type shipTemplate struct {
 	Equip2   uint32   `json:"equip_id_2"`
 	Equip3   uint32   `json:"equip_id_3"`
 	Skills   []uint32 `json:"buff_list"`
+	// 1 when the ship keeps exp past its max level (Ship:CanAccumulateExp)
+	CanGetProficency uint32 `json:"can_get_proficency"`
 
 	Rarity      uint32 `json:"-"`
 	Nationality uint32 `json:"-"`
@@ -281,8 +283,18 @@ func loadMedals(medals map[uint32]medalConfig) error {
 	return nil
 }
 
+// shipLeveling is how a ship_data_template levels (Ship:getLevelExpConfig,
+// Ship:CanAccumulateExp): on ship_level exp_ur when its
+// ship_data_statistics rarity is UR, keeping exp past its max level when
+// can_get_proficency.
+type shipLeveling struct {
+	ur, accumulate bool
+}
+
 var (
 	shipTemplates map[uint32]shipTemplate
+	// every ship_data_template's, limit broken and retrofit ones included
+	shipLevelings map[uint32]shipLeveling
 	buildPools    map[uint32]buildPool
 	equipUpgrades map[uint32]equipUpgrade
 	composes      map[uint32]composeRecipe
@@ -411,8 +423,12 @@ func loadShipData() error {
 		}
 	}
 	shipTemplates = map[uint32]shipTemplate{}
+	shipLevelings = map[uint32]shipLeveling{}
 	for id, row := range templates {
 		stat, ok := stats[id]
+		if ok {
+			shipLevelings[id] = shipLeveling{ur: stat.Rarity == shipRarityUR, accumulate: row.CanGetProficency == 1}
+		}
 		if id%10 != 1 || !ok {
 			continue
 		}

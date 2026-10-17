@@ -10,6 +10,7 @@ func loadGameData() error {
 		loadShipData,
 		loadSkinData,
 		loadChapterData,
+		loadExperienceData,
 		loadSignInData,
 		loadTaskData,
 		loadJuusData,

@@ -2,7 +2,6 @@ package game
 
 import (
 	"context"
-	"math"
 	"math/rand/v2"
 
 	"google.golang.org/protobuf/proto"
@@ -23,21 +22,19 @@ const (
 	scoreS = 4
 )
 
-// rankExpRate multiplies ship exp by battle score. The client never computes
-// battle exp (BattleGateScenario adds ship_exp_list) and no table has the
-// rates; S is the only score the capture shows. A battle with another score
-// gives no ship exp rather than an invented rate.
-var rankExpRate = map[uint32]float64{scoreS: 1.2}
-
+// The client never computes battle exp: BattleGateScenario adds the reply's
+// ship_exp_list and player_exp (FinishStageCommand.addShipsExp,
+// GeneralPlayerCosume) and no table has the rates, which are server-side
+// (battleExp, server/battle_exp.json).
 const (
 	// scenarioExpRate: the capture's ship exp is expedition exp x rank x morale
-	// x 2 (x flagship / mvp); the client data doesn't say where the 2 comes from.
+	// x 2 (x flagship / mvp), its commander exp the wiki's A-rank exp x rank
+	// x 2 ("2x" rows); the client data doesn't say where the 2 comes from.
 	scenarioExpRate = 2
-	// happyExpRate is the "EXP bonus" of energyHappy morale.
-	happyExpRate = 1.2
-	maxIntimacy  = 10000
+	maxIntimacy     = 10000
 	// scenarioPlayerExp is the commander exp of a won campaign battle in the
-	// capture (both a level 1 and a level 2 stage).
+	// capture (3 ships, a level 1 and a level 2 stage), what a win gives
+	// without server/battle_exp.json.
 	scenarioPlayerExp = 65
 	// scenarioGold / scenarioBossGold are the coins (Coins, 59001 in the
 	// award lists) a won normal / boss battle dropped in the capture; the
@@ -129,7 +126,7 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 	group := session.activeGroup()
 	score := min(req.GetScore(), scoreS)
 	win := score > scoreC
-	if _, known := rankExpRate[score]; !known {
+	if _, known := battleExp.ship[score]; !known {
 		logger.WithFields("Battle", logger.FieldValue("score", score)).Warn("no ship exp rate for this score, ships get no exp")
 	}
 
@@ -138,6 +135,10 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 		statShips[i] = stat.GetShipId()
 	}
 	byID, err := shipsByID(ctx, game.DB.Queries, client.CommanderID, statShips)
+	if err != nil {
+		return err
+	}
+	commander, err := game.DB.GetCommander(ctx, client.CommanderID)
 	if err != nil {
 		return err
 	}
@@ -173,6 +174,7 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 	}
 
 	var updated []db.Ship
+	techLevel := false // a ship reached level 120: pt_level
 	for _, stat := range req.GetStatistics() {
 		ship, ok := byID[stat.GetShipId()]
 		if !ok {
@@ -194,14 +196,16 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 			Exp:      proto.Uint32(gained),
 			Intimacy: proto.Uint32(maxIntimacy + affinity),
 		})
+		before := ship.Level
 		addShipExp(&ship, gained)
+		techLevel = techLevel || (before < techShipLevel && ship.Level >= techShipLevel)
 		ship.Intimacy = min(ship.Intimacy+affinity, maxIntimacy)
 		updated = append(updated, ship)
 	}
 	group.Bullet = proto.Uint32(group.GetBullet() - min(group.GetBullet(), 1))
+	reply.PlayerExp = proto.Uint32(playerBattleExp(expedition, score, uint32(len(updated)), commander.Level))
 
 	if win {
-		reply.PlayerExp = proto.Uint32(scenarioPlayerExp)
 		if cell.GetItemType() == attachAmbush {
 			setCell(cell, attachNone, 0, 0)
 		} else {
@@ -221,6 +225,9 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 		queries := tx.Queries
 		tx.newShipsAfterReply = true
 		tx.event(events...)
+		if techLevel {
+			tx.techPointsChanged()
+		}
 		for _, ship := range updated {
 			if err := saveShipBattleState(ctx, queries, ship); err != nil {
 				return err
@@ -240,8 +247,9 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 				return err
 			}
 		}
-		// reply.PlayerExp isn't added to the commander: their exp and level
-		// aren't stored
+		if err := addCommanderExp(tx, reply.GetPlayerExp()); err != nil {
+			return err
+		}
 		if err := tx.grantDrops(reply.DropInfo); err != nil {
 			return err
 		}
@@ -261,27 +269,6 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 	return client.Send(reply)
 }
 
-// shipBattleExp is the exp a ship gets for a battle: expedition exp x rank x
-// scenarioExpRate, x1.2 when happy, x mvp_exp_percent for the MVP and
-// x flagship_exp_percent for the flagship.
-func shipBattleExp(expedition expeditionTemplate, score uint32, ship db.Ship, flagship, mvp bool) uint32 {
-	rate, known := rankExpRate[score]
-	if !known {
-		return 0
-	}
-	exp := float64(expedition.Exp) * rate * scenarioExpRate
-	if ship.Energy >= happyEnergyFrom {
-		exp *= happyExpRate
-	}
-	if mvp {
-		exp = exp * float64(mvpExpPercent) / 100
-	}
-	if flagship {
-		exp = exp * float64(flagshipExpPercent) / 100
-	}
-	return uint32(math.Floor(exp))
-}
-
 // battleAffinity is the affinity (intimacy, 1/100) a win gives. It is random
 // server-side; the ranges cover what the capture's two battles gave (4-5 for
 // any ship, 4-9 for the flagship, 8-14 for the MVP).
@@ -294,23 +281,6 @@ func battleAffinity(flagship, mvp bool) uint32 {
 		gain += 4 + rand.Uint32N(6)
 	}
 	return gain
-}
-
-// addShipExp is Ship:addExp: exp is the progress into the current level,
-// ship_level.exp per level, capped at the ship's max_level. UR ships would
-// use ship_level.exp_ur, which isn't read.
-func addShipExp(ship *db.Ship, gained uint32) {
-	if ship.Level >= ship.MaxLevel {
-		return
-	}
-	ship.Exp += gained
-	for ship.Level < ship.MaxLevel && int(ship.Level) <= len(shipLevelExp) && ship.Exp >= shipLevelExp[ship.Level-1] {
-		ship.Exp -= shipLevelExp[ship.Level-1]
-		ship.Level++
-	}
-	if ship.Level >= ship.MaxLevel {
-		ship.Exp = 0
-	}
 }
 
 func saveShipBattleState(ctx context.Context, queries *db.Queries, ship db.Ship) error {

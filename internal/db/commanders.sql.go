@@ -339,6 +339,21 @@ func (q *Queries) SetChatRoom(ctx context.Context, arg SetChatRoomParams) error 
 	return err
 }
 
+const setCommanderExp = `-- name: SetCommanderExp :exec
+UPDATE commanders SET level = ?, exp = ? WHERE id = ?
+`
+
+type SetCommanderExpParams struct {
+	Level uint32
+	Exp   uint32
+	ID    uint32
+}
+
+func (q *Queries) SetCommanderExp(ctx context.Context, arg SetCommanderExpParams) error {
+	_, err := q.db.ExecContext(ctx, setCommanderExp, arg.Level, arg.Exp, arg.ID)
+	return err
+}
+
 const setDormFood = `-- name: SetDormFood :exec
 UPDATE commanders SET dorm_food = ? WHERE id = ?
 `

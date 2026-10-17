@@ -11,15 +11,6 @@ import (
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
-// commissionTeams is how many commissions can run at once:
-// user_level.max_collection at level 1.
-var commissionTeams uint32
-
-// user_level row
-type userLevelConfig struct {
-	MaxCollection uint32 `json:"max_collection"`
-}
-
 // collection_template row
 type commissionConfig struct {
 	Type uint32 `json:"type"`
@@ -40,20 +31,7 @@ const (
 var commissionConfigs map[uint32]commissionConfig
 
 func loadCommissionData() error {
-	var levels map[uint32]userLevelConfig
-	err := gamedata.LoadAll(
-		gamedata.Load("user_level", &levels),
-		gamedata.Load("collection_template", &commissionConfigs),
-	)
-	if err != nil {
-		return err
-	}
-	level, ok := levels[1]
-	if !ok {
-		return gamedata.Missing("user_level", "level 1")
-	}
-	commissionTeams = level.MaxCollection
-	return nil
+	return gamedata.Load("collection_template", &commissionConfigs)()
 }
 
 // grantCommissionsStarter offers a new commander new_commander.json's count
@@ -77,13 +55,14 @@ func grantCommissionsStarter(ctx context.Context, queries *db.Queries, commander
 	return nil
 }
 
-// commissionList is SC_13002, EventProxy's commissions.
-func commissionList(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobuf.SC_13002, error) {
+// commissionList is SC_13002, EventProxy's commissions; max_team, how many
+// can run at once, is user_level max_collection at the commander's level.
+func commissionList(ctx context.Context, queries *db.Queries, commanderID, level uint32) (*protobuf.SC_13002, error) {
 	rows, err := queries.ListCommissions(ctx, commanderID)
 	if err != nil {
 		return nil, err
 	}
-	msg := &protobuf.SC_13002{MaxTeam: proto.Uint32(commissionTeams)}
+	msg := &protobuf.SC_13002{MaxTeam: proto.Uint32(commanderLevels[level].MaxCollection)}
 	for _, row := range rows {
 		msg.CollectionList = append(msg.CollectionList, &protobuf.COLLECTIONINFO{
 			Id:         proto.Uint32(row.CollectionID),
