@@ -420,19 +420,6 @@ def generate_outputs(
     for key, message in en_data.messages.items():
         message_name = name_by_key.get(key, key[0])
         outputs.append((key, message_name, message, "EN", ""))
-    for symbol, namespaces in en_data.symbol_namespaces.items():
-        if len(namespaces) <= 1:
-            continue
-        default_key = (symbol, "")
-        if default_key in en_data.messages:
-            continue
-        namespace = sorted(namespaces)[0]
-        fallback_key = (symbol, namespace)
-        if fallback_key not in en_data.messages:
-            continue
-        message = en_data.messages[fallback_key]
-        message_name = name_by_key.get(fallback_key, symbol)
-        outputs.append((default_key, message_name, message, "EN", ""))
     for key, signature_groups in variant_groups.items():
         for signature, regions in signature_groups.items():
             region = regions[0]
