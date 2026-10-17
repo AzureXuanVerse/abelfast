@@ -305,31 +305,6 @@ func (game *Game) handleLoveLetters(client *connection.Client, req *protobuf.CS_
 	return client.Send(&protobuf.SC_12407{})
 }
 
-// archiveTrophies are the medal_template ids CollectionProxy gets progress
-// for: the first tier of every medal (ids ending in 1), as captured.
-var archiveTrophies = []uint32{
-	10011, 10021, 10031, 10041, 10051, 10061, 100611, 100621, 100631,
-	10071, 100711, 100721, 100731, 10081, 100811, 100821, 100831,
-	10091, 100911, 100921, 100931, 10101,
-	200001, 200011, 200021, 200031, 200041, 200051, 200061, 200071, 200081,
-	200091, 200101, 200111, 200121, 200131, 200141, 200151, 200161, 200171,
-	200181, 200191, 200201, 200211, 200221, 200231,
-}
-
-// archiveCountTrophy is the Naval F.L.E.X. Medal (target_type 1044): ships
-// unlocked in the archives.
-const archiveCountTrophy = 10101
-
-// nationTrophies are the sub-medals of the faction medals (10061 Eagle
-// Union...10091 Iron Blood), by ship_data_statistics nationality: medal_template
-// target_type 1042 (ships at level 120), 1043 (affinity) and 1041 (exp).
-var nationTrophies = []struct{ nationality, level120, intimacy, exp uint32 }{
-	{4, 100911, 100921, 100931},
-	{3, 100811, 100821, 100831},
-	{2, 100711, 100721, 100731},
-	{1, 100611, 100621, 100631},
-}
-
 // collectionState is SC_17001, CollectionProxy: the archives (one
 // SHIP_STATISTICS_INFO per ship group owned) and the medals' progress.
 func collectionState(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobuf.SC_17001, error) {
@@ -427,7 +402,7 @@ func ShipTrophyPushes(ctx context.Context, queries *db.Queries, commanderID uint
 			if shipTemplates[ship.TemplateID].Nationality != nation.nationality {
 				continue
 			}
-			if ship.Level >= 120 {
+			if ship.Level >= nation.level {
 				values[nation.level120]++
 			}
 			values[nation.intimacy] += ship.Intimacy

@@ -2,6 +2,7 @@ package game
 
 import (
 	"context"
+	"fmt"
 
 	"google.golang.org/protobuf/proto"
 
@@ -15,8 +16,26 @@ import (
 var starterCommissions = []uint32{30103, 30108, 30107, 30105, 20110}
 
 // commissionTeams is how many commissions can run at once:
-// user_level.max_collection at level 1 (it is 2 up to level 25).
-const commissionTeams = 2
+// user_level.max_collection at level 1.
+var commissionTeams uint32
+
+// user_level row
+type userLevelConfig struct {
+	MaxCollection uint32 `json:"max_collection"`
+}
+
+func loadCommissionTeams() error {
+	levels, err := readConfigTable[userLevelConfig]("user_level")
+	if err != nil {
+		return err
+	}
+	level, ok := levels[1]
+	if !ok {
+		return fmt.Errorf("config table user_level in %s: no level 1", regionDataDir())
+	}
+	commissionTeams = level.MaxCollection
+	return nil
+}
 
 func grantCommissionsStarter(ctx context.Context, queries *db.Queries, commanderID uint32) error {
 	for _, id := range starterCommissions {

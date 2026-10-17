@@ -122,6 +122,26 @@ func readConfigRows[T any](raw []byte) (map[uint32]T, error) {
 	return table, nil
 }
 
+// gamesetConfig is a gameset row, keyed by the setting's name: key_value,
+// or description for the settings that are lists.
+type gamesetConfig struct {
+	KeyValue    uint32          `json:"key_value"`
+	Description json.RawMessage `json:"description"`
+}
+
+// readGameset reads the gameset settings.
+func readGameset() (map[string]gamesetConfig, error) {
+	raw, err := readConfigFile("gameset")
+	if err != nil {
+		return nil, err
+	}
+	var gameset map[string]gamesetConfig
+	if err := json.Unmarshal(raw, &gameset); err != nil {
+		return nil, fmt.Errorf("config table gameset: %w", err)
+	}
+	return gameset, nil
+}
+
 // loadTable reads a config table into *table as is.
 func loadTable[T any](name string, table *map[uint32]T) func() error {
 	return func() (err error) {
@@ -154,5 +174,8 @@ func loadGameData() error {
 		loadBuildTimes,
 		loadTable("constellation_challenge_month", &limitChallengeMonths),
 		loadArenaShop,
+		loadCommissionTeams,
+		loadTable("honormedal_goods_list", &medalGoods),
+		loadEducateData,
 	)
 }

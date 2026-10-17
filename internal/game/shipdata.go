@@ -81,6 +81,95 @@ type itemConfig struct {
 	Price json.RawMessage `json:"price"`
 }
 
+// medal_template row
+type medalConfig struct {
+	Start      uint32          `json:"start"` // 0 for a medal's first tier
+	TargetType uint32          `json:"target_type"`
+	TargetID   json.RawMessage `json:"target_id"`
+}
+
+// medal_template.target_type
+const (
+	medalTargetSubMedals   = 160  // the sub-medals in target_id are all won
+	medalTargetNationExp   = 1041 // exp of the ships of a nationality
+	medalTargetNationLevel = 1042 // ships of a nationality at a level
+	medalTargetNationLove  = 1043 // affinity of the ships of a nationality
+	medalTargetArchive     = 1044 // ships unlocked in the archives
+)
+
+// nationTrophy is a faction medal's sub-medals (medalTargetNation*), by
+// ship_data_statistics nationality: ships at level or above, affinity, exp.
+type nationTrophy struct {
+	nationality, level      uint32
+	level120, intimacy, exp uint32
+}
+
+var (
+	// archiveTrophies are the medal_template ids CollectionProxy gets
+	// progress for: the first tier of every medal, each followed by its
+	// sub-medals (the captured order).
+	archiveTrophies []uint32
+	// archiveCountTrophy is the Naval F.L.E.X. Medal: ships unlocked in the
+	// archives.
+	archiveCountTrophy uint32
+	// nationTrophies are the faction medals' sub-medals, nationalities in
+	// descending order (as the official server sends them).
+	nationTrophies []nationTrophy
+)
+
+// loadMedals builds archiveTrophies, archiveCountTrophy and nationTrophies.
+func loadMedals(medals map[uint32]medalConfig) error {
+	archiveTrophies = nil
+	nations := map[uint32]*nationTrophy{}
+	for _, id := range slices.Sorted(maps.Keys(medals)) {
+		medal := medals[id]
+		if medal.Start != 0 {
+			continue
+		}
+		archiveTrophies = append(archiveTrophies, id)
+		if medal.TargetType == medalTargetArchive {
+			archiveCountTrophy = id
+		}
+		if medal.TargetType != medalTargetSubMedals {
+			continue
+		}
+		for _, subID := range parseIDList(medal.TargetID) {
+			archiveTrophies = append(archiveTrophies, subID)
+			sub := medals[subID]
+			// target_id: [[nationality, level]], "nationality" or
+			// [[nationality, 0]]
+			target := parseIDList(sub.TargetID)
+			if len(target) == 0 {
+				continue
+			}
+			nation := nations[target[0]]
+			if nation == nil {
+				nation = &nationTrophy{nationality: target[0]}
+				nations[target[0]] = nation
+			}
+			switch sub.TargetType {
+			case medalTargetNationLevel:
+				nation.level120 = subID
+				if len(target) > 1 {
+					nation.level = target[1]
+				}
+			case medalTargetNationLove:
+				nation.intimacy = subID
+			case medalTargetNationExp:
+				nation.exp = subID
+			}
+		}
+	}
+	if archiveCountTrophy == 0 {
+		return fmt.Errorf("config table medal_template in %s: no archive medal", regionDataDir())
+	}
+	nationTrophies = nil
+	for _, nationality := range slices.Backward(slices.Sorted(maps.Keys(nations))) {
+		nationTrophies = append(nationTrophies, *nations[nationality])
+	}
+	return nil
+}
+
 var (
 	shipTemplates map[uint32]shipTemplate
 	buildPools    map[uint32]buildPool
@@ -109,6 +198,7 @@ func loadShipData() error {
 	var pools map[uint32]buildPool
 	var groups map[uint32]shipGroupConfig
 	var items map[uint32]itemConfig
+	var medals map[uint32]medalConfig
 	err := loadAll(
 		loadTable("ship_data_template", &templates),
 		loadTable("ship_data_statistics", &stats),
@@ -117,8 +207,12 @@ func loadShipData() error {
 		loadTable("equip_data_template", &equipUpgrades),
 		loadTable("compose_data_template", &composes),
 		loadTable("item_data_statistics", &items),
+		loadTable("medal_template", &medals),
 	)
 	if err != nil {
+		return err
+	}
+	if err := loadMedals(medals); err != nil {
 		return err
 	}
 

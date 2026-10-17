@@ -16,14 +16,19 @@ func (game *Game) handleChargeList(client *connection.Client, req *protobuf.CS_1
 }
 
 // medalShopGoods is this month's medal exchange rotation, picked by the
-// server among honormedal_goods_list (the captured one): ids, in the
-// official order, with their goods_purchase_limit.
-var medalShopGoods = [][2]uint32{
-	{45, 1}, {32, 1}, {28, 10}, {27, 2}, {55, 5}, {54, 15}, {53, 20}, {52, 20}, {51, 20}, {48, 10},
-	{41, 20}, {26, 12}, {25, 24}, {22, 2}, {21, 2}, {20, 2}, {19, 6}, {18, 6}, {17, 6}, {16, 4},
-	{15, 12}, {14, 24}, {13, 5}, {12, 4}, {11, 4}, {10, 4}, {9, 4}, {8, 4}, {7, 5}, {6, 5},
-	{5, 5}, {4, 5}, {3, 5}, {2, 5}, {1, 30},
+// server among honormedal_goods_list (the captured one), in the official
+// order.
+var medalShopGoods = []uint32{
+	45, 32, 28, 27, 55, 54, 53, 52, 51, 48, 41, 26, 25, 22, 21, 20, 19, 18,
+	17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1,
 }
+
+// honormedal_goods_list row
+type medalGoodsConfig struct {
+	PurchaseLimit uint32 `json:"goods_purchase_limit"`
+}
+
+var medalGoods map[uint32]medalGoodsConfig
 
 // handleMedalShop answers GetMedalShopCommand: the medal exchange, every
 // purchase left (count is what can still be bought); it refreshes with the
@@ -33,8 +38,8 @@ func (game *Game) handleMedalShop(client *connection.Client, req *protobuf.CS_16
 		Result:        result(nil),
 		ItemFlashTime: proto.Uint32(uint32(nextMonth(time.Now()).Unix())),
 	}
-	for _, goods := range medalShopGoods {
-		reply.GoodList = append(reply.GoodList, &protobuf.GOODS_INFO_P16{Id: proto.Uint32(goods[0]), Count: proto.Uint32(goods[1])})
+	for _, id := range medalShopGoods {
+		reply.GoodList = append(reply.GoodList, &protobuf.GOODS_INFO_P16{Id: proto.Uint32(id), Count: proto.Uint32(medalGoods[id].PurchaseLimit)})
 	}
 	return client.Send(reply)
 }

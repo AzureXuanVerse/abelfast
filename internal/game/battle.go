@@ -30,10 +30,9 @@ const (
 	// scenarioExpRate: the capture's ship exp is expedition exp x rank x morale
 	// x 2 (x flagship / mvp); the client data doesn't say where the 2 comes from.
 	scenarioExpRate = 2
-	// happyExpRate is the "EXP bonus" of energy_template 4 (121-150 morale).
-	happyExpRate    = 1.2
-	happyEnergyFrom = 121
-	maxIntimacy     = 10000
+	// happyExpRate is the "EXP bonus" of energyHappy morale.
+	happyExpRate = 1.2
+	maxIntimacy  = 10000
 	// scenarioPlayerExp is the commander exp of a won campaign battle in the
 	// capture (both a level 1 and a level 2 stage).
 	scenarioPlayerExp = 65
@@ -260,10 +259,10 @@ func shipBattleExp(expedition expeditionTemplate, score uint32, ship db.Ship, fl
 		exp *= happyExpRate
 	}
 	if mvp {
-		exp = exp * mvpExpPercent / 100
+		exp = exp * float64(mvpExpPercent) / 100
 	}
 	if flagship {
-		exp = exp * flagshipExpPercent / 100
+		exp = exp * float64(flagshipExpPercent) / 100
 	}
 	return uint32(math.Floor(exp))
 }

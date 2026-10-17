@@ -1,14 +1,60 @@
 package game
 
 import (
+	"fmt"
+	"slices"
+
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
-// educateAttrs are child_data 1's attributes: stats, personality, talents.
-var educateAttrs = []uint32{101, 102, 103, 104, 201, 202, 203, 301, 302, 303, 304, 305, 306}
+// educateChild is the child_data row of TB.
+const educateChild = 1
+
+// child_data row: the attributes, stats, personality and talents
+type educateChildConfig struct {
+	Attrs1 []uint32 `json:"attr_1_list"`
+	Attrs2 []uint32 `json:"attr_2_list"`
+	Attrs3 []uint32 `json:"attr_3_list"`
+}
+
+// child_resource row
+type educateResourceConfig struct {
+	DefaultValue uint32 `json:"default_value"`
+}
+
+// EducateChar.RES_*_ID, child_resource ids
+const (
+	educateResMoney = 1
+	educateResMood  = 2
+	educateResFavor = 4
+)
+
+var (
+	// educateAttrs are TB's attributes (child_data attr_1..3_list)
+	educateAttrs []uint32
+	// educateResources are the child_resource defaults
+	educateResources map[uint32]educateResourceConfig
+)
+
+func loadEducateData() error {
+	var children map[uint32]educateChildConfig
+	err := loadAll(
+		loadTable("child_data", &children),
+		loadTable("child_resource", &educateResources),
+	)
+	if err != nil {
+		return err
+	}
+	child, ok := children[educateChild]
+	if !ok {
+		return fmt.Errorf("config table child_data in %s: no child %d", regionDataDir(), educateChild)
+	}
+	educateAttrs = slices.Concat(child.Attrs1, child.Attrs2, child.Attrs3)
+	return nil
+}
 
 // educateShops are the TB shops' goods at the start of a game (shop id,
 // goods ids), each in stock once (captured).
@@ -28,16 +74,16 @@ var educateShops = []struct {
 
 // handleEducate answers EducateRequestCommand with a TB (child_data 1) game
 // that hasn't started, as the official server sends it to a new commander:
-// month 2 week 4 day 7, child_resource defaults for money (20) and mood (50),
-// every attribute at 0, favor level 1 with 30 exp, the first three tasks and
-// the starting shops, one new game+ already counted.
+// month 2 week 4 day 7, the child_resource defaults for money, mood and favor
+// exp, every attribute at 0, favor level 1, the first three tasks and the
+// starting shops, one new game+ already counted.
 func (game *Game) handleEducate(client *connection.Client, req *protobuf.CS_27000) error {
 	child := &protobuf.CHILD_INFO{
 		Tid:                 proto.Uint32(1),
 		CurTime:             &protobuf.CHILD_TIME{Month: proto.Uint32(2), Week: proto.Uint32(4), Day: proto.Uint32(7)},
-		Mood:                proto.Uint32(50),
-		Money:               proto.Uint32(20),
-		Favor:               &protobuf.CHILD_FAVOR{Lv: proto.Uint32(1), Exp: proto.Uint32(30)},
+		Mood:                proto.Uint32(educateResources[educateResMood].DefaultValue),
+		Money:               proto.Uint32(educateResources[educateResMoney].DefaultValue),
+		Favor:               &protobuf.CHILD_FAVOR{Lv: proto.Uint32(1), Exp: proto.Uint32(educateResources[educateResFavor].DefaultValue)},
 		CanTriggerHomeEvent: proto.Uint32(1),
 		NewGamePlusCount:    proto.Uint32(1),
 	}

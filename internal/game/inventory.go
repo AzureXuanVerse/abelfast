@@ -32,10 +32,6 @@ var starterItems = []struct{ id, count uint32 }{
 	{ItemOxyCola, 10},
 }
 
-// bagLimits is SC_15001.limit_list as captured: 59010 (Specialized Core)
-// with nothing counted against its limit.
-var bagLimits = []*protobuf.ITEMINFO{{Id: proto.Uint32(59010), Count: proto.Uint32(0)}}
-
 // spweaponBagSize is SC_14001.spweapon_bag_size as captured for a new
 // commander.
 const spweaponBagSize = 150
@@ -120,13 +116,14 @@ func resourceList(rows []db.ListResourcesRow) []*protobuf.RESOURCE {
 	return list
 }
 
-// bag is SC_15001, BagProxy's items.
+// bag is SC_15001, BagProxy's items. limit_list is as captured: the
+// Specialized Core with nothing counted against its limit.
 func bag(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobuf.SC_15001, error) {
 	rows, err := queries.ListItems(ctx, commanderID)
 	if err != nil {
 		return nil, err
 	}
-	msg := &protobuf.SC_15001{ItemList: make([]*protobuf.ITEMINFO, len(rows)), LimitList: bagLimits}
+	msg := &protobuf.SC_15001{ItemList: make([]*protobuf.ITEMINFO, len(rows)), LimitList: []*protobuf.ITEMINFO{{Id: proto.Uint32(itemSpecializedCore), Count: proto.Uint32(0)}}}
 	for i, row := range rows {
 		msg.ItemList[i] = &protobuf.ITEMINFO{Id: proto.Uint32(row.ItemID), Count: proto.Uint32(row.Count)}
 	}
