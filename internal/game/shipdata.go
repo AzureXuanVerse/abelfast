@@ -90,6 +90,7 @@ type equipStatisticsConfig struct {
 // equip_limit (its base row's when it has none)
 type equipTemplateConfig struct {
 	equipUpgrade
+	equipReturn
 	Base       uint32  `json:"base"`
 	Prev       uint32  `json:"prev"` // 0 for a gear's +0
 	EquipLimit *uint32 `json:"equip_limit"`
@@ -139,6 +140,13 @@ type equipUpgrade struct {
 	Next  uint32      `json:"next"`
 	Gold  uint32      `json:"trans_use_gold"`
 	Items [][2]uint32 `json:"trans_use_item"` // [item, count]
+}
+
+// equipReturn is an equip_data_template row: what disassembling one piece
+// gives back.
+type equipReturn struct {
+	Gold  uint32      `json:"destory_gold"`
+	Items [][2]uint32 `json:"destory_item"` // [item, count]
 }
 
 // composeRecipe is a compose_data_template row.
@@ -252,6 +260,7 @@ var (
 	composes      map[uint32]composeRecipe
 	itemPrices    map[uint32][2]uint32 // item_data_statistics.price: [resource, amount]
 	equipIDs      map[uint32]bool      // every equip_data_template id
+	equipReturns  map[uint32]equipReturn
 )
 
 // what a ship's evasion is computed from (shipDodge)
@@ -423,8 +432,10 @@ func loadShipData() error {
 	}
 	readItemUses(items, techPackGear(equips, equipStats), gametip)
 	equipIDs = make(map[uint32]bool, len(equips))
-	for id := range equips {
+	equipReturns = make(map[uint32]equipReturn, len(equips))
+	for id, equip := range equips {
 		equipIDs[id] = true
+		equipReturns[id] = equip.equipReturn
 	}
 	return nil
 }

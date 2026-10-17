@@ -243,6 +243,46 @@ func (game *Game) handleComposeEquipment(client *connection.Client, req *protobu
 	return client.Send(&protobuf.SC_14007{Result: result(err)})
 }
 
+// handleDestroyEquipments disassembles depot equipment (DestroyEquipmentsCommand,
+// CS_14008), from the depot or a tech pack's gear. On result 0 the client
+// removes each [id, count] and adds count times its equip_data_template
+// destory_gold and destory_item, so the server grants the same. Any piece
+// missing or short refuses the whole list.
+func (game *Game) handleDestroyEquipments(client *connection.Client, req *protobuf.CS_14008) error {
+	ctx := context.Background()
+	err := game.tx(ctx, client, func(tx *Tx) error {
+		var pieces uint32
+		for _, equip := range req.GetEquipList() {
+			returns, ok := equipReturns[equip.GetId()]
+			count := equip.GetCount()
+			if !ok || count == 0 {
+				return errRefused
+			}
+			if err := tx.SpendEquipment(equip.GetId(), count); err != nil {
+				return err
+			}
+			if err := tx.AddResource(ResourceGold, returns.Gold*count); err != nil {
+				return err
+			}
+			for _, item := range returns.Items {
+				if err := tx.AddItem(item[0], item[1]*count); err != nil {
+					return err
+				}
+			}
+			pieces += count
+		}
+		if pieces == 0 {
+			return errRefused
+		}
+		tx.event(TaskEvent{SubType: TaskSubScrapGear, Count: pieces})
+		return nil
+	})
+	if err != nil && !refused(err) {
+		return err
+	}
+	return client.Send(&protobuf.SC_14009{Result: result(err)})
+}
+
 // handleSellItems sells bag items for their item_data_statistics price
 // (SellItemCommand, CS_15008). The home screen sends it on every visit with
 // the expired discount / skin trial items, usually none; the client adds the

@@ -26,6 +26,7 @@ const (
 	TaskSubWinS          = 24   // battles won with S rank
 	TaskSubBuild         = 30   // ships built
 	TaskSubEnhanceGear   = 40   // gear upgrades
+	TaskSubScrapGear     = 41   // pieces of gear disassembled
 	TaskSubCraftGear     = 42   // gear crafted
 	TaskSubAcademyLevel  = 85   // canteen / merchant level (absolute)
 	TaskSubHandbookPhase = 114  // commander manual tasks claimed, target: page id
