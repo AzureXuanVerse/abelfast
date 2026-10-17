@@ -3,7 +3,6 @@ package game
 import (
 	"google.golang.org/protobuf/proto"
 
-	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
@@ -43,8 +42,8 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 				tx.newShips = append(tx.newShips, ship)
 			}
 		case kind == dropTypeVItem && id == vitemSpecializedCore:
-			// stored without counting as an obtained item (TaskSubObtainItem)
-			if err := tx.Queries.AddItem(tx.ctx, db.AddItemParams{CommanderID: tx.commanderID, ItemID: itemSpecializedCore, Count: count}); err != nil {
+			// stored as its link item, which tasks count as obtained
+			if err := tx.AddItem(itemSpecializedCore, count); err != nil {
 				return err
 			}
 		case kind == dropTypeVItem && id == VirtualItemCruisePt:
