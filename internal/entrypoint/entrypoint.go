@@ -22,6 +22,10 @@ func Run() {
 		runMail(os.Args[2:])
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "notice" {
+		runNotice(os.Args[2:])
+		return
+	}
 	listen := flag.String("listen", "0.0.0.0:80", "listen address (gateway and game server share it)")
 	serverHost := flag.String("server-host", "127.0.0.1", "game server host handed to clients in the server list")
 	serverPort := flag.Uint("server-port", 80, "game server port handed to clients in the server list")

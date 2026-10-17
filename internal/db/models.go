@@ -247,6 +247,22 @@ type Mail struct {
 	Archived    bool
 }
 
+type Notice struct {
+	ID         uint32
+	Kind       string
+	Version    uint32
+	BtnTitle   string
+	Title      string
+	TitleImage string
+	TimeDesc   string
+	Content    string
+	TagType    uint32
+	Icon       uint32
+	Track      string
+	Priority   uint32
+	NeedLevel  uint32
+}
+
 type Setting struct {
 	Key   string
 	Value []byte

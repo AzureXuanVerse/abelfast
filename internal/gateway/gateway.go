@@ -5,6 +5,7 @@
 package gateway
 
 import (
+	"context"
 	"fmt"
 	"hash/fnv"
 	"sync"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
+	"github.com/ggmolly/belfast/internal/game"
 	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/protobuf"
@@ -121,12 +123,17 @@ func (gateway *Gateway) handleServerState(client *connection.Client, req *protob
 func (gateway *Gateway) handleLogin(client *connection.Client, req *protobuf.CS_10020) error {
 	account := accountID(req.GetArg2())
 	ticket := gateway.issueTicket(account)
+	notices, err := game.GatewayNotices(context.Background(), gateway.DB.Queries)
+	if err != nil {
+		return err
+	}
 	logger.LogEvent("Gateway", "Login", fmt.Sprintf("account %d (login type %d) from %s", account, req.GetLoginType(), client.IP), logger.LOG_LEVEL_INFO)
 	return client.Send(&protobuf.SC_10021{
 		Result:       proto.Uint32(0),
 		Serverlist:   gateway.serverList(),
 		AccountId:    proto.Uint32(account),
 		ServerTicket: proto.String(ticket),
+		NoticeList:   notices,
 		Device:       proto.Uint32(req.GetDevice()),
 	})
 }

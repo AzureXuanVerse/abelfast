@@ -248,8 +248,8 @@ var loginBurst = []loginPush{
 	empty[protobuf.SC_11210](),
 	// ActivityRemasterProxy: no remaster ticket timer
 	empty[protobuf.SC_11213](),
-	// ServerNoticeProxy: belfast has no announcements
-	empty[protobuf.SC_11300](),
+	// ServerNoticeProxy: the bulletin board
+	func(game *Game, l *login) (proto.Message, error) { return boardNotices(l.ctx, l.queries) },
 	// PlayerProxy: everything is loaded, starts the proxies
 	func(game *Game, l *login) (proto.Message, error) {
 		return &protobuf.SC_11002{
