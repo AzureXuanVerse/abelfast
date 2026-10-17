@@ -9,6 +9,9 @@ CREATE TABLE commander_tasks (
 	PRIMARY KEY (commander_id, task_id)
 );
 
+-- the tasks still running, the ones sent at login and progressed by events
+CREATE INDEX commander_tasks_unclaimed ON commander_tasks (commander_id) WHERE submit_time = 0;
+
 -- weekly missions (SC_20101): the current step of each weekly_task_template
 -- chain, and the weekly reward level reached (pt is virtual item 59012)
 CREATE TABLE commander_weekly_tasks (
