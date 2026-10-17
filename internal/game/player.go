@@ -6,6 +6,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/protobuf"
@@ -14,6 +15,7 @@ import (
 
 // registerPlayer installs the player area's handlers.
 func (game *Game) registerPlayer() {
+	packets.Handle(game.handleDormPopEvents)
 	packets.Handle(game.handleLoadPlayerData)
 	// settings.go
 	packets.Handle(game.handleSecondaryPassword)
@@ -296,4 +298,11 @@ func (game *Game) dorm(ctx context.Context, commander db.Commander) (*protobuf.S
 		ExpPos:          proto.Uint32(2),
 		LoadTime:        proto.Uint32(loadTime),
 	}), nil
+}
+
+// handleDormPopEvents answers BackYardRequestPopEventCommand (CS_19009): the
+// affection and coins waiting above the ships resting in the backyard. No
+// ship rests there yet.
+func (game *Game) handleDormPopEvents(client *connection.Client, req *protobuf.CS_19009) error {
+	return client.Send(&protobuf.SC_19010{})
 }
