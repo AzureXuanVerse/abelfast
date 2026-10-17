@@ -31,6 +31,12 @@ func (game *Game) Register() {
 	packets.Handle(game.handleAppreciationVersion)
 	packets.Handle(game.handleGuideIndex)
 	packets.Handle(game.handleStoryRead)
+	packets.Handle(game.handleMetaPoints)
+	packets.Handle(game.handleSeasonInfo)
+	packets.Handle(game.handleGuildInfo)
+	packets.Handle(game.handlePublicGuildTech)
+	packets.Handle(game.handleMiniGameHubs)
+	packets.Handle(game.handleEmojiInfo)
 }
 
 // handleLoadPlayerData answers CS_11001 (LoadPlayerDataCommand): everything
@@ -61,6 +67,32 @@ func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.
 		shipList.Shiplist[i] = shipInfo(ship)
 	}
 	if err := client.Send(shipList); err != nil {
+		return err
+	}
+	for _, push := range taskPushes() {
+		if err := client.Send(push); err != nil {
+			return err
+		}
+	}
+	if err := client.Send(technology()); err != nil {
+		return err
+	}
+	// TechnologyProxy blueprints (PR ships): none
+	if err := client.Send(&protobuf.SC_63100{
+		ColdTime:                 proto.Uint32(0),
+		DailyCatchupStrengthen:   proto.Uint32(0),
+		DailyCatchupStrengthenUr: proto.Uint32(0),
+	}); err != nil {
+		return err
+	}
+	if err := client.Send(dorm()); err != nil {
+		return err
+	}
+	if err := client.Send(navalAcademy()); err != nil {
+		return err
+	}
+	// MailProxy: empty mailbox
+	if err := client.Send(&protobuf.SC_30001{UnreadNumber: proto.Uint32(0), TotalNumber: proto.Uint32(0)}); err != nil {
 		return err
 	}
 	// CompensateProxy: no compensation mail
@@ -132,4 +164,47 @@ func playerInfo(commander db.Commander, ships []db.Ship, stories []uint32) *prot
 		}
 	}
 	return info
+}
+
+// navalAcademy is SC_22001, NavalAcademyProxy's state: oil field, gold field
+// and classroom at level 1 (their template tables start there), no lessons.
+func navalAcademy() *protobuf.SC_22001 {
+	return &protobuf.SC_22001{
+		OilWellLevel:       proto.Uint32(1),
+		OilWellLvUpTime:    proto.Uint32(0),
+		GoldWellLevel:      proto.Uint32(1),
+		GoldWellLvUpTime:   proto.Uint32(0),
+		ClassLv:            proto.Uint32(1),
+		ClassLvUpTime:      proto.Uint32(0),
+		Class:              &protobuf.NAVALACADEMY_CLASS{Proficiency: proto.Uint32(0)},
+		SkillClassNum:      proto.Uint32(0),
+		DailyFinishBuffCnt: proto.Uint32(0),
+	}
+}
+
+// technology is SC_63000, TechnologyProxy's research state: nothing started,
+// no catch-up research.
+func technology() *protobuf.SC_63000 {
+	return &protobuf.SC_63000{
+		RefreshFlag: proto.Uint32(0),
+		Catchup:     &protobuf.TECHNOLOGYCATCHUP{Version: proto.Uint32(0), Target: proto.Uint32(0)},
+	}
+}
+
+// dorm is SC_19001, the backyard (DormProxy): level 1, one floor, two
+// training slots, no food, ships or furniture.
+func dorm() *protobuf.SC_19001 {
+	return &protobuf.SC_19001{
+		Lv:                   proto.Uint32(1),
+		Food:                 proto.Uint32(0),
+		FoodMaxIncrease:      proto.Uint32(0),
+		FoodMaxIncreaseCount: proto.Uint32(0),
+		FloorNum:             proto.Uint32(1),
+		ExpPos:               proto.Uint32(2),
+		NextTimestamp:        proto.Uint32(0),
+		LoadExp:              proto.Uint32(0),
+		LoadFood:             proto.Uint32(0),
+		LoadTime:             proto.Uint32(0),
+		Name:                 proto.String(""),
+	}
 }
