@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"time"
 
@@ -206,6 +207,83 @@ func shipsByID(ctx context.Context, queries *db.Queries, commanderID uint32, ids
 		ships[ship.ID] = ship
 	}
 	return ships, nil
+}
+
+// calcFloor is the client's floor (support/helpers/mathssupport.lua).
+func calcFloor(value float64) float64 {
+	return math.Floor(value + 1e-9)
+}
+
+// intimacyBonus is intimacy_template[Ship:getIntimacyLevel()].attr_bonus
+// (1/10000): the row whose range holds the affinity, at least the oath's.
+// The client caps an unoathed ship's affinity at 100.00 (Ship:Ctor).
+func intimacyBonus(intimacy uint32, propose bool) uint32 {
+	if !propose {
+		intimacy = min(intimacy, maxIntimacy)
+	}
+	level := 0
+	for i, row := range intimacies {
+		if row.LowerBound <= intimacy && intimacy <= row.UpperBound {
+			level = i + 1
+			break
+		}
+	}
+	if propose && level < intimacyPropose {
+		level = intimacyPropose
+	}
+	if level == 0 {
+		return 0
+	}
+	return intimacies[level-1].AttrBonus
+}
+
+// activeEquipments is Ship:getActiveEquipments: the equipment of slots (by
+// position, 0 when empty), a piece dropped (0) when an earlier slot holds
+// one with the same non-zero equip_limit.
+func activeEquipments(slots []uint32) []uint32 {
+	active := slices.Clone(slots)
+	for i := len(active) - 1; i >= 0; i-- {
+		limit := equipEvasions[active[i]].limit
+		if active[i] == 0 || limit == 0 {
+			continue
+		}
+		for _, earlier := range active[:i] {
+			if earlier != 0 && equipEvasions[earlier].limit == limit {
+				active[i] = 0
+				break
+			}
+		}
+	}
+	return active
+}
+
+// shipDodge is a ship's evasion as Ship:getProperties (model/vo/ship.lua)
+// computes it from what belfast models, its equipment by slot:
+//   - getBaseProperties / getGrowthForAttr: attrs plus attrs_growth per
+//     level, plus attrs_growth_extra above extra_attr_level_limit (the
+//     "lock" loop copies the same values, it changes nothing);
+//   - getShipProperties: evasion isn't enhanceable (ShipModAttr.ATTR_TO_INDEX),
+//     then intimacyAdditions; retrofits (transforms), blueprint and META
+//     ships aren't modeled and add nothing;
+//   - getEquipmentProperties: the flat dodge of the active equipment and the
+//     best dodge property_rate (augments aren't modeled);
+//   - getProperties: floor(floor(base) * (1 + rate)) + flat. Commanders, the
+//     fleet tech nation bonus of max star ships and Operation Siren buffs
+//     aren't modeled and add nothing.
+func shipDodge(ship db.Ship, slots []uint32) float64 {
+	growth := shipDodges[ship.TemplateID]
+	dodge := growth.base + (float64(ship.Level)-1)*growth.growth/1000
+	if ship.Level > extraAttrLevelLimit {
+		dodge += float64(ship.Level-extraAttrLevelLimit) * growth.growthExtra / 1000
+	}
+	dodge *= 1 + float64(intimacyBonus(ship.Intimacy, ship.Propose != 0))/10000
+	flat, rate := 0.0, 0.0
+	for _, equip := range activeEquipments(slots) {
+		evasion := equipEvasions[equip]
+		flat += evasion.dodge
+		rate = max(rate, evasion.dodgeRate)
+	}
+	return calcFloor(calcFloor(dodge)*(1+rate)) + flat
 }
 
 // grantShipsStarter gives a new commander the starter ship they chose and

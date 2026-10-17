@@ -53,6 +53,7 @@ type chapterTemplate struct {
 	isAmbush      bool
 	ambushes      []uint32 // ambush_expedition_list
 	ambushRatios  []ambushRatio
+	avoidRatio    uint32 // how hard ambushes are to evade
 	winConditions []chapterWinCondition
 	awards        []uint32 // award virtual items, see dropPools
 }
@@ -74,6 +75,7 @@ type chapterConfig struct {
 	IsAmbush               uint32     `json:"is_ambush"`
 	AmbushExpeditionList   []uint32   `json:"ambush_expedition_list"`
 	AmbushRatioExtra       [][]int    `json:"ambush_ratio_extra"`
+	AvoidRatio             uint32     `json:"avoid_ratio"`
 	// [kind, param], param a cell for the kinds that name one
 	WinCondition [][2]any    `json:"win_condition"`
 	Awards       [][2]uint32 `json:"awards"` // [type, virtual item]
@@ -204,6 +206,7 @@ func loadChapterData() error {
 			bossRefresh:  row.BossRefresh,
 			isAmbush:     row.IsAmbush != 0,
 			ambushes:     row.AmbushExpeditionList,
+			avoidRatio:   row.AvoidRatio,
 		}
 		for _, grid := range row.Grids {
 			cellRow, _ := grid[0].(float64)

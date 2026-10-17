@@ -32,10 +32,73 @@ func (template shipTemplate) equips() [3]uint32 {
 	return [3]uint32{template.Equip1, template.Equip2, template.Equip3}
 }
 
-// ship_data_statistics row
+// ship_data_statistics row: attrs by Ship.PROPERTIES (model/vo/ship.lua),
+// their growths per level in 1/1000
 type shipStatisticsConfig struct {
-	Rarity      uint32 `json:"rarity"`
-	Nationality uint32 `json:"nationality"`
+	Rarity           uint32    `json:"rarity"`
+	Nationality      uint32    `json:"nationality"`
+	Attrs            []float64 `json:"attrs"`
+	AttrsGrowth      []float64 `json:"attrs_growth"`
+	AttrsGrowthExtra []float64 `json:"attrs_growth_extra"`
+}
+
+// AttributeType.Dodge, and its index in Ship.PROPERTIES (the 9th)
+const (
+	attributeDodge = "dodge"
+	propertyDodge  = 8
+)
+
+// shipDodgeGrowth is a ship_data_statistics row's evasion: attrs,
+// attrs_growth and attrs_growth_extra at propertyDodge.
+type shipDodgeGrowth struct {
+	base, growth, growthExtra float64
+}
+
+// intimacy_template row: an affinity range (1/100) and the stat bonus it
+// gives (1/10000)
+type intimacyConfig struct {
+	LowerBound uint32 `json:"lower_bound"`
+	UpperBound uint32 `json:"upper_bound"`
+	AttrBonus  uint32 `json:"attr_bonus"`
+}
+
+// Ship.INTIMACY_PROPOSE, the intimacy_template row of an oathed ship
+const intimacyPropose = 6
+
+// equipStatisticsConfig is an equip_data_statistics row, the fields a
+// ship's evasion reads: up to 3 [attribute_N, value_N] stats (value a number
+// or a numeric string), property_rate {attribute: rate} and
+// equip_parameters (avoid_extra, 1/10000). An upgraded equipment's row only
+// lists what differs from its base row, the rest is read from it (the config
+// tables' base lookup in include.lua).
+type equipStatisticsConfig struct {
+	Base            uint32          `json:"base"`
+	Attribute1      json.RawMessage `json:"attribute_1"`
+	Attribute2      json.RawMessage `json:"attribute_2"`
+	Attribute3      json.RawMessage `json:"attribute_3"`
+	Value1          json.RawMessage `json:"value_1"`
+	Value2          json.RawMessage `json:"value_2"`
+	Value3          json.RawMessage `json:"value_3"`
+	PropertyRate    json.RawMessage `json:"property_rate"`
+	EquipParameters json.RawMessage `json:"equip_parameters"`
+}
+
+// equip_data_template row: what upgrading it costs and gives, and its
+// equip_limit (its base row's when it has none)
+type equipTemplateConfig struct {
+	equipUpgrade
+	Base       uint32  `json:"base"`
+	EquipLimit *uint32 `json:"equip_limit"`
+}
+
+// equipEvasion is what a piece of equipment adds to evasion: a flat dodge
+// (GetAttributes), a dodge rate (GetPropertyRate), the fleet's ambush
+// evasion (equip_parameters.avoid_extra, 1/10000), and its equip_limit (two
+// pieces sharing a non-zero one don't stack, Ship:getActiveEquipments).
+type equipEvasion struct {
+	dodge, dodgeRate float64
+	avoidExtra       float64
+	limit            uint32
 }
 
 // ship_data_group row: description lists where the ship can be obtained,
@@ -185,6 +248,16 @@ var (
 	itemPrices    map[uint32][2]uint32 // item_data_statistics.price: [resource, amount]
 )
 
+// what a ship's evasion is computed from (shipDodge)
+var (
+	shipDodges    map[uint32]shipDodgeGrowth // every ship_data_statistics id
+	intimacies    []intimacyConfig           // intimacy_template, by id from 1
+	equipEvasions map[uint32]equipEvasion    // the equipment that has any
+	// gameset extra_attr_level_limit: the level above which
+	// attrs_growth_extra applies
+	extraAttrLevelLimit uint32
+)
+
 // buildPoolNames are the GETBOAT projectName of the ship_data_create_material
 // pools, how ship_data_group descriptions link a ship to them: the client's
 // pool marks (BuildShipProxy:GetPools in model/proxy/buildshipproxy.lua,
@@ -208,16 +281,26 @@ func loadShipData() error {
 	var groups map[uint32]shipGroupConfig
 	var items map[uint32]itemConfig
 	var medals map[uint32]medalConfig
+	var intimacyRows map[uint32]intimacyConfig
+	var equips map[uint32]equipTemplateConfig
+	var equipStats map[uint32]equipStatisticsConfig
+	var gameset map[string]uint32
 	err := gamedata.LoadAll(
 		gamedata.Load("ship_data_template", &templates),
 		gamedata.Load("ship_data_statistics", &stats),
 		gamedata.Load("ship_data_create_material", &pools),
 		gamedata.Load("ship_data_group", &groups),
-		gamedata.Load("equip_data_template", &equipUpgrades),
+		gamedata.Load("equip_data_template", &equips),
+		gamedata.Load("equip_data_statistics", &equipStats),
 		gamedata.Load("compose_data_template", &composes),
 		gamedata.Load("item_data_statistics", &items),
 		gamedata.Load("medal_template", &medals),
+		gamedata.Load("intimacy_template", &intimacyRows),
 		loadBuildTimes,
+		func() (err error) {
+			gameset, err = gamedata.Gameset()
+			return err
+		},
 	)
 	if err != nil {
 		return err
@@ -225,6 +308,32 @@ func loadShipData() error {
 	if err := loadMedals(medals); err != nil {
 		return err
 	}
+	limit, ok := gameset["extra_attr_level_limit"]
+	if !ok {
+		return gamedata.Missing("gameset", "extra_attr_level_limit")
+	}
+	extraAttrLevelLimit = limit
+
+	shipDodges = make(map[uint32]shipDodgeGrowth, len(stats))
+	for id, stat := range stats {
+		if len(stat.Attrs) <= propertyDodge || len(stat.AttrsGrowth) <= propertyDodge {
+			continue
+		}
+		growth := shipDodgeGrowth{base: stat.Attrs[propertyDodge], growth: stat.AttrsGrowth[propertyDodge]}
+		if len(stat.AttrsGrowthExtra) > propertyDodge {
+			growth.growthExtra = stat.AttrsGrowthExtra[propertyDodge]
+		}
+		shipDodges[id] = growth
+	}
+	intimacies = make([]intimacyConfig, max(len(intimacyRows), intimacyPropose))
+	for i := range intimacies {
+		row, ok := intimacyRows[uint32(i+1)]
+		if !ok {
+			return gamedata.Missing("intimacy_template", "row %d", i+1)
+		}
+		intimacies[i] = row
+	}
+	loadEquipEvasions(equipStats, equips)
 
 	shipTemplates = map[uint32]shipTemplate{}
 	for id, row := range templates {
@@ -286,7 +395,12 @@ func loadShipData() error {
 	}
 
 	// only the equipment that upgrades into another
-	maps.DeleteFunc(equipUpgrades, func(_ uint32, upgrade equipUpgrade) bool { return upgrade.Next == 0 })
+	equipUpgrades = map[uint32]equipUpgrade{}
+	for id, equip := range equips {
+		if equip.Next != 0 {
+			equipUpgrades[id] = equip.equipUpgrade
+		}
+	}
 
 	itemPrices = map[uint32][2]uint32{}
 	for id, row := range items {
@@ -320,4 +434,67 @@ func obtainedFromPool(description json.RawMessage, pool string) bool {
 		}
 	}
 	return false
+}
+
+// stat is the row's [attribute_N, value_N], i from 0.
+func (row equipStatisticsConfig) stat(i int) (attribute, value json.RawMessage) {
+	return [3]json.RawMessage{row.Attribute1, row.Attribute2, row.Attribute3}[i],
+		[3]json.RawMessage{row.Value1, row.Value2, row.Value3}[i]
+}
+
+// loadEquipEvasions builds equipEvasions from every piece of equipment's
+// dodge stats (Equipment:GetAttributes and GetPropertyRate, equip_parameters,
+// model/vo/equipment.lua) and equip_limit.
+func loadEquipEvasions(stats map[uint32]equipStatisticsConfig, templates map[uint32]equipTemplateConfig) {
+	// inherited reads a row's field, else its base row's
+	inherited := func(id uint32, field func(equipStatisticsConfig) json.RawMessage) json.RawMessage {
+		row := stats[id]
+		if value := field(row); value != nil || row.Base == 0 {
+			return value
+		}
+		return field(stats[row.Base])
+	}
+	equipEvasions = map[uint32]equipEvasion{}
+	for id := range stats {
+		var evasion equipEvasion
+		for i := range 3 {
+			var attribute string
+			raw := inherited(id, func(row equipStatisticsConfig) json.RawMessage { attribute, _ := row.stat(i); return attribute })
+			if json.Unmarshal(raw, &attribute) != nil || attribute != attributeDodge {
+				continue
+			}
+			// a number, or a string tonumber reads
+			raw = inherited(id, func(row equipStatisticsConfig) json.RawMessage { _, value := row.stat(i); return value })
+			var value float64
+			if json.Unmarshal(raw, &value) != nil {
+				var text string
+				if json.Unmarshal(raw, &text) == nil {
+					value, _ = strconv.ParseFloat(text, 64)
+				}
+			}
+			evasion.dodge += value
+		}
+		// a {attribute: rate} table, or an empty list
+		var rates map[string]float64
+		if json.Unmarshal(inherited(id, func(row equipStatisticsConfig) json.RawMessage { return row.PropertyRate }), &rates) == nil {
+			evasion.dodgeRate = rates[attributeDodge]
+		}
+		var parameters struct {
+			AvoidExtra float64 `json:"avoid_extra"`
+		}
+		if json.Unmarshal(inherited(id, func(row equipStatisticsConfig) json.RawMessage { return row.EquipParameters }), &parameters) == nil {
+			evasion.avoidExtra = parameters.AvoidExtra
+		}
+		if template, ok := templates[id]; ok {
+			if template.EquipLimit == nil {
+				template = templates[template.Base]
+			}
+			if template.EquipLimit != nil {
+				evasion.limit = *template.EquipLimit
+			}
+		}
+		if evasion != (equipEvasion{}) {
+			equipEvasions[id] = evasion
+		}
+	}
 }
