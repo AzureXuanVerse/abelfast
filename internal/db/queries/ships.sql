@@ -15,6 +15,9 @@ SELECT * FROM ships WHERE commander_id = ? AND id IN (sqlc.slice(ids)) ORDER BY 
 -- name: CountOwnedShips :one
 SELECT COUNT(*) FROM ships WHERE commander_id = ? AND id IN (sqlc.slice(ids));
 
+-- name: DeleteShip :exec
+DELETE FROM ships WHERE id = ? AND commander_id = ?;
+
 -- name: SetShipLocked :exec
 UPDATE ships SET is_locked = ? WHERE id = ? AND commander_id = ?;
 

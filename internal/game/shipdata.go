@@ -13,7 +13,7 @@ import (
 )
 
 // shipTemplate is a ship_data_template row, with its ship_data_statistics
-// rarity and nationality.
+// rarity, nationality and type.
 type shipTemplate struct {
 	Star     uint32   `json:"star"`
 	Energy   uint32   `json:"energy"`
@@ -25,6 +25,11 @@ type shipTemplate struct {
 
 	Rarity      uint32 `json:"-"`
 	Nationality uint32 `json:"-"`
+	Type        uint32 `json:"-"`
+	// blueprint (Ship:isBluePrintShip, its ship_data_group handbook_type is
+	// 2) or META (Ship:isMetaShip, a ship_meta_breakout id) ship, which
+	// ShipStatus.canDestroyShip never lets retire
+	unretirable bool
 }
 
 // equips are what the ship comes with, equip_id_1..3.
@@ -35,6 +40,7 @@ func (template shipTemplate) equips() [3]uint32 {
 // ship_data_statistics row: attrs by Ship.PROPERTIES (model/vo/ship.lua),
 // their growths per level in 1/1000
 type shipStatisticsConfig struct {
+	Type             uint32    `json:"type"`
 	Rarity           uint32    `json:"rarity"`
 	Nationality      uint32    `json:"nationality"`
 	Attrs            []float64 `json:"attrs"`
@@ -109,8 +115,25 @@ type equipEvasion struct {
 // ship_data_group row: description lists where the ship can be obtained,
 // [text, [action, params], ...]
 type shipGroupConfig struct {
-	GroupType   uint32          `json:"group_type"`
-	Description json.RawMessage `json:"description"`
+	GroupType    uint32          `json:"group_type"`
+	HandbookType uint32          `json:"handbook_type"`
+	Description  json.RawMessage `json:"description"`
+}
+
+// handbookBlueprint is ship_data_group handbook_type of the research
+// (blueprint) ships (Ship:Ctor's bluePrintFlag).
+const handbookBlueprint = 2
+
+// ship_data_by_type row: the gold a retired ship of the type gives
+// (Ship:calReturnRes; its distory_resource_oil_ratio isn't returned)
+type shipTypeConfig struct {
+	RetireGold uint32 `json:"distory_resource_gold_ratio"`
+}
+
+// ship_data_by_star row: what a retired ship of the rarity gives,
+// [[type, id, count], ...]
+type shipStarConfig struct {
+	RetireItems [][]uint32 `json:"destory_item"`
 }
 
 // buildPool is a ship_data_create_material row with its candidates.
@@ -261,6 +284,13 @@ var (
 	itemPrices    map[uint32][2]uint32 // item_data_statistics.price: [resource, amount]
 	equipIDs      map[uint32]bool      // every equip_data_template id
 	equipReturns  map[uint32]equipReturn
+	// what retiring a ship gives (Ship:calReturnRes): gold by
+	// ship_data_statistics type, drops by rarity
+	retireGold  map[uint32]uint32
+	retireItems map[uint32][][]uint32
+	// gameset urpt_chapter_max: [limit counter id, cap] of the Specialized
+	// Core (virtual_type 20)
+	specializedCoreCap [2]uint32
 )
 
 // what a ship's evasion is computed from (shipDodge)
@@ -302,8 +332,15 @@ func loadShipData() error {
 	var equipStats map[uint32]equipStatisticsConfig
 	var gameset map[string]uint32
 	var gametip map[string]string
+	var shipTypes map[uint32]shipTypeConfig
+	var shipStars map[uint32]shipStarConfig
+	var metas map[uint32]json.RawMessage
 	err := gamedata.LoadAll(
 		gamedata.Load("ship_data_template", &templates),
+		gamedata.Load("ship_data_by_type", &shipTypes),
+		gamedata.Load("ship_data_by_star", &shipStars),
+		gamedata.Load("ship_meta_breakout", &metas),
+		func() error { return gamedata.GamesetDescription("urpt_chapter_max", &specializedCoreCap) },
 		gamedata.Load("ship_data_statistics", &stats),
 		gamedata.Load("ship_data_create_material", &pools),
 		gamedata.Load("ship_data_group", &groups),
@@ -356,14 +393,30 @@ func loadShipData() error {
 	}
 	loadEquipEvasions(equipStats, equips)
 
+	blueprints := map[uint32]bool{}
+	for _, group := range groups {
+		if group.HandbookType == handbookBlueprint {
+			blueprints[group.GroupType] = true
+		}
+	}
 	shipTemplates = map[uint32]shipTemplate{}
 	for id, row := range templates {
 		stat, ok := stats[id]
 		if id%10 != 1 || !ok {
 			continue
 		}
-		row.Rarity, row.Nationality = stat.Rarity, stat.Nationality
+		row.Rarity, row.Nationality, row.Type = stat.Rarity, stat.Nationality, stat.Type
+		_, meta := metas[id]
+		row.unretirable = meta || blueprints[id/10]
 		shipTemplates[id] = row
+	}
+	retireGold = make(map[uint32]uint32, len(shipTypes))
+	for id, row := range shipTypes {
+		retireGold[id] = row.RetireGold
+	}
+	retireItems = make(map[uint32][][]uint32, len(shipStars))
+	for id, row := range shipStars {
+		retireItems[id] = row.RetireItems
 	}
 
 	// ships without a construction time (buildTimes) are left out

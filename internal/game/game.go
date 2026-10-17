@@ -76,6 +76,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleConfirmBuilds)
 	packets.Handle(game.handleShipLock)
 	packets.Handle(game.handleShipEquip)
+	packets.Handle(game.handleRetireShips)
 	packets.Handle(game.handleLoveLetters)
 	packets.Handle(game.handleUpgradeShipEquipment)
 	packets.Handle(game.handleUpgradeEquipment)

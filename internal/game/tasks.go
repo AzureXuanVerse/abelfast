@@ -25,6 +25,7 @@ const (
 	TaskSubWinA          = 23   // battles won with A rank or better
 	TaskSubWinS          = 24   // battles won with S rank
 	TaskSubBuild         = 30   // ships built
+	TaskSubRetireShip    = 31   // ships retired
 	TaskSubEnhanceGear   = 40   // gear upgrades
 	TaskSubScrapGear     = 41   // pieces of gear disassembled
 	TaskSubCraftGear     = 42   // gear crafted

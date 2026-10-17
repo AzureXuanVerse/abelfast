@@ -141,6 +141,20 @@ func (q *Queries) CreateShip(ctx context.Context, arg CreateShipParams) (Ship, e
 	return i, err
 }
 
+const deleteShip = `-- name: DeleteShip :exec
+DELETE FROM ships WHERE id = ? AND commander_id = ?
+`
+
+type DeleteShipParams struct {
+	ID          uint32
+	CommanderID uint32
+}
+
+func (q *Queries) DeleteShip(ctx context.Context, arg DeleteShipParams) error {
+	_, err := q.db.ExecContext(ctx, deleteShip, arg.ID, arg.CommanderID)
+	return err
+}
+
 const getShip = `-- name: GetShip :one
 SELECT id, commander_id, template_id, level, exp, energy, intimacy, max_level, is_locked, created_at, state, proficiency, skin_id, propose, name, change_name_timestamp, common_flag FROM ships WHERE id = ? AND commander_id = ?
 `
