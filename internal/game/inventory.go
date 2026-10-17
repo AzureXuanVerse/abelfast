@@ -2,12 +2,14 @@ package game
 
 import (
 	"context"
+	"errors"
 
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/protobuf"
+	"github.com/ggmolly/belfast/internal/protocol"
 )
 
 // player_resource ids
@@ -17,16 +19,91 @@ const (
 )
 
 // item_data_statistics ids
-const ItemWisdomCube = 20001
+const (
+	ItemWisdomCube    = 20001
+	ItemQuickFinisher = 15003 // ITEM_ID_EQUIP_QUICK_FINISH
+	ItemOxyCola       = 50001
+	ItemSecretCoolant = 50002
+)
 
-// GrantStarter gives a new commander exactly what the new player guide
-// (SG002) spends before any reward: one light build (ship_data_create_material
-// 2: 600 gold and 1 wisdom cube).
-func GrantStarter(ctx context.Context, queries *db.Queries, commanderID uint32) error {
-	if err := queries.AddResource(ctx, db.AddResourceParams{CommanderID: commanderID, ResourceID: ResourceGold, Amount: 600}); err != nil {
-		return err
+// ErrNotEnough is returned when a commander can't pay for something.
+var ErrNotEnough = errors.New("not enough")
+
+// starterItems is the bag of a new commander (SC_15001 of the capture).
+var starterItems = []struct{ id, count uint32 }{
+	{ItemWisdomCube, 5},
+	{ItemQuickFinisher, 10},
+	{ItemSecretCoolant, 10},
+	{ItemOxyCola, 10},
+}
+
+// bagLimits is SC_15001.limit_list as captured: 59010 (Specialized Core)
+// with nothing counted against its limit.
+var bagLimits = []*protobuf.ITEMINFO{{Id: proto.Uint32(59010), Count: proto.Uint32(0)}}
+
+// spweaponBagSize is SC_14001.spweapon_bag_size as captured for a new
+// commander.
+const spweaponBagSize = 150
+
+// AddResource gives a commander amount of a player_resource.
+func AddResource(ctx context.Context, queries *db.Queries, commanderID, resourceID, amount uint32) error {
+	return queries.AddResource(ctx, db.AddResourceParams{CommanderID: commanderID, ResourceID: resourceID, Amount: amount})
+}
+
+// SpendResource takes amount of a player_resource, ErrNotEnough if the
+// commander has less.
+func SpendResource(ctx context.Context, queries *db.Queries, commanderID, resourceID, amount uint32) error {
+	if amount == 0 {
+		return nil
 	}
-	return queries.AddItem(ctx, db.AddItemParams{CommanderID: commanderID, ItemID: ItemWisdomCube, Count: 1})
+	n, err := queries.SpendResource(ctx, db.SpendResourceParams{CommanderID: commanderID, ResourceID: resourceID, Amount: amount})
+	if err == nil && n == 0 {
+		err = ErrNotEnough
+	}
+	return err
+}
+
+// AddItem puts count of an item in a commander's bag.
+func AddItem(ctx context.Context, queries *db.Queries, commanderID, itemID, count uint32) error {
+	return queries.AddItem(ctx, db.AddItemParams{CommanderID: commanderID, ItemID: itemID, Count: count})
+}
+
+// SpendItem takes count of an item from the bag, ErrNotEnough if there are
+// fewer.
+func SpendItem(ctx context.Context, queries *db.Queries, commanderID, itemID, count uint32) error {
+	if count == 0 {
+		return nil
+	}
+	n, err := queries.SpendItem(ctx, db.SpendItemParams{CommanderID: commanderID, ItemID: itemID, Count: count})
+	if err == nil && n == 0 {
+		err = ErrNotEnough
+	}
+	return err
+}
+
+// AddEquipment puts count of an equip_data_template id in the depot.
+func AddEquipment(ctx context.Context, queries *db.Queries, commanderID, equipID, count uint32) error {
+	return queries.AddEquipment(ctx, db.AddEquipmentParams{CommanderID: commanderID, EquipID: equipID, Count: count})
+}
+
+// SpendEquipment takes count of an equipment from the depot, ErrNotEnough if
+// there are fewer.
+func SpendEquipment(ctx context.Context, queries *db.Queries, commanderID, equipID, count uint32) error {
+	n, err := queries.SpendEquipment(ctx, db.SpendEquipmentParams{CommanderID: commanderID, EquipID: equipID, Count: count})
+	if err == nil && n == 0 {
+		err = ErrNotEnough
+	}
+	return err
+}
+
+// grantStarterItems fills the bag of a new commander.
+func grantStarterItems(ctx context.Context, queries *db.Queries, commanderID uint32) error {
+	for _, item := range starterItems {
+		if err := AddItem(ctx, queries, commanderID, item.id, item.count); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func resourceList(rows []db.ListResourcesRow) []*protobuf.RESOURCE {
@@ -39,11 +116,123 @@ func resourceList(rows []db.ListResourcesRow) []*protobuf.RESOURCE {
 
 // bag is SC_15001, BagProxy's items.
 func bag(rows []db.ListItemsRow) *protobuf.SC_15001 {
-	msg := &protobuf.SC_15001{ItemList: make([]*protobuf.ITEMINFO, len(rows))}
+	msg := &protobuf.SC_15001{ItemList: make([]*protobuf.ITEMINFO, len(rows)), LimitList: bagLimits}
 	for i, row := range rows {
 		msg.ItemList[i] = &protobuf.ITEMINFO{Id: proto.Uint32(row.ItemID), Count: proto.Uint32(row.Count)}
 	}
 	return msg
+}
+
+// equipmentDepot is SC_14001, EquipmentProxy's equipment not on a ship
+// (Equipment.New keyed by template id), no augments.
+func equipmentDepot(rows []db.ListEquipmentsRow) *protobuf.SC_14001 {
+	msg := &protobuf.SC_14001{
+		EquipList:       make([]*protobuf.EQUIPINFO, len(rows)),
+		SpweaponBagSize: proto.Uint32(spweaponBagSize),
+	}
+	for i, row := range rows {
+		msg.EquipList[i] = &protobuf.EQUIPINFO{Id: proto.Uint32(row.EquipID), Count: proto.Uint32(row.Count)}
+	}
+	return msg
+}
+
+// result is the common { result } reply value: 0 ok, 1 refused.
+func result(ok bool) *uint32 {
+	if ok {
+		return proto.Uint32(0)
+	}
+	return proto.Uint32(1)
+}
+
+// handleUpgradeShipEquipment upgrades the equipment in a ship slot by lv
+// levels (UpGradeEquipmentCommands, CS_14002). Each level costs the current
+// equip_data_template's trans_use_gold and trans_use_item and moves to its
+// next; the client takes the same costs off its own state on result 0.
+func (game *Game) handleUpgradeShipEquipment(client *connection.Client, req *protobuf.CS_14002) error {
+	ctx := context.Background()
+	err := game.DB.InTx(ctx, func(queries *db.Queries) error {
+		equips, err := shipEquipments(ctx, queries, client.CommanderID, req.GetShipId())
+		if err != nil {
+			return err
+		}
+		pos := req.GetPos()
+		if pos < 1 || int(pos) > len(equips) || equips[pos-1].EquipID == 0 || req.GetLv() == 0 {
+			return errRefused
+		}
+		equip := equips[pos-1]
+		for range req.GetLv() {
+			upgrade, ok := equipUpgrades[equip.EquipID]
+			if !ok {
+				return errRefused
+			}
+			if err := SpendResource(ctx, queries, client.CommanderID, ResourceGold, upgrade.Gold); err != nil {
+				return err
+			}
+			for _, item := range upgrade.Items {
+				if err := SpendItem(ctx, queries, client.CommanderID, item[0], item[1]); err != nil {
+					return err
+				}
+			}
+			equip.EquipID = upgrade.Next
+		}
+		return queries.SetShipEquipment(ctx, db.SetShipEquipmentParams{ShipID: equip.ShipID, Pos: pos, EquipID: equip.EquipID, SkinID: equip.SkinID})
+	})
+	if err != nil && !refused(err) {
+		return err
+	}
+	return client.Send(&protobuf.SC_14003{Result: result(err == nil)})
+}
+
+// handleComposeEquipment crafts equipment from blueprints
+// (CompositeEquipmentCommand, CS_14006): num times compose_data_template id,
+// each costing gold_num gold and material_num of material_id, into the depot.
+func (game *Game) handleComposeEquipment(client *connection.Client, req *protobuf.CS_14006) error {
+	ctx := context.Background()
+	recipe, ok := composes[req.GetId()]
+	num := req.GetNum()
+	err := errRefused
+	if ok && num > 0 {
+		err = game.DB.InTx(ctx, func(queries *db.Queries) error {
+			if err := SpendResource(ctx, queries, client.CommanderID, ResourceGold, recipe.Gold*num); err != nil {
+				return err
+			}
+			if err := SpendItem(ctx, queries, client.CommanderID, recipe.Material, recipe.MaterialCount*num); err != nil {
+				return err
+			}
+			return AddEquipment(ctx, queries, client.CommanderID, recipe.Equip, num)
+		})
+	}
+	if err != nil && !refused(err) {
+		return err
+	}
+	return client.Send(&protobuf.SC_14007{Result: result(err == nil)})
+}
+
+// handleSellItems sells bag items for their item_data_statistics price
+// (SellItemCommand, CS_15008). The home screen sends it on every visit with
+// the expired discount / skin trial items, usually none; the client adds the
+// price (BagProxy:GetSellingPrice) itself on result 0.
+func (game *Game) handleSellItems(client *connection.Client, req *protobuf.CS_15008) error {
+	ctx := context.Background()
+	err := game.DB.InTx(ctx, func(queries *db.Queries) error {
+		for _, item := range req.GetItemList() {
+			price, ok := itemPrices[item.GetId()]
+			if !ok {
+				return errRefused
+			}
+			if err := SpendItem(ctx, queries, client.CommanderID, item.GetId(), item.GetCount()); err != nil {
+				return err
+			}
+			if err := AddResource(ctx, queries, client.CommanderID, price[0], price[1]*item.GetCount()); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil && !refused(err) {
+		return err
+	}
+	return client.Send(protocol.FillRequired(&protobuf.SC_15009{Result: result(err == nil)}))
 }
 
 // handleTracking takes the client's analytics events (CS_10991), no reply.
