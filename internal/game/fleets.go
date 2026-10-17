@@ -47,7 +47,7 @@ func grantFleetsStarter(tx *Tx, commander db.Commander) error {
 	if err := setFleetShips(ctx, queries, commander.ID, fleetRegular, ids); err != nil {
 		return err
 	}
-	return grantCommissionsStarter(ctx, queries, commander.ID)
+	return grantCommissionsStarter(ctx, queries, commander)
 }
 
 func setFleetShips(ctx context.Context, queries *db.Queries, commanderID uint32, fleetID uint32, shipIDs []uint32) error {
