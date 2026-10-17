@@ -13,6 +13,7 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
+	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -646,6 +647,7 @@ func (game *Game) handleSubmitTask(client *connection.Client, req *protobuf.CS_2
 		ok = claim.drops != nil
 	}
 	if !ok {
+		logger.WithFields("Task", logger.FieldValue("id", req.GetId()), logger.FieldValue("progress", claim.task.Progress), logger.FieldValue("target", claim.config.TargetNum)).Warn("claim refused")
 		return client.Send(&protobuf.SC_20006{Result: result(errRefused)})
 	}
 	awards, err := game.claimTasks(ctx, client, []taskClaimed{claim})
