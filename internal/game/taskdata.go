@@ -1,9 +1,12 @@
 package game
 
 import (
+	"cmp"
 	"encoding/json"
+	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // task_data_template row (TaskProxy, ActivityTaskProxy tasks)
@@ -19,6 +22,8 @@ type taskConfig struct {
 	AutoCommit   uint32          `json:"auto_commit"`
 
 	awards [][]uint32 // award_display
+	target taskTarget // target_id
+	next   []uint32   // next_task
 }
 
 // weekly_task_template row (WeekPtTask)
@@ -29,6 +34,8 @@ type weeklyTaskConfig struct {
 	TargetID     json.RawMessage `json:"target_id"`
 	TargetNum    uint32          `json:"target_num"`
 	AwardDisplay []uint32        `json:"award_display"`
+
+	target taskTarget // target_id
 }
 
 // activity_template row, only what task activities need
@@ -38,6 +45,50 @@ type activityConfig struct {
 	ConfigID   uint32          `json:"config_id"`
 	ConfigData json.RawMessage `json:"config_data"`
 	Time       json.RawMessage `json:"time"`
+
+	// for the activities with tasks (taskActivityTypes, task lists)
+	tasks  []uint32       // config_data
+	window activityWindow // time
+}
+
+// activityWindow is an activity_template.time: "always", or
+// ["timer", [[y,m,d],[h,m,s]], [[y,m,d],[h,m,s]]] in server time.
+type activityWindow struct {
+	always     bool
+	start, end time.Time // zero without a timer
+}
+
+func parseActivityWindow(raw json.RawMessage) activityWindow {
+	var always string
+	if json.Unmarshal(raw, &always) == nil {
+		return activityWindow{always: always == "always"}
+	}
+	var timer []json.RawMessage
+	if json.Unmarshal(raw, &timer) != nil || len(timer) < 3 {
+		return activityWindow{}
+	}
+	start, okStart := configTime(timer[1])
+	end, okEnd := configTime(timer[2])
+	if !okStart || !okEnd {
+		return activityWindow{}
+	}
+	return activityWindow{start: start, end: end}
+}
+
+func configTime(raw json.RawMessage) (time.Time, bool) {
+	var parts [2][3]int
+	if json.Unmarshal(raw, &parts) != nil {
+		return time.Time{}, false
+	}
+	return time.Date(parts[0][0], time.Month(parts[0][1]), parts[0][2], parts[1][0], parts[1][1], parts[1][2], 0, serverZone), true
+}
+
+// open is whether the activity runs at now.
+func (window activityWindow) open(now time.Time) bool {
+	if window.always {
+		return true
+	}
+	return !window.start.IsZero() && !now.Before(window.start) && now.Before(window.end)
 }
 
 // battlepass_task_group row: the cruise pass tasks of one week (group_mask),
@@ -47,6 +98,8 @@ type battlepassTaskGroup struct {
 	GroupMask uint32     `json:"group_mask"`
 	IsOntime  uint32     `json:"is_ontime"`
 	TaskGroup [][]uint32 `json:"task_group"`
+
+	tasks []uint32 // task_group flattened, backwards (as the capture lists them)
 }
 
 // tutorial_handbook_task row: a commander manual page; task_list holds
@@ -63,6 +116,12 @@ var (
 	activityConfigs      map[uint32]activityConfig
 	battlepassTaskGroups map[uint32]battlepassTaskGroup
 	handbookPageConfigs  map[uint32]handbookPageConfig
+
+	// taskActivities are the activity_template rows of taskActivityTypes, by id
+	taskActivities []activityConfig
+	// task_data_template / weekly_task_template ids by sub_type
+	taskIDsBySubType       map[uint32][]uint32
+	weeklyTaskIDsBySubType map[uint32][]uint32
 )
 
 // loadTaskData reads the tasks, weekly missions, activities, cruise pass
@@ -78,6 +137,7 @@ func loadTaskData() error {
 	if err != nil {
 		return err
 	}
+	taskIDsBySubType = map[uint32][]uint32{}
 	for id, config := range taskConfigs {
 		// a task whose award_display isn't a drop list (one is a Lua
 		// string) is left out like any row that doesn't fit
@@ -85,7 +145,36 @@ func loadTaskData() error {
 			delete(taskConfigs, id)
 			continue
 		}
+		config.target = parseTaskTarget(config.TargetID)
+		config.next = parseIDList(config.NextTask)
 		taskConfigs[id] = config
+		taskIDsBySubType[config.SubType] = append(taskIDsBySubType[config.SubType], id)
+	}
+	weeklyTaskIDsBySubType = map[uint32][]uint32{}
+	for id, config := range weeklyTaskConfigs {
+		config.target = parseTaskTarget(config.TargetID)
+		weeklyTaskConfigs[id] = config
+		weeklyTaskIDsBySubType[config.SubType] = append(weeklyTaskIDsBySubType[config.SubType], id)
+	}
+	taskActivities = nil
+	for id, config := range activityConfigs {
+		if !taskActivityTypes[config.Type] && config.Type != activityTypeTaskList {
+			continue
+		}
+		config.tasks = parseIDList(config.ConfigData)
+		config.window = parseActivityWindow(config.Time)
+		activityConfigs[id] = config
+		if taskActivityTypes[config.Type] {
+			taskActivities = append(taskActivities, config)
+		}
+	}
+	slices.SortFunc(taskActivities, func(a, b activityConfig) int { return cmp.Compare(a.ID, b.ID) })
+	for id, group := range battlepassTaskGroups {
+		for _, chain := range group.TaskGroup {
+			group.tasks = append(group.tasks, chain...)
+		}
+		slices.Reverse(group.tasks)
+		battlepassTaskGroups[id] = group
 	}
 	return nil
 }

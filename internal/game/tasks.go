@@ -249,7 +249,7 @@ func initialProgress(config taskConfig, counters map[taskCounterKey]uint32) uint
 	if !taskInheritedSubTypes[config.SubType] && !(taskInheritedCountSubTypes[config.SubType] && config.AutoCommit == 0) {
 		return 0
 	}
-	target := parseTaskTarget(config.TargetID)
+	target := config.target
 	var progress uint32
 	switch {
 	case target.any || target.min != nil:
@@ -324,8 +324,10 @@ func (game *Game) applyTaskEvents(ctx context.Context, queries *db.Queries, comm
 		return nil, err
 	}
 	changed := map[taskCounterKey]bool{}
+	subTypes := map[uint32]bool{}
 	var level uint32
 	for _, event := range events {
+		subTypes[event.SubType] = true
 		keys := []taskCounterKey{{event.SubType, event.Target}}
 		if event.Target != 0 {
 			keys = append(keys, taskCounterKey{event.SubType, 0})
@@ -368,55 +370,69 @@ func (game *Game) applyTaskEvents(ctx context.Context, queries *db.Queries, comm
 	}
 
 	var pushes []proto.Message
-	tasks, err := queries.ListTasks(ctx, commanderID)
-	if err != nil {
-		return nil, err
+	// the commander's tasks are only read when a task counts an event's
+	// sub type at all
+	counts := func(idsBySubType map[uint32][]uint32) bool {
+		for subType := range subTypes {
+			if len(idsBySubType[subType]) > 0 {
+				return true
+			}
+		}
+		return false
 	}
-	taskProgress := &protobuf.SC_20002{}
-	for _, task := range tasks {
-		config, ok := taskConfigs[task.TaskID]
-		if !ok {
-			continue
-		}
-		value, counted := progress(config.SubType, parseTaskTarget(config.TargetID), task.Progress)
-		if !counted {
-			continue
-		}
-		// TaskProxy tasks stop at their target (the second win re-sends
-		// "An Exercise" at 1/1)
-		value = min(value, config.TargetNum)
-		if err := queries.SetTaskProgress(ctx, db.SetTaskProgressParams{Progress: value, CommanderID: commanderID, TaskID: task.TaskID}); err != nil {
+	if counts(taskIDsBySubType) {
+		tasks, err := queries.ListTasks(ctx, commanderID)
+		if err != nil {
 			return nil, err
 		}
-		taskProgress.Info = append(taskProgress.Info, &protobuf.TASK_PROGRESS{Id: proto.Uint32(task.TaskID), Progress: proto.Uint32(value)})
-	}
-	if len(taskProgress.Info) > 0 {
-		pushes = append(pushes, taskProgress)
+		taskProgress := &protobuf.SC_20002{}
+		for _, task := range tasks {
+			config, ok := taskConfigs[task.TaskID]
+			if !ok {
+				continue
+			}
+			value, counted := progress(config.SubType, config.target, task.Progress)
+			if !counted {
+				continue
+			}
+			// TaskProxy tasks stop at their target (the second win re-sends
+			// "An Exercise" at 1/1)
+			value = min(value, config.TargetNum)
+			if err := queries.SetTaskProgress(ctx, db.SetTaskProgressParams{Progress: value, CommanderID: commanderID, TaskID: task.TaskID}); err != nil {
+				return nil, err
+			}
+			taskProgress.Info = append(taskProgress.Info, &protobuf.TASK_PROGRESS{Id: proto.Uint32(task.TaskID), Progress: proto.Uint32(value)})
+		}
+		if len(taskProgress.Info) > 0 {
+			pushes = append(pushes, taskProgress)
+		}
 	}
 
-	weekly, err := queries.ListWeeklyTasks(ctx, commanderID)
-	if err != nil {
-		return nil, err
-	}
-	weeklyProgress := &protobuf.SC_20102{}
-	for _, task := range weekly {
-		config, ok := weeklyTaskConfigs[task.TaskID]
-		if !ok {
-			continue
-		}
-		// weekly missions keep counting past their target (2/1 wins in the
-		// capture)
-		value, counted := progress(config.SubType, parseTaskTarget(config.TargetID), task.Progress)
-		if !counted {
-			continue
-		}
-		if err := queries.SetWeeklyTaskProgress(ctx, db.SetWeeklyTaskProgressParams{Progress: value, CommanderID: commanderID, TaskID: task.TaskID}); err != nil {
+	if counts(weeklyTaskIDsBySubType) {
+		weekly, err := queries.ListWeeklyTasks(ctx, commanderID)
+		if err != nil {
 			return nil, err
 		}
-		weeklyProgress.Task = append(weeklyProgress.Task, &protobuf.WEEKLY_TASK_P20{Id: proto.Uint32(task.TaskID), Progress: proto.Uint32(value)})
-	}
-	if len(weeklyProgress.Task) > 0 {
-		pushes = append(pushes, weeklyProgress)
+		weeklyProgress := &protobuf.SC_20102{}
+		for _, task := range weekly {
+			config, ok := weeklyTaskConfigs[task.TaskID]
+			if !ok {
+				continue
+			}
+			// weekly missions keep counting past their target (2/1 wins in the
+			// capture)
+			value, counted := progress(config.SubType, config.target, task.Progress)
+			if !counted {
+				continue
+			}
+			if err := queries.SetWeeklyTaskProgress(ctx, db.SetWeeklyTaskProgressParams{Progress: value, CommanderID: commanderID, TaskID: task.TaskID}); err != nil {
+				return nil, err
+			}
+			weeklyProgress.Task = append(weeklyProgress.Task, &protobuf.WEEKLY_TASK_P20{Id: proto.Uint32(task.TaskID), Progress: proto.Uint32(value)})
+		}
+		if len(weeklyProgress.Task) > 0 {
+			pushes = append(pushes, weeklyProgress)
+		}
 	}
 	if level > 0 {
 		unlocked, err := unlockWeeklyTasks(ctx, queries, commanderID, level)
@@ -428,8 +444,19 @@ func (game *Game) applyTaskEvents(ctx context.Context, queries *db.Queries, comm
 		}
 	}
 
-	activities, err := game.activityTaskLists(ctx, queries, commanderID, time.Now())
-	if err != nil {
+	// the same for the open activities' tasks
+	activities := openTaskActivities(time.Now())
+	activityCounts := false
+	for _, activity := range activities {
+		for _, task := range activity.tasks {
+			config, ok := taskConfigs[task.taskID]
+			activityCounts = activityCounts || (ok && subTypes[config.SubType])
+		}
+	}
+	if !activityCounts {
+		return pushes, nil
+	}
+	if err := activityTaskProgress(ctx, queries, commanderID, activities); err != nil {
 		return nil, err
 	}
 	activityProgress := &protobuf.SC_20202{}
@@ -440,7 +467,7 @@ func (game *Game) applyTaskEvents(ctx context.Context, queries *db.Queries, comm
 			if !ok || task.finished {
 				continue
 			}
-			value, counted := progress(config.SubType, parseTaskTarget(config.TargetID), task.progress)
+			value, counted := progress(config.SubType, config.target, task.progress)
 			if !counted {
 				continue
 			}
@@ -470,94 +497,72 @@ type taskActivity struct {
 	tasks []activityTask
 }
 
-// activityTaskLists are the open task activities (activity_template rows of
-// taskActivityTypes running at now) with their tasks and the commander's
-// progress on them.
+// activityTaskLists are the open task activities with their tasks and the
+// commander's progress on them.
 func (game *Game) activityTaskLists(ctx context.Context, queries *db.Queries, commanderID uint32, now time.Time) ([]taskActivity, error) {
+	activities := openTaskActivities(now)
+	if err := activityTaskProgress(ctx, queries, commanderID, activities); err != nil {
+		return nil, err
+	}
+	return activities, nil
+}
+
+// openTaskActivities are the task activities (activity_template rows of
+// taskActivityTypes) running at now with their tasks, without progress.
+func openTaskActivities(now time.Time) []taskActivity {
+	var activities []taskActivity
+	for _, config := range taskActivities {
+		if !config.window.open(now) {
+			continue
+		}
+		activity := taskActivity{id: config.ID}
+		for _, taskID := range activityTaskIDs(config, now) {
+			activity.tasks = append(activity.tasks, activityTask{taskID: taskID})
+		}
+		activities = append(activities, activity)
+	}
+	return activities
+}
+
+// activityTaskProgress fills in the commander's progress on activities' tasks.
+func activityTaskProgress(ctx context.Context, queries *db.Queries, commanderID uint32, activities []taskActivity) error {
 	rows, err := queries.ListActivityTasks(ctx, commanderID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	stored := map[[2]uint32]db.ListActivityTasksRow{}
 	for _, row := range rows {
 		stored[[2]uint32{row.ActID, row.TaskID}] = row
 	}
-	var ids []uint32
-	for id, config := range activityConfigs {
-		if taskActivityTypes[config.Type] {
-			if _, _, open := activityWindow(config, now); open {
-				ids = append(ids, id)
-			}
+	for _, activity := range activities {
+		for i, task := range activity.tasks {
+			row := stored[[2]uint32{activity.id, task.taskID}]
+			activity.tasks[i].progress, activity.tasks[i].finished = row.Progress, row.Finished
 		}
 	}
-	slices.Sort(ids)
-	var activities []taskActivity
-	for _, id := range ids {
-		taskIDs := activityTaskIDs(activityConfigs[id], now)
-		activity := taskActivity{id: id}
-		for _, taskID := range taskIDs {
-			row := stored[[2]uint32{id, taskID}]
-			activity.tasks = append(activity.tasks, activityTask{taskID: taskID, progress: row.Progress, finished: row.Finished})
-		}
-		activities = append(activities, activity)
-	}
-	return activities, nil
+	return nil
 }
 
 // activityTaskIDs lists an activity's tasks: config_data holds them, except
 // for the cruise pass where it holds battlepass_task_group ids, a group
 // opening each week (group_mask) since the activity started
-// (CrusingTaskLayer, GetServerOverWeek). Each group is listed backwards, as
-// the capture does.
+// (CrusingTaskLayer, GetServerOverWeek).
 func activityTaskIDs(config activityConfig, now time.Time) []uint32 {
-	ids := parseIDList(config.ConfigData)
 	if config.Type != activityTypeCruise {
-		return ids
+		return config.tasks
 	}
-	start, _, _ := activityWindow(config, now)
+	start := config.window.start
 	weekStart := start.Unix() - (start.Unix()-mondayReference)%(7*86400)
 	weeks := uint32((now.Unix() - weekStart + 7*86400 - 1) / (7 * 86400))
 	var tasks []uint32
-	for _, groupID := range ids {
+	for _, groupID := range config.tasks {
 		group, ok := battlepassTaskGroups[groupID]
 		if !ok || (group.IsOntime == 1 && group.GroupMask > weeks) {
 			continue
 		}
-		var groupTasks []uint32
-		for _, chain := range group.TaskGroup {
-			groupTasks = append(groupTasks, chain...)
-		}
-		slices.Reverse(groupTasks)
-		tasks = append(tasks, groupTasks...)
+		tasks = append(tasks, group.tasks...)
 	}
 	return tasks
-}
-
-// activityWindow reads activity_template.time: "always", or
-// ["timer", [[y,m,d],[h,m,s]], [[y,m,d],[h,m,s]]] in server time.
-func activityWindow(config activityConfig, now time.Time) (time.Time, time.Time, bool) {
-	var always string
-	if json.Unmarshal(config.Time, &always) == nil {
-		return time.Time{}, time.Time{}, always == "always"
-	}
-	var timer []json.RawMessage
-	if json.Unmarshal(config.Time, &timer) != nil || len(timer) < 3 {
-		return time.Time{}, time.Time{}, false
-	}
-	start, okStart := configTime(timer[1])
-	end, okEnd := configTime(timer[2])
-	if !okStart || !okEnd {
-		return time.Time{}, time.Time{}, false
-	}
-	return start, end, !now.Before(start) && now.Before(end)
-}
-
-func configTime(raw json.RawMessage) (time.Time, bool) {
-	var parts [2][3]int
-	if json.Unmarshal(raw, &parts) != nil {
-		return time.Time{}, false
-	}
-	return time.Date(parts[0][0], time.Month(parts[0][1]), parts[0][2], parts[1][0], parts[1][1], parts[1][2], 0, serverZone), true
 }
 
 // awardChoice picks the award_choice option the client chose (CS_20005
@@ -623,7 +628,7 @@ func (game *Game) handleSubmitTask(client *connection.Client, req *protobuf.CS_2
 		// the next tasks start from the counters the claim updated, its
 		// progress doesn't count for them
 		tx.afterEvents(func() error {
-			next, err = acceptTasks(ctx, tx.Queries, client.CommanderID, parseIDList(config.NextTask), now)
+			next, err = acceptTasks(ctx, tx.Queries, client.CommanderID, config.next, now)
 			return err
 		})
 		return nil
