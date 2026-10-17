@@ -103,6 +103,7 @@ func (gateway *Gateway) Register() {
 	packets.Handle(gateway.handleVersionCheck)
 	packets.Handle(gateway.handleServerState)
 	packets.Handle(gateway.handleLogin)
+	packets.Handle(gateway.handleServerLogin)
 }
 
 // HTTP answers the SDK's reachability probe (GET /?cmd=test?) the way the
@@ -114,7 +115,7 @@ func (gateway *Gateway) HTTP() http.Handler {
 	})
 }
 
-// Account returns the account a server ticket was issued to by CS_10020.
+// Account returns the account a server ticket was issued to (CS_10020 or CS_10022).
 func (gateway *Gateway) Account(ticket string) (uint32, bool) {
 	gateway.mu.Lock()
 	defer gateway.mu.Unlock()
@@ -146,16 +147,10 @@ func (gateway *Gateway) handleServerState(client *connection.Client, req *protob
 // id is derived from it so it stays the same across logins and restarts.
 func (gateway *Gateway) handleLogin(client *connection.Client, req *protobuf.CS_10020) error {
 	account := accountID(req.GetArg2())
-	ticket, err := newTicket()
+	ticket, err := gateway.issueTicket(account)
 	if err != nil {
 		return err
 	}
-	gateway.mu.Lock()
-	if gateway.tickets == nil {
-		gateway.tickets = make(map[string]uint32)
-	}
-	gateway.tickets[ticket] = account
-	gateway.mu.Unlock()
 	logger.LogEvent("Gateway", "Login", fmt.Sprintf("account %d (login type %d) from %s", account, req.GetLoginType(), client.IP), logger.LOG_LEVEL_INFO)
 	return client.Send(&protobuf.SC_10021{
 		Result:       proto.Uint32(0),
@@ -175,10 +170,18 @@ func accountID(uid string) uint32 {
 	return 1
 }
 
-func newTicket() (string, error) {
+// issueTicket hands out a new server ticket for account.
+func (gateway *Gateway) issueTicket(account uint32) (string, error) {
 	var raw [21]byte
 	if _, err := rand.Read(raw[:]); err != nil {
 		return "", err
 	}
-	return hex.EncodeToString(raw[:]), nil
+	ticket := hex.EncodeToString(raw[:])
+	gateway.mu.Lock()
+	defer gateway.mu.Unlock()
+	if gateway.tickets == nil {
+		gateway.tickets = make(map[string]uint32)
+	}
+	gateway.tickets[ticket] = account
+	return ticket, nil
 }
