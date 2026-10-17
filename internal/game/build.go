@@ -15,7 +15,6 @@ import (
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/gamedata"
-	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -40,10 +39,12 @@ const (
 var rarityByRateName = map[string]uint32{"Common": 2, "Rare": 3, "Elite": 4, "Super Rare": 5, "Ultra Rare": 6}
 
 // buildTimes are the construction times of the ships (base template id ->
-// seconds), server-side data the client never sees: server/build_times.json
-// of the data dir, scraped from the wiki by internal/tools/wiki_build_times.py
-// (Hatsuharu's 1500 s matches the official capture). Without it, or for a
-// ship it doesn't list, buildDurations by rarity is used.
+// seconds), server-side data the client never sees and no table has:
+// server/build_times.json of the data dir ({"<template id>": seconds}),
+// scraped from the wiki by internal/tools/wiki_build_times.py (Hatsuharu's
+// 1500 s matches the official capture). A ship it doesn't list is never
+// drawn (loadShipData leaves it out of the pools); without the file no build
+// can be started.
 var buildTimes map[uint32]uint32
 
 func loadBuildTimes() error {
@@ -57,13 +58,6 @@ func loadBuildTimes() error {
 	}
 	return nil
 }
-
-// buildDurations is how long a build takes by the rarity of what it yields,
-// for ships without a known construction time (guessed, Rare's from the
-// capture).
-// The real times are per ship and server side (none of the client tables has
-// them); rare matches the capture, the rest are approximations.
-var buildDurations = map[uint32]uint32{2: 1200, 3: 1500, 4: 1800, 5: 3600, 6: 5400}
 
 // buildDocksState is SC_12024 from storage: the builds in dock order (their
 // index is the pos the client sends back) and the build points. draw_count_*
@@ -100,7 +94,7 @@ func buildInfo(build db.Build) *protobuf.BUILDINFO {
 
 // pickBuildShip decides what a build yields: a rarity drawn with the pool's
 // rate_tip, then one of the pool's ships of that rarity (ship_data_group
-// descriptions linking to the pool).
+// descriptions linking to the pool), built in its buildTimes time.
 func pickBuildShip(pool buildPool) (template uint32, duration uint32, ok bool) {
 	if len(pool.rates) == 0 {
 		return 0, 0, false
@@ -115,11 +109,7 @@ func pickBuildShip(pool buildPool) (template uint32, duration uint32, ok bool) {
 	}
 	ships := pool.candidates[rarity]
 	template = ships[rand.IntN(len(ships))]
-	if seconds, ok := buildTimes[template]; ok {
-		return template, seconds, true
-	}
-	logger.WithFields("Build", logger.FieldValue("template", template)).Warn("no construction time, using the rarity's")
-	return template, buildDurations[rarity], true
+	return template, buildTimes[template], true
 }
 
 // buildStart is when a new build behind placed ones starts: when one of the

@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/ggmolly/belfast/internal/gamedata"
+	"github.com/ggmolly/belfast/internal/logger"
 )
 
 // shipTemplate is a ship_data_template row, with its ship_data_statistics
@@ -214,6 +215,7 @@ func loadShipData() error {
 		gamedata.Load("compose_data_template", &composes),
 		gamedata.Load("item_data_statistics", &items),
 		gamedata.Load("medal_template", &medals),
+		loadBuildTimes,
 	)
 	if err != nil {
 		return err
@@ -232,6 +234,8 @@ func loadShipData() error {
 		shipTemplates[id] = row
 	}
 
+	// ships without a construction time (buildTimes) are left out
+	untimed := 0
 	buildPools = map[uint32]buildPool{}
 	for id, name := range buildPoolNames {
 		pool, ok := pools[id]
@@ -247,9 +251,15 @@ func loadShipData() error {
 		slices.Sort(poolGroups)
 		pool.candidates = map[uint32][]uint32{}
 		for _, group := range poolGroups {
-			if ship, ok := shipTemplates[group*10+1]; ok {
-				pool.candidates[ship.Rarity] = append(pool.candidates[ship.Rarity], group*10+1)
+			ship, ok := shipTemplates[group*10+1]
+			if !ok {
+				continue
 			}
+			if _, timed := buildTimes[group*10+1]; !timed {
+				untimed++
+				continue
+			}
+			pool.candidates[ship.Rarity] = append(pool.candidates[ship.Rarity], group*10+1)
 		}
 		for _, tip := range pool.RateTip {
 			match := rateTipPattern.FindStringSubmatch(rateTipTags.ReplaceAllString(tip, ""))
@@ -268,6 +278,9 @@ func loadShipData() error {
 		}
 		slices.SortFunc(pool.rates, func(a, b rarityRate) int { return cmp.Compare(a.rarity, b.rarity) })
 		buildPools[id] = pool
+	}
+	if untimed > 0 {
+		logger.WithFields("Build", logger.FieldValue("left out", untimed)).Warn("pool ships without a construction time in server/build_times.json")
 	}
 
 	// only the equipment that upgrades into another
