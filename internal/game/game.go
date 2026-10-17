@@ -24,10 +24,27 @@ type Game struct {
 	DB *db.Store
 }
 
+// StartCommander creates what a new commander starts with (CS_10024), in
+// dependency order: ships first, the secretary and fleets point at them.
+func StartCommander(ctx context.Context, queries *db.Queries, commander db.Commander) error {
+	for _, grant := range []func(context.Context, *db.Queries, db.Commander) error{
+		grantShipsStarter,
+		grantPlayerStarter,
+		grantFleetsStarter,
+	} {
+		if err := grant(ctx, queries, commander); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Register installs the game server packet handlers.
 func (game *Game) Register() {
 	game.registerPlayer()
-	// other areas' handlers, until the integrator calls their register<Area>
+	game.registerShips()
+	game.registerFleets()
+	// tasks area, until its registerTasks lands
 	packets.Handle(game.handleGuideIndex)
 	packets.Handle(game.handleStoryRead)
 	packets.Handle(game.handleTracking)
@@ -108,10 +125,14 @@ func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.
 	if err := add(game.playerLoginPushes(ctx, commander)); err != nil {
 		return err
 	}
-	// INTEGRATION: the other areas' <area>LoginPushes go here, e.g.
-	// add(game.shipsLoginPushes(ctx, commander)). Until then, the pushes
-	// game.go sent for them before:
-	if err := add(game.legacyLoginPushes(ctx, commander)); err != nil {
+	if err := add(game.shipsLoginPushes(ctx, commander)); err != nil {
+		return err
+	}
+	if err := add(game.fleetsLoginPushes(ctx, commander)); err != nil {
+		return err
+	}
+	// tasks area, until its tasksLoginPushes lands
+	if err := add(taskPushes(), nil); err != nil {
 		return err
 	}
 	for _, id := range loginBurstOrder {
@@ -126,31 +147,4 @@ func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.
 		return fmt.Errorf("login push SC_%d has no place in loginBurstOrder", id)
 	}
 	return nil
-}
-
-// legacyLoginPushes are the other areas' login pushes game.go sent before
-// the areas were split. INTEGRATION: drop each one once its area's
-// <area>LoginPushes is wired in handleLoadPlayerData.
-func (game *Game) legacyLoginPushes(ctx context.Context, commander db.Commander) ([]proto.Message, error) {
-	ships, err := game.DB.ListShipsByCommander(ctx, commander.ID)
-	if err != nil {
-		return nil, err
-	}
-	items, err := game.DB.ListItems(ctx, commander.ID)
-	if err != nil {
-		return nil, err
-	}
-	shipList := &protobuf.SC_12001{Shiplist: make([]*protobuf.SHIPINFO, len(ships))}
-	for i, ship := range ships {
-		shipList.Shiplist[i] = shipInfo(ship)
-	}
-	pushes := []proto.Message{buildDocks(), shipList, bag(items)}
-	pushes = append(pushes, taskPushes()...)
-	// ChapterAutoProxy reads its auto battle state from here
-	pushes = append(pushes, &protobuf.SC_13001{
-		Oil:          proto.Uint32(0),
-		TimeAcc:      proto.Uint32(0),
-		ExtraTimeMax: proto.Uint32(0),
-	})
-	return pushes, nil
 }

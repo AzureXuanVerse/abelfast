@@ -233,44 +233,6 @@ func grantShipsStarter(ctx context.Context, queries *db.Queries, commander db.Co
 	return grantStarterRest(ctx, queries, commander.ID)
 }
 
-// GrantStarter completes a new commander whose starter ship row the gateway
-// already created with NewShip: its equipment, skills and archive entry, then
-// the rest of grantShipsStarter.
-//
-// Deprecated: the gateway's CS_10024 should call grantShipsStarter instead of
-// CreateShip + GrantStarter.
-func GrantStarter(ctx context.Context, queries *db.Queries, commanderID uint32) error {
-	ships, err := queries.ListShipsByCommander(ctx, commanderID)
-	if err != nil {
-		return err
-	}
-	for _, ship := range ships {
-		template := shipTemplates[ship.TemplateID]
-		for i, equip := range template.Equips {
-			if err := queries.SetShipEquipment(ctx, db.SetShipEquipmentParams{ShipID: ship.ID, Pos: uint32(i + 1), EquipID: equip}); err != nil {
-				return err
-			}
-		}
-		for pos := len(template.Equips) + 1; pos <= shipEquipSlots; pos++ {
-			if err := queries.SetShipEquipment(ctx, db.SetShipEquipmentParams{ShipID: ship.ID, Pos: uint32(pos)}); err != nil {
-				return err
-			}
-		}
-		for _, skill := range template.Skills {
-			if err := queries.AddShipSkill(ctx, db.AddShipSkillParams{ShipID: ship.ID, SkillID: skill, Level: 1}); err != nil {
-				return err
-			}
-		}
-		if _, err := recordShipGroup(ctx, queries, ship); err != nil {
-			return err
-		}
-	}
-	if _, _, err := AddShip(ctx, queries, commanderID, starterGiftShip); err != nil {
-		return err
-	}
-	return grantStarterRest(ctx, queries, commanderID)
-}
-
 func grantStarterRest(ctx context.Context, queries *db.Queries, commanderID uint32) error {
 	if err := grantStarterItems(ctx, queries, commanderID); err != nil {
 		return err
