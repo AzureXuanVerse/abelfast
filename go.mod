@@ -1,6 +1,6 @@
 module github.com/ggmolly/belfast
 
-go 1.25.5
+go 1.27.2
 
 require (
 	github.com/fatih/color v1.18.0
