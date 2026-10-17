@@ -202,6 +202,7 @@ type CommanderWeeklyTask struct {
 	CommanderID uint32
 	TaskID      uint32
 	Progress    uint32
+	Claimed     bool
 }
 
 type Fleet struct {

@@ -16,7 +16,17 @@ UPDATE commander_tasks SET progress = ? WHERE commander_id = ? AND task_id = ?;
 UPDATE commander_tasks SET submit_time = ? WHERE commander_id = ? AND task_id = ? AND submit_time = 0;
 
 -- name: ListWeeklyTasks :many
-SELECT task_id, progress FROM commander_weekly_tasks WHERE commander_id = ? ORDER BY task_id;
+SELECT task_id, progress FROM commander_weekly_tasks
+WHERE commander_id = ? AND NOT claimed ORDER BY task_id;
+
+-- name: ListWeeklyTaskIDs :many
+SELECT task_id FROM commander_weekly_tasks WHERE commander_id = ?;
+
+-- name: GetWeeklyTask :one
+SELECT progress, claimed FROM commander_weekly_tasks WHERE commander_id = ? AND task_id = ?;
+
+-- name: ClaimWeeklyTask :execrows
+UPDATE commander_weekly_tasks SET claimed = 1 WHERE commander_id = ? AND task_id = ? AND NOT claimed;
 
 -- name: CreateWeeklyTask :exec
 INSERT INTO commander_weekly_tasks (commander_id, task_id, progress) VALUES (?, ?, ?)

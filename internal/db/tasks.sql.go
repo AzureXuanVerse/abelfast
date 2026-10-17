@@ -9,6 +9,23 @@ import (
 	"context"
 )
 
+const claimWeeklyTask = `-- name: ClaimWeeklyTask :execrows
+UPDATE commander_weekly_tasks SET claimed = 1 WHERE commander_id = ? AND task_id = ? AND NOT claimed
+`
+
+type ClaimWeeklyTaskParams struct {
+	CommanderID uint32
+	TaskID      uint32
+}
+
+func (q *Queries) ClaimWeeklyTask(ctx context.Context, arg ClaimWeeklyTaskParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, claimWeeklyTask, arg.CommanderID, arg.TaskID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const createTask = `-- name: CreateTask :execrows
 INSERT INTO commander_tasks (commander_id, task_id, progress, accept_time) VALUES (?, ?, ?, ?)
 ON CONFLICT DO NOTHING
@@ -122,6 +139,27 @@ func (q *Queries) GetWeeklyRewardLevel(ctx context.Context, commanderID uint32) 
 	return reward_lv, err
 }
 
+const getWeeklyTask = `-- name: GetWeeklyTask :one
+SELECT progress, claimed FROM commander_weekly_tasks WHERE commander_id = ? AND task_id = ?
+`
+
+type GetWeeklyTaskParams struct {
+	CommanderID uint32
+	TaskID      uint32
+}
+
+type GetWeeklyTaskRow struct {
+	Progress uint32
+	Claimed  bool
+}
+
+func (q *Queries) GetWeeklyTask(ctx context.Context, arg GetWeeklyTaskParams) (GetWeeklyTaskRow, error) {
+	row := q.db.QueryRowContext(ctx, getWeeklyTask, arg.CommanderID, arg.TaskID)
+	var i GetWeeklyTaskRow
+	err := row.Scan(&i.Progress, &i.Claimed)
+	return i, err
+}
+
 const listActivityTasks = `-- name: ListActivityTasks :many
 SELECT act_id, task_id, progress, finished FROM commander_activity_tasks WHERE commander_id = ?
 `
@@ -228,8 +266,36 @@ func (q *Queries) ListTasks(ctx context.Context, commanderID uint32) ([]ListTask
 	return items, nil
 }
 
+const listWeeklyTaskIDs = `-- name: ListWeeklyTaskIDs :many
+SELECT task_id FROM commander_weekly_tasks WHERE commander_id = ?
+`
+
+func (q *Queries) ListWeeklyTaskIDs(ctx context.Context, commanderID uint32) ([]uint32, error) {
+	rows, err := q.db.QueryContext(ctx, listWeeklyTaskIDs, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uint32
+	for rows.Next() {
+		var task_id uint32
+		if err := rows.Scan(&task_id); err != nil {
+			return nil, err
+		}
+		items = append(items, task_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWeeklyTasks = `-- name: ListWeeklyTasks :many
-SELECT task_id, progress FROM commander_weekly_tasks WHERE commander_id = ? ORDER BY task_id
+SELECT task_id, progress FROM commander_weekly_tasks
+WHERE commander_id = ? AND NOT claimed ORDER BY task_id
 `
 
 type ListWeeklyTasksRow struct {
