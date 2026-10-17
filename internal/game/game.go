@@ -47,6 +47,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleChargeList)
 	packets.Handle(game.handleChangeChatRoom)
 	packets.Handle(game.handleClientReport)
+	packets.Handle(game.handleTracking)
 }
 
 // handleLoadPlayerData answers CS_11001 (LoadPlayerDataCommand): everything
@@ -69,7 +70,17 @@ func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.
 	if err != nil {
 		return err
 	}
-	if err := client.Send(playerInfo(commander, ships, stories)); err != nil {
+	resources, err := game.DB.ListResources(ctx, commander.ID)
+	if err != nil {
+		return err
+	}
+	items, err := game.DB.ListItems(ctx, commander.ID)
+	if err != nil {
+		return err
+	}
+	info := playerInfo(commander, ships, stories)
+	info.ResourceList = resourceList(resources)
+	if err := client.Send(info); err != nil {
 		return err
 	}
 	shipList := &protobuf.SC_12001{Shiplist: make([]*protobuf.SHIPINFO, len(ships))}
@@ -83,6 +94,12 @@ func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.
 		if err := client.Send(push); err != nil {
 			return err
 		}
+	}
+	if err := client.Send(bag(items)); err != nil {
+		return err
+	}
+	if err := client.Send(buildDocks()); err != nil {
+		return err
 	}
 	if err := client.Send(technology()); err != nil {
 		return err

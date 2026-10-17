@@ -74,8 +74,10 @@ func (gateway *Gateway) handleCreatePlayer(client *connection.Client, req *proto
 			if err != nil {
 				return err
 			}
-			_, err = queries.CreateShip(ctx, game.NewShip(commander.ID, req.GetShipId()))
-			return err
+			if _, err = queries.CreateShip(ctx, game.NewShip(commander.ID, req.GetShipId())); err != nil {
+				return err
+			}
+			return game.GrantStarter(ctx, queries, commander.ID)
 		})
 		if err != nil {
 			return err

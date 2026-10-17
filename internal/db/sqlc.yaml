@@ -40,3 +40,15 @@ sql:
             go_type: uint32
           - column: commander_stories.story_id
             go_type: uint32
+          - column: commander_resources.commander_id
+            go_type: uint32
+          - column: commander_resources.resource_id
+            go_type: uint32
+          - column: commander_resources.amount
+            go_type: uint32
+          - column: commander_items.commander_id
+            go_type: uint32
+          - column: commander_items.item_id
+            go_type: uint32
+          - column: commander_items.count
+            go_type: uint32

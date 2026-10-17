@@ -14,6 +14,18 @@ type Commander struct {
 	NewGuideIndex uint32
 }
 
+type CommanderItem struct {
+	CommanderID uint32
+	ItemID      uint32
+	Count       uint32
+}
+
+type CommanderResource struct {
+	CommanderID uint32
+	ResourceID  uint32
+	Amount      uint32
+}
+
 type CommanderStory struct {
 	CommanderID uint32
 	StoryID     uint32
