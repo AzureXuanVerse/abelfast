@@ -9,34 +9,45 @@ import (
 )
 
 // handleGuildInfo answers GetGuildInfoCommand. A guild id of 0 means the
-// commander isn't in one (GuildProxy then exits it).
+// commander isn't in one (GuildProxy then exits it); the official server
+// still fills policy, faction and level with 1.
 func (game *Game) handleGuildInfo(client *connection.Client, req *protobuf.CS_60037) error {
-	return client.Send(&protobuf.SC_60000{Guild: &protobuf.GUILD_INFO{
+	return client.Send(protocol.FillRequired(&protobuf.SC_60000{Guild: &protobuf.GUILD_INFO{
 		Base: &protobuf.GUILD_BASE_INFO{
-			Id: proto.Uint32(0), Policy: proto.Uint32(0), Faction: proto.Uint32(0), Name: proto.String(""),
-			Level: proto.Uint32(0), Announce: proto.String(""), Manifesto: proto.String(""), Exp: proto.Uint32(0),
-			MemberCount: proto.Uint32(0), ChangeFactionCd: proto.Uint32(0), KickLeaderCd: proto.Uint32(0),
+			Policy:  proto.Uint32(1),
+			Faction: proto.Uint32(1),
+			Level:   proto.Uint32(1),
 		},
-		GuildEx: &protobuf.GUILD_EXPANSION_INFO{
-			Capital:               proto.Uint32(0),
-			ThisWeeklyTasks:       &protobuf.WEEKLY_TASK{Id: proto.Uint32(0), Progress: proto.Uint32(0), Monday_0Clock: proto.Uint32(0)},
-			BenefitFinishTime:     proto.Uint32(0),
-			RetreatCnt:            proto.Uint32(0),
-			TechCancelCnt:         proto.Uint32(0),
-			LastBenefitFinishTime: proto.Uint32(0),
-			ActiveEventCnt:        proto.Uint32(0),
-		},
-	}})
+	}}))
 }
 
-// handlePublicGuildTech answers GetPublicGuildUserDataCommand: no guild
-// technology outside a guild.
+// publicGuildTechs are the public guild technologies a commander outside a
+// guild sees (GetPublicGuildUserDataCommand), with the progress the official
+// server reports for a new commander (captured).
+var publicGuildTechs = [][2]uint32{{6012, 0}, {5009, 20}, {4009, 20}, {3030, 0}, {2030, 0}}
+
+// handlePublicGuildTech answers GetPublicGuildUserDataCommand: the public
+// guild technologies, none started.
 func (game *Game) handlePublicGuildTech(client *connection.Client, req *protobuf.CS_62100) error {
-	return client.Send(&protobuf.SC_62101{})
+	reply := &protobuf.SC_62101{}
+	for _, tech := range publicGuildTechs {
+		reply.Technologys = append(reply.Technologys, &protobuf.GUILD_TECHNOLOGY{
+			Id: proto.Uint32(tech[0]), State: proto.Uint32(0), Progress: proto.Uint32(tech[1]),
+		})
+	}
+	return client.Send(reply)
 }
 
-// handleGuildUserInfo answers GuildGetUserInfoCommand / the public guild
-// data: no donations, benefits or guild tech.
+// handleGuildUserInfo answers GuildGetUserInfoCommand: no donations or
+// benefits yet, today's donation tasks (guild_donate_task ids, captured).
 func (game *Game) handleGuildUserInfo(client *connection.Client, req *protobuf.CS_60102) error {
-	return client.Send(protocol.FillRequired(&protobuf.SC_60103{}))
+	return client.Send(protocol.FillRequired(&protobuf.SC_60103{UserInfo: &protobuf.USER_GUILD_INFO{
+		DonateTasks: []uint32{1, 2, 20},
+	}}))
+}
+
+// handleGuildShop answers GetGuildShopCommand: outside a guild the shop is
+// empty and never refreshes.
+func (game *Game) handleGuildShop(client *connection.Client, req *protobuf.CS_60033) error {
+	return client.Send(protocol.FillRequired(&protobuf.SC_60034{Result: proto.Uint32(0)}))
 }

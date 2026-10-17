@@ -5,7 +5,6 @@ package game
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -13,10 +12,11 @@ import (
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/protobuf"
+	"github.com/ggmolly/belfast/internal/protocol"
 )
 
 // mondayReference is the "monday_0oclock_timestamp" the official EN servers
-// send (SC_10801, SC_11002): Monday 2020-11-23 00:00 in UTC-7. The client
+// send (SC_11000, SC_11002): Monday 2020-11-23 00:00 in UTC-7. The client
 // derives its weekly resets from it.
 const mondayReference = 1606114800
 
@@ -26,33 +26,62 @@ type Game struct {
 
 // Register installs the game server packet handlers.
 func (game *Game) Register() {
-	packets.Handle(game.handleLoadPlayerData)
-	packets.Handle(game.handleAuctionGameInit)
-	packets.Handle(game.handleAppreciationVersion)
+	game.registerPlayer()
+	// other areas' handlers, until the integrator calls their register<Area>
 	packets.Handle(game.handleGuideIndex)
 	packets.Handle(game.handleStoryRead)
-	packets.Handle(game.handleMetaPoints)
-	packets.Handle(game.handleSeasonInfo)
-	packets.Handle(game.handleGuildInfo)
-	packets.Handle(game.handlePublicGuildTech)
-	packets.Handle(game.handleMiniGameHubs)
-	packets.Handle(game.handleEmojiInfo)
-	packets.Handle(game.handleLimitChallenge)
-	packets.Handle(game.handleEducate)
-	packets.Handle(game.handleNewEducate)
-	packets.Handle(game.handleJuusGroups)
-	packets.Handle(game.handleSecondaryPassword)
-	packets.Handle(game.handleGuildUserInfo)
-	packets.Handle(game.handleEducateEndings)
-	packets.Handle(game.handleChargeList)
-	packets.Handle(game.handleChangeChatRoom)
-	packets.Handle(game.handleClientReport)
 	packets.Handle(game.handleTracking)
+}
+
+// loginBurstOrder is the order the official server pushes the login burst
+// in (CS_11001 up to SC_11002), with the area each push belongs to.
+var loginBurstOrder = []int{
+	11000, // player
+	11003, // player
+	11015, // player
+	11752, // player
+	21536, // player
+	22001, // player
+	26120, // player
+	25001, // player
+	17001, // collection
+	22300, // player
+	12024, // ships (build)
+	12001, // ships
+	12101, // ships (fleets)
+	12201, // player
+	63000, // player
+	63100, // player
+	64000, // player
+	13001, // chapters
+	13000, // chapters
+	13002, // chapters
+	13201, // player
+	16200, // player
+	33114, // player
+	14001, // equipment
+	14101, // equipment
+	15001, // ships (bag)
+	20001, // tasks
+	20101, // tasks
+	20201, // tasks
+	19001, // player
+	12031, // ships
+	28000, // player
+	30001, // player
+	30101, // player
+	50000, // player
+	11200, // player
+	11210, // player
+	11213, // player
+	11300, // player
+	11002, // player, starts the proxies: always last
 }
 
 // handleLoadPlayerData answers CS_11001 (LoadPlayerDataCommand): everything
 // pushed before SC_11002 lands in the proxies the client just registered,
-// SC_11002 then starts them.
+// SC_11002 then starts them. Every area hands its pushes over, they go out
+// in loginBurstOrder.
 func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.CS_11001) error {
 	if client.CommanderID == 0 {
 		return fmt.Errorf("CS_11001 without a commander")
@@ -62,180 +91,66 @@ func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.
 	if err != nil {
 		return err
 	}
+	burst := make(map[int][]proto.Message)
+	add := func(pushes []proto.Message, err error) error {
+		if err != nil {
+			return err
+		}
+		for _, push := range pushes {
+			id, err := protocol.ServerPacketID(push)
+			if err != nil {
+				return err
+			}
+			burst[id] = append(burst[id], push)
+		}
+		return nil
+	}
+	if err := add(game.playerLoginPushes(ctx, commander)); err != nil {
+		return err
+	}
+	// INTEGRATION: the other areas' <area>LoginPushes go here, e.g.
+	// add(game.shipsLoginPushes(ctx, commander)). Until then, the pushes
+	// game.go sent for them before:
+	if err := add(game.legacyLoginPushes(ctx, commander)); err != nil {
+		return err
+	}
+	for _, id := range loginBurstOrder {
+		for _, push := range burst[id] {
+			if err := client.Send(push); err != nil {
+				return err
+			}
+		}
+		delete(burst, id)
+	}
+	for id := range burst {
+		return fmt.Errorf("login push SC_%d has no place in loginBurstOrder", id)
+	}
+	return nil
+}
+
+// legacyLoginPushes are the other areas' login pushes game.go sent before
+// the areas were split. INTEGRATION: drop each one once its area's
+// <area>LoginPushes is wired in handleLoadPlayerData.
+func (game *Game) legacyLoginPushes(ctx context.Context, commander db.Commander) ([]proto.Message, error) {
 	ships, err := game.DB.ListShipsByCommander(ctx, commander.ID)
 	if err != nil {
-		return err
-	}
-	stories, err := game.DB.ListStories(ctx, commander.ID)
-	if err != nil {
-		return err
-	}
-	resources, err := game.DB.ListResources(ctx, commander.ID)
-	if err != nil {
-		return err
+		return nil, err
 	}
 	items, err := game.DB.ListItems(ctx, commander.ID)
 	if err != nil {
-		return err
-	}
-	info := playerInfo(commander, ships, stories)
-	info.ResourceList = resourceList(resources)
-	if err := client.Send(info); err != nil {
-		return err
+		return nil, err
 	}
 	shipList := &protobuf.SC_12001{Shiplist: make([]*protobuf.SHIPINFO, len(ships))}
 	for i, ship := range ships {
 		shipList.Shiplist[i] = shipInfo(ship)
 	}
-	if err := client.Send(shipList); err != nil {
-		return err
-	}
-	for _, push := range taskPushes() {
-		if err := client.Send(push); err != nil {
-			return err
-		}
-	}
-	if err := client.Send(bag(items)); err != nil {
-		return err
-	}
-	if err := client.Send(buildDocks()); err != nil {
-		return err
-	}
-	if err := client.Send(technology()); err != nil {
-		return err
-	}
-	// TechnologyProxy blueprints (PR ships): none
-	if err := client.Send(&protobuf.SC_63100{
-		ColdTime:                 proto.Uint32(0),
-		DailyCatchupStrengthen:   proto.Uint32(0),
-		DailyCatchupStrengthenUr: proto.Uint32(0),
-	}); err != nil {
-		return err
-	}
-	if err := client.Send(dorm()); err != nil {
-		return err
-	}
-	if err := client.Send(navalAcademy()); err != nil {
-		return err
-	}
-	// CommanderManualProxy: no handbook progress (every page starts at 0)
-	if err := client.Send(&protobuf.SC_22300{}); err != nil {
-		return err
-	}
-	// MailProxy: empty mailbox
-	if err := client.Send(&protobuf.SC_30001{UnreadNumber: proto.Uint32(0), TotalNumber: proto.Uint32(0)}); err != nil {
-		return err
-	}
-	// CompensateProxy: no compensation mail
-	if err := client.Send(&protobuf.SC_30101{Number: proto.Uint32(0), MaxTimestamp: proto.Uint32(0)}); err != nil {
-		return err
-	}
+	pushes := []proto.Message{buildDocks(), shipList, bag(items)}
+	pushes = append(pushes, taskPushes()...)
 	// ChapterAutoProxy reads its auto battle state from here
-	if err := client.Send(&protobuf.SC_13001{
+	pushes = append(pushes, &protobuf.SC_13001{
 		Oil:          proto.Uint32(0),
 		TimeAcc:      proto.Uint32(0),
 		ExtraTimeMax: proto.Uint32(0),
-	}); err != nil {
-		return err
-	}
-	return client.Send(&protobuf.SC_11002{
-		Timestamp:               proto.Uint32(uint32(time.Now().Unix())),
-		Monday_0OclockTimestamp: proto.Uint32(mondayReference),
-		ShipCount:               proto.Uint32(uint32(len(ships))),
 	})
-}
-
-// playerInfo is SC_11003, read by PlayerProxy into a Player (model/vo/player.lua).
-// The secretary (character) and the avatar (display.icon) are the first ship
-// until they can be changed.
-func playerInfo(commander db.Commander, ships []db.Ship, stories []uint32) *protobuf.SC_11003 {
-	info := &protobuf.SC_11003{
-		Id:                        proto.Uint32(commander.ID),
-		Name:                      proto.String(commander.Name),
-		Level:                     proto.Uint32(1), // user_level row
-		Exp:                       proto.Uint32(0),
-		AttackCount:               proto.Uint32(0),
-		WinCount:                  proto.Uint32(0),
-		Adv:                       proto.String(""),
-		ShipBagMax:                proto.Uint32(0),
-		EquipBagMax:               proto.Uint32(0),
-		GmFlag:                    proto.Uint32(0),
-		Rank:                      proto.Uint32(0),
-		PvpAttackCount:            proto.Uint32(0),
-		PvpWinCount:               proto.Uint32(0),
-		CollectAttackCount:        proto.Uint32(0),
-		GuideIndex:                proto.Uint32(commander.GuideIndex),
-		BuyOilCount:               proto.Uint32(0),
-		ChatRoomId:                proto.Uint32(1),
-		MaxRank:                   proto.Uint32(0),
-		RegisterTime:              proto.Uint32(uint32(commander.RegisteredAt)),
-		ShipCount:                 proto.Uint32(uint32(len(ships))),
-		AccPayLv:                  proto.Uint32(0),
-		GuildWaitTime:             proto.Uint32(0),
-		ChatMsgBanTime:            proto.Uint32(0),
-		CommanderBagMax:           proto.Uint32(0),
-		Rmb:                       proto.Uint32(0),
-		Appreciation:              &protobuf.APPRECIATIONINFO{MusicNo: proto.Uint32(0), MusicMode: proto.Uint32(0)},
-		ThemeUploadNotAllowedTime: proto.Uint32(0),
-		RandomShipMode:            proto.Uint32(0),
-		MarryShip:                 proto.Uint32(0),
-		ChildDisplay:              proto.Uint32(0),
-		Cover:                     &protobuf.LIVINGAREA_COVER{Id: proto.Uint32(0)},
-		MailStoreroomLv:           proto.Uint32(0),
-		BattleUi:                  proto.Uint32(0), // item_data_battleui "Standard"
-		NewGuideIndex:             proto.Uint32(commander.NewGuideIndex),
-		StoryList:                 stories,
-		LoadingPicOpenFlag:        proto.Uint32(0),
-	}
-	if len(ships) > 0 {
-		info.Character = []*protobuf.KVDATA{{Key: proto.Uint32(ships[0].ID), Value: proto.Uint32(0)}}
-		info.Display = &protobuf.DISPLAYINFO{
-			Icon: proto.Uint32(ships[0].TemplateID), Skin: proto.Uint32(0), IconFrame: proto.Uint32(0), ChatFrame: proto.Uint32(0),
-			IconTheme: proto.Uint32(0), MarryFlag: proto.Uint32(0), TransformFlag: proto.Uint32(0),
-		}
-	}
-	return info
-}
-
-// navalAcademy is SC_22001, NavalAcademyProxy's state: oil field, gold field
-// and classroom at level 1 (their template tables start there), no lessons.
-func navalAcademy() *protobuf.SC_22001 {
-	return &protobuf.SC_22001{
-		OilWellLevel:       proto.Uint32(1),
-		OilWellLvUpTime:    proto.Uint32(0),
-		GoldWellLevel:      proto.Uint32(1),
-		GoldWellLvUpTime:   proto.Uint32(0),
-		ClassLv:            proto.Uint32(1),
-		ClassLvUpTime:      proto.Uint32(0),
-		Class:              &protobuf.NAVALACADEMY_CLASS{Proficiency: proto.Uint32(0)},
-		SkillClassNum:      proto.Uint32(0),
-		DailyFinishBuffCnt: proto.Uint32(0),
-	}
-}
-
-// technology is SC_63000, TechnologyProxy's research state: nothing started,
-// no catch-up research.
-func technology() *protobuf.SC_63000 {
-	return &protobuf.SC_63000{
-		RefreshFlag: proto.Uint32(0),
-		Catchup:     &protobuf.TECHNOLOGYCATCHUP{Version: proto.Uint32(0), Target: proto.Uint32(0)},
-	}
-}
-
-// dorm is SC_19001, the backyard (DormProxy): level 1, one floor, two
-// training slots, no food, ships or furniture.
-func dorm() *protobuf.SC_19001 {
-	return &protobuf.SC_19001{
-		Lv:                   proto.Uint32(1),
-		Food:                 proto.Uint32(0),
-		FoodMaxIncrease:      proto.Uint32(0),
-		FoodMaxIncreaseCount: proto.Uint32(0),
-		FloorNum:             proto.Uint32(1),
-		ExpPos:               proto.Uint32(2),
-		NextTimestamp:        proto.Uint32(0),
-		LoadExp:              proto.Uint32(0),
-		LoadFood:             proto.Uint32(0),
-		LoadTime:             proto.Uint32(0),
-		Name:                 proto.String(""),
-	}
+	return pushes, nil
 }
