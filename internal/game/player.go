@@ -73,8 +73,8 @@ var starterResources = []struct{ id, amount uint32 }{
 var starterFurniture = []uint32{1001, 1002, 1102, 1103, 1104, 1105, 1106, 1107, 1111, 1112, 1301, 1302, 1304, 1306}
 
 // grantPlayerStarter sets up what a new commander starts with besides ships:
-// resources, backyard furniture, the starter ship as secretary and avatar.
-// The capacities, rank, chat room... are column defaults (0005_player.sql).
+// resources, backyard furniture, the starter ship as secretary (the avatar is the starter ship).
+// The capacities, rank, chat room... are column defaults (0001_commanders.sql).
 func grantPlayerStarter(ctx context.Context, queries *db.Queries, commander db.Commander) error {
 	for _, resource := range starterResources {
 		if err := queries.AddResource(ctx, db.AddResourceParams{CommanderID: commander.ID, ResourceID: resource.id, Amount: resource.amount}); err != nil {
@@ -85,12 +85,6 @@ func grantPlayerStarter(ctx context.Context, queries *db.Queries, commander db.C
 		if err := queries.AddFurniture(ctx, db.AddFurnitureParams{CommanderID: commander.ID, FurnitureID: id, Count: 1}); err != nil {
 			return err
 		}
-	}
-	if err := queries.SetCommanderIcon(ctx, db.SetCommanderIconParams{Icon: commander.StarterShip, ID: commander.ID}); err != nil {
-		return err
-	}
-	if err := queries.SetDormLoadTime(ctx, db.SetDormLoadTimeParams{DormLoadTime: uint32(commander.RegisteredAt), ID: commander.ID}); err != nil {
-		return err
 	}
 	ships, err := queries.ListShipsByCommander(ctx, commander.ID)
 	if err != nil {
@@ -148,16 +142,6 @@ func (game *Game) playerInfo(ctx context.Context, commander db.Commander, ships 
 	for i, secretary := range secretaries {
 		characters[i] = &protobuf.KVDATA{Key: proto.Uint32(secretary.ShipID), Value: proto.Uint32(secretary.PhantomID)}
 	}
-	if len(characters) == 0 {
-		// commanders created before secretaries were stored
-		if ship, ok := starterShip(commander, ships); ok {
-			characters = []*protobuf.KVDATA{{Key: proto.Uint32(ship.ID)}}
-		}
-	}
-	icon := commander.Icon
-	if icon == 0 {
-		icon = commander.StarterShip
-	}
 	return &protobuf.SC_11003{
 		Id:              proto.Uint32(commander.ID),
 		Name:            proto.String(commander.Name),
@@ -174,7 +158,7 @@ func (game *Game) playerInfo(ctx context.Context, commander db.Commander, ships 
 		RegisterTime:    proto.Uint32(uint32(commander.RegisteredAt)),
 		ShipCount:       proto.Uint32(uint32(len(ships))),
 		CommanderBagMax: proto.Uint32(commander.CommanderBagMax),
-		Display:         &protobuf.DISPLAYINFO{Icon: proto.Uint32(icon)},
+		Display:         &protobuf.DISPLAYINFO{Icon: proto.Uint32(commander.StarterShip)}, // can't be changed yet
 		MailStoreroomLv: proto.Uint32(commander.MailStoreroomLv),
 		BattleUi:        proto.Uint32(0), // item_data_battleui "Standard"
 		NewGuideIndex:   proto.Uint32(commander.NewGuideIndex),
@@ -205,16 +189,14 @@ func (game *Game) dorm(ctx context.Context, commander db.Commander) (*protobuf.S
 	for i, row := range furniture {
 		list[i] = &protobuf.FURNITUREINFO{Id: proto.Uint32(row.FurnitureID), Count: proto.Uint32(row.Count)}
 	}
-	loadTime := commander.DormLoadTime
-	if loadTime == 0 {
-		loadTime = uint32(commander.RegisteredAt)
-	}
 	return &protobuf.SC_19001{
 		Lv:              proto.Uint32(1),
 		FurnitureIdList: list,
 		FloorNum:        proto.Uint32(1),
 		ExpPos:          proto.Uint32(2),
-		LoadTime:        proto.Uint32(loadTime),
+		// nothing is ever collected yet: the backyard was last loaded when
+		// the commander was created
+		LoadTime: proto.Uint32(uint32(commander.RegisteredAt)),
 	}, nil
 }
 

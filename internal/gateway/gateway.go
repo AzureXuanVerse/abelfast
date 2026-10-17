@@ -90,13 +90,23 @@ type Gateway struct {
 	// TicketKey signs the server tickets, see LoadTicketKey.
 	TicketKey []byte
 
+	// the upstream SC_10801 cache, see version
 	mu       sync.Mutex
 	versions map[string]cachedVersion
+	fetching map[string]*versionFetch
 }
 
 type cachedVersion struct {
 	msg *protobuf.SC_10801
 	at  time.Time
+}
+
+// versionFetch is an upstream request in flight, done is closed once msg or
+// err is set.
+type versionFetch struct {
+	done chan struct{}
+	msg  *protobuf.SC_10801
+	err  error
 }
 
 // Register installs the gateway packet handlers.

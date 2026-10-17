@@ -7,21 +7,23 @@ SELECT * FROM commander_juus_posts WHERE commander_id = ? AND post_id = ?;
 -- name: CreateJuusPost :exec
 INSERT INTO commander_juus_posts (commander_id, post_id) VALUES (?, ?) ON CONFLICT DO NOTHING;
 
--- name: LikeJuusPost :exec
-UPDATE commander_juus_posts SET is_good = 1 WHERE commander_id = ? AND post_id = ?;
+-- name: LikeJuusPost :one
+UPDATE commander_juus_posts SET is_good = 1 WHERE commander_id = ? AND post_id = ?
+RETURNING *;
 
--- name: ReadJuusPost :exec
-UPDATE commander_juus_posts SET is_read = 1 WHERE commander_id = ? AND post_id = ?;
+-- name: ReadJuusPost :one
+UPDATE commander_juus_posts SET is_read = 1 WHERE commander_id = ? AND post_id = ?
+RETURNING *;
 
 -- name: CommentJuusPost :exec
 UPDATE commander_juus_posts SET comment_discuss = ?, comment_index = ?, comment_time = ?
 WHERE commander_id = ? AND post_id = ?;
 
 -- name: ListJuusTopics :many
-SELECT topic_id, ship_group, op_time, read_flag FROM commander_juus_topics WHERE commander_id = ? ORDER BY rowid;
+SELECT topic_id, op_time, read_flag FROM commander_juus_topics WHERE commander_id = ? ORDER BY rowid;
 
 -- name: ActivateJuusTopic :execrows
-INSERT INTO commander_juus_topics (commander_id, topic_id, ship_group, op_time) VALUES (?, ?, ?, ?)
+INSERT INTO commander_juus_topics (commander_id, topic_id, op_time) VALUES (?, ?, ?)
 ON CONFLICT DO NOTHING;
 
 -- name: TouchJuusTopic :execrows

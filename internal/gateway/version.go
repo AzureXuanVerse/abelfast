@@ -14,8 +14,14 @@ import (
 
 const upstreamTimeout = 10 * time.Second
 
+// maxCachedVersions bounds the version cache: a client build sends one
+// state and platform, more keys only come from clients making them up. Past
+// it the oldest reply is dropped.
+const maxCachedVersions = 16
+
 // version returns the upstream SC_10801 for this request, cached per
-// (state, platform). A stale copy is served when the upstream is unreachable.
+// (state, platform). Concurrent requests for the same key share one upstream
+// fetch. A stale copy is served when the upstream is unreachable.
 func (gateway *Gateway) version(req *protobuf.CS_10800) (*protobuf.SC_10801, error) {
 	key := fmt.Sprintf("%d/%s", req.GetState(), req.GetPlatform())
 	ttl := gateway.VersionTTL
@@ -24,25 +30,58 @@ func (gateway *Gateway) version(req *protobuf.CS_10800) (*protobuf.SC_10801, err
 	}
 	gateway.mu.Lock()
 	cached, ok := gateway.versions[key]
-	gateway.mu.Unlock()
 	if ok && time.Since(cached.at) < ttl {
+		gateway.mu.Unlock()
 		return cached.msg, nil
 	}
-	msg, err := fetchVersion(gateway.Upstream, req)
-	if err != nil {
+	fetch, inFlight := gateway.fetching[key]
+	if !inFlight {
+		fetch = &versionFetch{done: make(chan struct{})}
+		if gateway.fetching == nil {
+			gateway.fetching = make(map[string]*versionFetch)
+		}
+		gateway.fetching[key] = fetch
+	}
+	gateway.mu.Unlock()
+
+	if inFlight {
+		<-fetch.done
+	} else {
+		fetch.msg, fetch.err = fetchVersion(gateway.Upstream, req)
+		gateway.mu.Lock()
+		delete(gateway.fetching, key)
+		if fetch.err == nil {
+			gateway.cacheVersion(key, fetch.msg)
+		}
+		gateway.mu.Unlock()
+		close(fetch.done)
+	}
+	if fetch.err != nil {
 		if ok {
-			logger.LogEvent("Gateway", "Version", fmt.Sprintf("upstream %s: %v, serving cached reply from %s", gateway.Upstream, err, cached.at.Format(time.RFC3339)), logger.LOG_LEVEL_WARN)
+			logger.LogEvent("Gateway", "Version", fmt.Sprintf("upstream %s: %v, serving cached reply from %s", gateway.Upstream, fetch.err, cached.at.Format(time.RFC3339)), logger.LOG_LEVEL_WARN)
 			return cached.msg, nil
 		}
-		return nil, fmt.Errorf("upstream %s: %w", gateway.Upstream, err)
+		return nil, fmt.Errorf("upstream %s: %w", gateway.Upstream, fetch.err)
 	}
-	gateway.mu.Lock()
+	return fetch.msg, nil
+}
+
+// cacheVersion stores an upstream reply, dropping the oldest one when the
+// cache is full. gateway.mu must be held.
+func (gateway *Gateway) cacheVersion(key string, msg *protobuf.SC_10801) {
 	if gateway.versions == nil {
 		gateway.versions = make(map[string]cachedVersion)
 	}
+	if _, ok := gateway.versions[key]; !ok && len(gateway.versions) >= maxCachedVersions {
+		oldest := ""
+		for other, cached := range gateway.versions {
+			if oldest == "" || cached.at.Before(gateway.versions[oldest].at) {
+				oldest = other
+			}
+		}
+		delete(gateway.versions, oldest)
+	}
 	gateway.versions[key] = cachedVersion{msg: msg, at: time.Now()}
-	gateway.mu.Unlock()
-	return msg, nil
 }
 
 // fetchVersion sends req to the gateway at address and reads its SC_10801.

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -193,7 +194,7 @@ func shipEquipments(ctx context.Context, queries *db.Queries, commanderID, shipI
 	} else if err != nil {
 		return nil, err
 	}
-	rows, err := queries.ListShipEquipmentsByCommander(ctx, commanderID)
+	rows, err := queries.ListShipEquipments(ctx, shipID)
 	if err != nil {
 		return nil, err
 	}
@@ -202,11 +203,34 @@ func shipEquipments(ctx context.Context, queries *db.Queries, commanderID, shipI
 		slots[i] = db.ShipEquipment{ShipID: shipID, Pos: uint32(i + 1)}
 	}
 	for _, row := range rows {
-		if row.ShipID == shipID && row.Pos >= 1 && row.Pos <= shipEquipSlots {
+		if row.Pos >= 1 && row.Pos <= shipEquipSlots {
 			slots[row.Pos-1] = row
 		}
 	}
 	return slots, nil
+}
+
+// ownsShips tells whether every ship of ids is the commander's.
+func ownsShips(ctx context.Context, queries *db.Queries, commanderID uint32, ids []uint32) (bool, error) {
+	distinct := slices.Compact(slices.Sorted(slices.Values(ids)))
+	if len(distinct) == 0 {
+		return true, nil
+	}
+	owned, err := queries.CountOwnedShips(ctx, db.CountOwnedShipsParams{CommanderID: commanderID, Ids: distinct})
+	return owned == int64(len(distinct)), err
+}
+
+// shipsByID loads the ships of ids that are the commander's, by id.
+func shipsByID(ctx context.Context, queries *db.Queries, commanderID uint32, ids []uint32) (map[uint32]db.Ship, error) {
+	rows, err := queries.ListShipsByID(ctx, db.ListShipsByIDParams{CommanderID: commanderID, Ids: slices.Compact(slices.Sorted(slices.Values(ids)))})
+	if err != nil {
+		return nil, err
+	}
+	ships := make(map[uint32]db.Ship, len(rows))
+	for _, ship := range rows {
+		ships[ship.ID] = ship
+	}
+	return ships, nil
 }
 
 // grantShipsStarter gives a new commander the starter ship they chose and
@@ -356,7 +380,7 @@ func collectionState(ctx context.Context, queries *db.Queries, commanderID uint3
 		// heart_count is the likes of every player of the server
 		msg.ShipInfoList = append(msg.ShipInfoList, &protobuf.SHIP_STATISTICS_INFO{
 			Id:          proto.Uint32(group.GroupID),
-			Star:        proto.Uint32(group.Star),
+			Star:        proto.Uint32(shipTemplates[group.GroupID*10+1].Star), // the group's base template
 			HeartFlag:   proto.Uint32(group.HeartFlag),
 			HeartCount:  proto.Uint32(0),
 			MarryFlag:   proto.Uint32(group.MarryFlag),
@@ -367,28 +391,24 @@ func collectionState(ctx context.Context, queries *db.Queries, commanderID uint3
 	return msg, nil
 }
 
-// recordShipGroup adds a ship to the archives, and returns the SC_17002 of
-// the archive count medal when its group is new.
+// recordShipGroup adds a new ship to the archives, and returns the SC_17002
+// of the archive count medal when its group is new. A new ship (level 1,
+// newShipIntimacy) never raises the best values of a group already there.
 func recordShipGroup(ctx context.Context, queries *db.Queries, ship db.Ship) (*protobuf.SC_17002, error) {
-	before, err := queries.CountShipGroups(ctx, ship.CommanderID)
-	if err != nil {
-		return nil, err
-	}
-	err = queries.UpsertShipGroup(ctx, db.UpsertShipGroupParams{
+	added, err := queries.AddShipGroup(ctx, db.AddShipGroupParams{
 		CommanderID: ship.CommanderID,
 		GroupID:     ship.TemplateID / 10, // ship_data_template.group_type
-		Star:        shipTemplates[ship.TemplateID].Star,
 		IntimacyMax: ship.Intimacy,
 		LvMax:       ship.Level,
 	})
+	if err != nil || added == 0 {
+		return nil, err
+	}
+	groups, err := queries.CountShipGroups(ctx, ship.CommanderID)
 	if err != nil {
 		return nil, err
 	}
-	after, err := queries.CountShipGroups(ctx, ship.CommanderID)
-	if err != nil || after == before {
-		return nil, err
-	}
-	return SetTrophy(ctx, queries, ship.CommanderID, archiveCountTrophy, uint32(after))
+	return SetTrophy(ctx, queries, ship.CommanderID, archiveCountTrophy, uint32(groups))
 }
 
 // SetTrophy stores a medal_template progress and returns its SC_17002 push.

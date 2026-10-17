@@ -9,72 +9,6 @@ import (
 	"context"
 )
 
-const addHandbookFinished = `-- name: AddHandbookFinished :execrows
-INSERT INTO commander_handbook_finished (commander_id, page_id, task_id) VALUES (?, ?, ?)
-ON CONFLICT DO NOTHING
-`
-
-type AddHandbookFinishedParams struct {
-	CommanderID uint32
-	PageID      uint32
-	TaskID      uint32
-}
-
-func (q *Queries) AddHandbookFinished(ctx context.Context, arg AddHandbookFinishedParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, addHandbookFinished, arg.CommanderID, arg.PageID, arg.TaskID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
-const addHandbookPagePt = `-- name: AddHandbookPagePt :exec
-UPDATE commander_handbook_pages SET pt = pt + 1 WHERE commander_id = ? AND page_id = ?
-`
-
-type AddHandbookPagePtParams struct {
-	CommanderID uint32
-	PageID      uint32
-}
-
-func (q *Queries) AddHandbookPagePt(ctx context.Context, arg AddHandbookPagePtParams) error {
-	_, err := q.db.ExecContext(ctx, addHandbookPagePt, arg.CommanderID, arg.PageID)
-	return err
-}
-
-const addVirtualItem = `-- name: AddVirtualItem :one
-INSERT INTO commander_virtual_items (commander_id, item_id, amount) VALUES (?, ?, ?)
-ON CONFLICT (commander_id, item_id) DO UPDATE SET amount = amount + excluded.amount
-RETURNING amount
-`
-
-type AddVirtualItemParams struct {
-	CommanderID uint32
-	ItemID      uint32
-	Amount      uint32
-}
-
-func (q *Queries) AddVirtualItem(ctx context.Context, arg AddVirtualItemParams) (uint32, error) {
-	row := q.db.QueryRowContext(ctx, addVirtualItem, arg.CommanderID, arg.ItemID, arg.Amount)
-	var amount uint32
-	err := row.Scan(&amount)
-	return amount, err
-}
-
-const createHandbookPage = `-- name: CreateHandbookPage :exec
-INSERT INTO commander_handbook_pages (commander_id, page_id) VALUES (?, ?) ON CONFLICT DO NOTHING
-`
-
-type CreateHandbookPageParams struct {
-	CommanderID uint32
-	PageID      uint32
-}
-
-func (q *Queries) CreateHandbookPage(ctx context.Context, arg CreateHandbookPageParams) error {
-	_, err := q.db.ExecContext(ctx, createHandbookPage, arg.CommanderID, arg.PageID)
-	return err
-}
-
 const createTask = `-- name: CreateTask :execrows
 INSERT INTO commander_tasks (commander_id, task_id, progress, accept_time) VALUES (?, ?, ?, ?)
 ON CONFLICT DO NOTHING
@@ -160,20 +94,21 @@ func (q *Queries) GetTask(ctx context.Context, arg GetTaskParams) (CommanderTask
 	return i, err
 }
 
-const getVirtualItem = `-- name: GetVirtualItem :one
-SELECT amount FROM commander_virtual_items WHERE commander_id = ? AND item_id = ?
+const getTaskCounter = `-- name: GetTaskCounter :one
+SELECT value FROM commander_task_counters WHERE commander_id = ? AND sub_type = ? AND target = ?
 `
 
-type GetVirtualItemParams struct {
+type GetTaskCounterParams struct {
 	CommanderID uint32
-	ItemID      uint32
+	SubType     uint32
+	Target      uint32
 }
 
-func (q *Queries) GetVirtualItem(ctx context.Context, arg GetVirtualItemParams) (uint32, error) {
-	row := q.db.QueryRowContext(ctx, getVirtualItem, arg.CommanderID, arg.ItemID)
-	var amount uint32
-	err := row.Scan(&amount)
-	return amount, err
+func (q *Queries) GetTaskCounter(ctx context.Context, arg GetTaskCounterParams) (uint32, error) {
+	row := q.db.QueryRowContext(ctx, getTaskCounter, arg.CommanderID, arg.SubType, arg.Target)
+	var value uint32
+	err := row.Scan(&value)
+	return value, err
 }
 
 const getWeeklyRewardLevel = `-- name: GetWeeklyRewardLevel :one
@@ -213,71 +148,6 @@ func (q *Queries) ListActivityTasks(ctx context.Context, commanderID uint32) ([]
 			&i.Progress,
 			&i.Finished,
 		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listHandbookFinished = `-- name: ListHandbookFinished :many
-SELECT page_id, task_id FROM commander_handbook_finished WHERE commander_id = ? ORDER BY rowid
-`
-
-type ListHandbookFinishedRow struct {
-	PageID uint32
-	TaskID uint32
-}
-
-func (q *Queries) ListHandbookFinished(ctx context.Context, commanderID uint32) ([]ListHandbookFinishedRow, error) {
-	rows, err := q.db.QueryContext(ctx, listHandbookFinished, commanderID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListHandbookFinishedRow
-	for rows.Next() {
-		var i ListHandbookFinishedRow
-		if err := rows.Scan(&i.PageID, &i.TaskID); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listHandbookPages = `-- name: ListHandbookPages :many
-SELECT page_id, pt, award FROM commander_handbook_pages WHERE commander_id = ? ORDER BY page_id
-`
-
-type ListHandbookPagesRow struct {
-	PageID uint32
-	Pt     uint32
-	Award  uint32
-}
-
-func (q *Queries) ListHandbookPages(ctx context.Context, commanderID uint32) ([]ListHandbookPagesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listHandbookPages, commanderID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListHandbookPagesRow
-	for rows.Next() {
-		var i ListHandbookPagesRow
-		if err := rows.Scan(&i.PageID, &i.Pt, &i.Award); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -88,24 +88,21 @@ func buildDocksState(ctx context.Context, queries *db.Queries, commanderID uint3
 	if err != nil {
 		return nil, err
 	}
-	state, err := buildState(ctx, queries, commanderID)
-	if err != nil {
+	points, err := queries.GetBuildPoints(ctx, commanderID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
 	msg := buildDocks()
-	msg.ExchangeCount = proto.Uint32(state.ExchangeCount)
+	msg.ExchangeCount = proto.Uint32(points)
 	for _, build := range builds {
 		msg.WorklistList = append(msg.WorklistList, buildInfo(build))
 	}
 	return msg, nil
 }
 
-func buildState(ctx context.Context, queries *db.Queries, commanderID uint32) (db.CommanderBuildState, error) {
-	state, err := queries.GetBuildState(ctx, commanderID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return db.CommanderBuildState{CommanderID: commanderID}, nil
-	}
-	return state, err
+// buildStartTime is when a build started, or starts while it is queued.
+func buildStartTime(build db.Build) int64 {
+	return build.FinishTime - int64(build.Duration)
 }
 
 // buildInfo is a BUILDINFO, read into a BuildShip (model/vo/buildship.lua).
@@ -202,7 +199,8 @@ func (game *Game) handleBuildShip(client *connection.Client, req *protobuf.CS_12
 			if len(builds)+int(count) > maxBuilds {
 				return errRefused
 			}
-			state, err := buildState(ctx, tx.Queries, client.CommanderID)
+			// the guide's build is the commander's first
+			built, err := taskCounter(ctx, tx.Queries, client.CommanderID, TaskSubBuild, 0)
 			if err != nil {
 				return err
 			}
@@ -214,7 +212,7 @@ func (game *Game) handleBuildShip(client *connection.Client, req *protobuf.CS_12
 			}
 			for i := range count {
 				template, duration, ok := uint32(tutorialBuildShip), uint32(tutorialBuildDuration), true
-				if state.BuildCount > 0 || i > 0 || req.GetId() != lightPool {
+				if built > 0 || i > 0 || req.GetId() != lightPool {
 					template, duration, ok = pickBuildShip(pool)
 				}
 				if !ok {
@@ -226,7 +224,6 @@ func (game *Game) handleBuildShip(client *connection.Client, req *protobuf.CS_12
 					PoolID:      req.GetId(),
 					TemplateID:  template,
 					Duration:    duration,
-					StartTime:   start,
 					FinishTime:  start + int64(duration),
 				})
 				if err != nil {
@@ -237,9 +234,7 @@ func (game *Game) handleBuildShip(client *connection.Client, req *protobuf.CS_12
 			}
 			// capture: the task progress (SC_20102, SC_20202) comes before SC_12003
 			tx.event(TaskEvent{SubType: TaskSubBuild, Count: count})
-			return tx.AddBuildCounts(ctx, db.AddBuildCountsParams{
-				CommanderID: client.CommanderID, BuildCount: count, ExchangeCount: pool.ExchangeCount * count,
-			})
+			return tx.AddBuildPoints(ctx, db.AddBuildPointsParams{CommanderID: client.CommanderID, ExchangeCount: pool.ExchangeCount * count})
 		})
 	}
 	if err != nil && !refused(err) {
@@ -291,7 +286,6 @@ func (game *Game) handleBuildQuickFinish(client *connection.Client, req *protobu
 			if err := tx.SpendItem(ItemQuickFinisher, 1); err != nil {
 				return err
 			}
-			builds[positions[i]-1].StartTime = min(build.StartTime, now)
 			builds[positions[i]-1].FinishTime = now
 			finished = append(finished, positions[i])
 		}
@@ -311,12 +305,11 @@ func (game *Game) handleBuildQuickFinish(client *connection.Client, req *protobu
 func rescheduleBuilds(ctx context.Context, queries *db.Queries, builds []db.Build, now int64) error {
 	var placed []db.Build
 	for _, build := range builds {
-		if build.StartTime > now {
-			build.StartTime = buildStart(placed, now)
-			build.FinishTime = build.StartTime + int64(build.Duration)
+		if buildStartTime(build) > now {
+			build.FinishTime = buildStart(placed, now) + int64(build.Duration)
 		}
 		placed = append(placed, build)
-		if err := queries.SetBuildTimes(ctx, db.SetBuildTimesParams{StartTime: build.StartTime, FinishTime: build.FinishTime, ID: build.ID}); err != nil {
+		if err := queries.SetBuildFinishTime(ctx, db.SetBuildFinishTimeParams{FinishTime: build.FinishTime, ID: build.ID}); err != nil {
 			return err
 		}
 	}

@@ -9,20 +9,6 @@ import (
 	"context"
 )
 
-const addCommission = `-- name: AddCommission :exec
-INSERT INTO commander_commissions (commander_id, collection_id, finish_time, over_time) VALUES (?, ?, 0, 0) ON CONFLICT DO NOTHING
-`
-
-type AddCommissionParams struct {
-	CommanderID  uint32
-	CollectionID uint32
-}
-
-func (q *Queries) AddCommission(ctx context.Context, arg AddCommissionParams) error {
-	_, err := q.db.ExecContext(ctx, addCommission, arg.CommanderID, arg.CollectionID)
-	return err
-}
-
 const addFleetShip = `-- name: AddFleetShip :exec
 INSERT INTO fleet_ships (commander_id, fleet_id, position, ship_id) VALUES (?, ?, ?, ?)
 `
@@ -71,126 +57,6 @@ type CreateFleetParams struct {
 func (q *Queries) CreateFleet(ctx context.Context, arg CreateFleetParams) error {
 	_, err := q.db.ExecContext(ctx, createFleet, arg.CommanderID, arg.FleetID, arg.Name)
 	return err
-}
-
-const deleteChapterState = `-- name: DeleteChapterState :exec
-DELETE FROM chapter_states WHERE commander_id = ?
-`
-
-func (q *Queries) DeleteChapterState(ctx context.Context, commanderID uint32) error {
-	_, err := q.db.ExecContext(ctx, deleteChapterState, commanderID)
-	return err
-}
-
-const getChapterProgress = `-- name: GetChapterProgress :one
-SELECT commander_id, chapter_id, progress, kill_boss_count, kill_enemy_count, take_box_count, defeat_count, today_defeat_count, pass_count FROM chapter_progress WHERE commander_id = ? AND chapter_id = ?
-`
-
-type GetChapterProgressParams struct {
-	CommanderID uint32
-	ChapterID   uint32
-}
-
-func (q *Queries) GetChapterProgress(ctx context.Context, arg GetChapterProgressParams) (ChapterProgress, error) {
-	row := q.db.QueryRowContext(ctx, getChapterProgress, arg.CommanderID, arg.ChapterID)
-	var i ChapterProgress
-	err := row.Scan(
-		&i.CommanderID,
-		&i.ChapterID,
-		&i.Progress,
-		&i.KillBossCount,
-		&i.KillEnemyCount,
-		&i.TakeBoxCount,
-		&i.DefeatCount,
-		&i.TodayDefeatCount,
-		&i.PassCount,
-	)
-	return i, err
-}
-
-const getChapterState = `-- name: GetChapterState :one
-SELECT commander_id, chapter_id, state, ambushed FROM chapter_states WHERE commander_id = ?
-`
-
-func (q *Queries) GetChapterState(ctx context.Context, commanderID uint32) (ChapterState, error) {
-	row := q.db.QueryRowContext(ctx, getChapterState, commanderID)
-	var i ChapterState
-	err := row.Scan(
-		&i.CommanderID,
-		&i.ChapterID,
-		&i.State,
-		&i.Ambushed,
-	)
-	return i, err
-}
-
-const listChapterProgress = `-- name: ListChapterProgress :many
-SELECT commander_id, chapter_id, progress, kill_boss_count, kill_enemy_count, take_box_count, defeat_count, today_defeat_count, pass_count FROM chapter_progress WHERE commander_id = ? ORDER BY chapter_id
-`
-
-func (q *Queries) ListChapterProgress(ctx context.Context, commanderID uint32) ([]ChapterProgress, error) {
-	rows, err := q.db.QueryContext(ctx, listChapterProgress, commanderID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ChapterProgress
-	for rows.Next() {
-		var i ChapterProgress
-		if err := rows.Scan(
-			&i.CommanderID,
-			&i.ChapterID,
-			&i.Progress,
-			&i.KillBossCount,
-			&i.KillEnemyCount,
-			&i.TakeBoxCount,
-			&i.DefeatCount,
-			&i.TodayDefeatCount,
-			&i.PassCount,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listCommissions = `-- name: ListCommissions :many
-SELECT commander_id, collection_id, finish_time, over_time FROM commander_commissions WHERE commander_id = ? ORDER BY rowid
-`
-
-func (q *Queries) ListCommissions(ctx context.Context, commanderID uint32) ([]CommanderCommission, error) {
-	rows, err := q.db.QueryContext(ctx, listCommissions, commanderID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []CommanderCommission
-	for rows.Next() {
-		var i CommanderCommission
-		if err := rows.Scan(
-			&i.CommanderID,
-			&i.CollectionID,
-			&i.FinishTime,
-			&i.OverTime,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const listFleetShips = `-- name: ListFleetShips :many
@@ -257,91 +123,34 @@ func (q *Queries) ListFleets(ctx context.Context, commanderID uint32) ([]ListFle
 	return items, nil
 }
 
-const saveChapterProgress = `-- name: SaveChapterProgress :exec
-INSERT INTO chapter_progress (commander_id, chapter_id, progress, kill_boss_count, kill_enemy_count, take_box_count, defeat_count, today_defeat_count, pass_count)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (commander_id, chapter_id) DO UPDATE SET
-	progress = excluded.progress,
-	kill_boss_count = excluded.kill_boss_count,
-	kill_enemy_count = excluded.kill_enemy_count,
-	take_box_count = excluded.take_box_count,
-	defeat_count = excluded.defeat_count,
-	today_defeat_count = excluded.today_defeat_count,
-	pass_count = excluded.pass_count
+const listShipsOfFleet = `-- name: ListShipsOfFleet :many
+SELECT ship_id FROM fleet_ships WHERE commander_id = ? AND fleet_id = ? ORDER BY position
 `
 
-type SaveChapterProgressParams struct {
-	CommanderID      uint32
-	ChapterID        uint32
-	Progress         uint32
-	KillBossCount    uint32
-	KillEnemyCount   uint32
-	TakeBoxCount     uint32
-	DefeatCount      uint32
-	TodayDefeatCount uint32
-	PassCount        uint32
-}
-
-func (q *Queries) SaveChapterProgress(ctx context.Context, arg SaveChapterProgressParams) error {
-	_, err := q.db.ExecContext(ctx, saveChapterProgress,
-		arg.CommanderID,
-		arg.ChapterID,
-		arg.Progress,
-		arg.KillBossCount,
-		arg.KillEnemyCount,
-		arg.TakeBoxCount,
-		arg.DefeatCount,
-		arg.TodayDefeatCount,
-		arg.PassCount,
-	)
-	return err
-}
-
-const saveChapterState = `-- name: SaveChapterState :exec
-INSERT INTO chapter_states (commander_id, chapter_id, state, ambushed) VALUES (?, ?, ?, ?)
-ON CONFLICT (commander_id) DO UPDATE SET chapter_id = excluded.chapter_id, state = excluded.state, ambushed = excluded.ambushed
-`
-
-type SaveChapterStateParams struct {
+type ListShipsOfFleetParams struct {
 	CommanderID uint32
-	ChapterID   uint32
-	State       []byte
-	Ambushed    string
+	FleetID     uint32
 }
 
-func (q *Queries) SaveChapterState(ctx context.Context, arg SaveChapterStateParams) error {
-	_, err := q.db.ExecContext(ctx, saveChapterState,
-		arg.CommanderID,
-		arg.ChapterID,
-		arg.State,
-		arg.Ambushed,
-	)
-	return err
-}
-
-const updateShipBattleState = `-- name: UpdateShipBattleState :exec
-UPDATE ships SET level = ?, exp = ?, intimacy = ?, energy = ? WHERE id = ? AND commander_id = ?
-`
-
-type UpdateShipBattleStateParams struct {
-	Level       uint32
-	Exp         uint32
-	Intimacy    uint32
-	Energy      uint32
-	ID          uint32
-	CommanderID uint32
-}
-
-// Spending is the inventory area's; this is the minimum battles need.
-// Battle results on a ship, the ships area owns the table.
-func (q *Queries) UpdateShipBattleState(ctx context.Context, arg UpdateShipBattleStateParams) error {
-	_, err := q.db.ExecContext(ctx, updateShipBattleState,
-		arg.Level,
-		arg.Exp,
-		arg.Intimacy,
-		arg.Energy,
-		arg.ID,
-		arg.CommanderID,
-	)
-	return err
+func (q *Queries) ListShipsOfFleet(ctx context.Context, arg ListShipsOfFleetParams) ([]uint32, error) {
+	rows, err := q.db.QueryContext(ctx, listShipsOfFleet, arg.CommanderID, arg.FleetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uint32
+	for rows.Next() {
+		var ship_id uint32
+		if err := rows.Scan(&ship_id); err != nil {
+			return nil, err
+		}
+		items = append(items, ship_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

@@ -15,7 +15,15 @@ CREATE TABLE chapter_progress (
 -- the chapter being played, at most one per commander
 CREATE TABLE chapter_states (
 	commander_id INTEGER PRIMARY KEY REFERENCES commanders (id),
-	chapter_id   INTEGER NOT NULL,
-	state        BLOB    NOT NULL, -- CURRENTCHAPTERINFO as sent in SC_13102 / SC_13000
+	state        BLOB    NOT NULL, -- CURRENTCHAPTERINFO (SC_13102 / SC_13000), its id is the chapter's
 	ambushed     TEXT    NOT NULL DEFAULT '' -- "row,column;..." scripted ambush cells already sprung
+);
+
+-- commissions on offer or running (EventProxy, SC_13002 COLLECTIONINFO)
+CREATE TABLE commander_commissions (
+	commander_id  INTEGER NOT NULL REFERENCES commanders (id),
+	collection_id INTEGER NOT NULL, -- collection_template id
+	finish_time   INTEGER NOT NULL DEFAULT 0,
+	over_time     INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (commander_id, collection_id)
 );

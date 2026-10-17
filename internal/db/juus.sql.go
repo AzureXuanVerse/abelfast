@@ -10,24 +10,18 @@ import (
 )
 
 const activateJuusTopic = `-- name: ActivateJuusTopic :execrows
-INSERT INTO commander_juus_topics (commander_id, topic_id, ship_group, op_time) VALUES (?, ?, ?, ?)
+INSERT INTO commander_juus_topics (commander_id, topic_id, op_time) VALUES (?, ?, ?)
 ON CONFLICT DO NOTHING
 `
 
 type ActivateJuusTopicParams struct {
 	CommanderID uint32
 	TopicID     uint32
-	ShipGroup   uint32
 	OpTime      uint32
 }
 
 func (q *Queries) ActivateJuusTopic(ctx context.Context, arg ActivateJuusTopicParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, activateJuusTopic,
-		arg.CommanderID,
-		arg.TopicID,
-		arg.ShipGroup,
-		arg.OpTime,
-	)
+	result, err := q.db.ExecContext(ctx, activateJuusTopic, arg.CommanderID, arg.TopicID, arg.OpTime)
 	if err != nil {
 		return 0, err
 	}
@@ -118,8 +112,9 @@ func (q *Queries) GetJuusPost(ctx context.Context, arg GetJuusPostParams) (Comma
 	return i, err
 }
 
-const likeJuusPost = `-- name: LikeJuusPost :exec
+const likeJuusPost = `-- name: LikeJuusPost :one
 UPDATE commander_juus_posts SET is_good = 1 WHERE commander_id = ? AND post_id = ?
+RETURNING commander_id, post_id, is_good, is_read, comment_discuss, comment_index, comment_time
 `
 
 type LikeJuusPostParams struct {
@@ -127,9 +122,19 @@ type LikeJuusPostParams struct {
 	PostID      uint32
 }
 
-func (q *Queries) LikeJuusPost(ctx context.Context, arg LikeJuusPostParams) error {
-	_, err := q.db.ExecContext(ctx, likeJuusPost, arg.CommanderID, arg.PostID)
-	return err
+func (q *Queries) LikeJuusPost(ctx context.Context, arg LikeJuusPostParams) (CommanderJuusPost, error) {
+	row := q.db.QueryRowContext(ctx, likeJuusPost, arg.CommanderID, arg.PostID)
+	var i CommanderJuusPost
+	err := row.Scan(
+		&i.CommanderID,
+		&i.PostID,
+		&i.IsGood,
+		&i.IsRead,
+		&i.CommentDiscuss,
+		&i.CommentIndex,
+		&i.CommentTime,
+	)
+	return i, err
 }
 
 const listJuusPosts = `-- name: ListJuusPosts :many
@@ -201,14 +206,13 @@ func (q *Queries) ListJuusReplies(ctx context.Context, commanderID uint32) ([]Li
 }
 
 const listJuusTopics = `-- name: ListJuusTopics :many
-SELECT topic_id, ship_group, op_time, read_flag FROM commander_juus_topics WHERE commander_id = ? ORDER BY rowid
+SELECT topic_id, op_time, read_flag FROM commander_juus_topics WHERE commander_id = ? ORDER BY rowid
 `
 
 type ListJuusTopicsRow struct {
-	TopicID   uint32
-	ShipGroup uint32
-	OpTime    uint32
-	ReadFlag  bool
+	TopicID  uint32
+	OpTime   uint32
+	ReadFlag bool
 }
 
 func (q *Queries) ListJuusTopics(ctx context.Context, commanderID uint32) ([]ListJuusTopicsRow, error) {
@@ -220,12 +224,7 @@ func (q *Queries) ListJuusTopics(ctx context.Context, commanderID uint32) ([]Lis
 	var items []ListJuusTopicsRow
 	for rows.Next() {
 		var i ListJuusTopicsRow
-		if err := rows.Scan(
-			&i.TopicID,
-			&i.ShipGroup,
-			&i.OpTime,
-			&i.ReadFlag,
-		); err != nil {
+		if err := rows.Scan(&i.TopicID, &i.OpTime, &i.ReadFlag); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -248,8 +247,9 @@ func (q *Queries) ReadAllJuusTopics(ctx context.Context, commanderID uint32) err
 	return err
 }
 
-const readJuusPost = `-- name: ReadJuusPost :exec
+const readJuusPost = `-- name: ReadJuusPost :one
 UPDATE commander_juus_posts SET is_read = 1 WHERE commander_id = ? AND post_id = ?
+RETURNING commander_id, post_id, is_good, is_read, comment_discuss, comment_index, comment_time
 `
 
 type ReadJuusPostParams struct {
@@ -257,9 +257,19 @@ type ReadJuusPostParams struct {
 	PostID      uint32
 }
 
-func (q *Queries) ReadJuusPost(ctx context.Context, arg ReadJuusPostParams) error {
-	_, err := q.db.ExecContext(ctx, readJuusPost, arg.CommanderID, arg.PostID)
-	return err
+func (q *Queries) ReadJuusPost(ctx context.Context, arg ReadJuusPostParams) (CommanderJuusPost, error) {
+	row := q.db.QueryRowContext(ctx, readJuusPost, arg.CommanderID, arg.PostID)
+	var i CommanderJuusPost
+	err := row.Scan(
+		&i.CommanderID,
+		&i.PostID,
+		&i.IsGood,
+		&i.IsRead,
+		&i.CommentDiscuss,
+		&i.CommentIndex,
+		&i.CommentTime,
+	)
+	return i, err
 }
 
 const readJuusTopic = `-- name: ReadJuusTopic :exec
