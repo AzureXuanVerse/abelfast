@@ -41,6 +41,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleEducate)
 	packets.Handle(game.handleNewEducate)
 	packets.Handle(game.handleJuusGroups)
+	packets.Handle(game.handleSecondaryPassword)
 }
 
 // handleLoadPlayerData answers CS_11001 (LoadPlayerDataCommand): everything
