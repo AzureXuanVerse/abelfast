@@ -24,5 +24,6 @@ func loadGameData() error {
 		loadStarterFurniture,
 		loadMailData,
 		loadDiscussionData,
+		loadCollectionData,
 	)
 }

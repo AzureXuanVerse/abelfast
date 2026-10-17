@@ -378,7 +378,8 @@ func (game *Game) handleLoveLetters(client *connection.Client, req *protobuf.CS_
 }
 
 // collectionState is SC_17001, CollectionProxy: the archives (one
-// SHIP_STATISTICS_INFO per ship group owned) and the medals' progress.
+// SHIP_STATISTICS_INFO per ship group owned), the milestone rewards
+// claimed and the medals' progress.
 func collectionState(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobuf.SC_17001, error) {
 	groups, err := queries.ListShipGroups(ctx, commanderID)
 	if err != nil {
@@ -404,7 +405,11 @@ func collectionState(ctx context.Context, queries *db.Queries, commanderID uint3
 	if err != nil {
 		return nil, err
 	}
-	msg := &protobuf.SC_17001{DailyDiscuss: proto.Uint32(daily)}
+	awards, err := collectionAwards(ctx, queries, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	msg := &protobuf.SC_17001{DailyDiscuss: proto.Uint32(daily), ShipAwardList: awards}
 	for _, id := range archiveTrophies {
 		trophy := stored[id]
 		msg.ProgressList = append(msg.ProgressList, &protobuf.ACHIEVEMENT_INFO{
@@ -415,7 +420,7 @@ func collectionState(ctx context.Context, queries *db.Queries, commanderID uint3
 		// heart_count is the likes of every commander of the server
 		msg.ShipInfoList = append(msg.ShipInfoList, &protobuf.SHIP_STATISTICS_INFO{
 			Id:          proto.Uint32(group.GroupID),
-			Star:        proto.Uint32(shipTemplates[group.GroupID*10+1].Star), // the group's base template
+			Star:        proto.Uint32(archiveStar(group.GroupID)),
 			HeartFlag:   proto.Uint32(group.HeartFlag),
 			HeartCount:  proto.Uint32(heartCounts[group.GroupID]),
 			MarryFlag:   proto.Uint32(group.MarryFlag),

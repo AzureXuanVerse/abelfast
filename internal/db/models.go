@@ -74,6 +74,12 @@ type CommanderBuildState struct {
 	ExchangeCount uint32
 }
 
+type CommanderCollectionAward struct {
+	CommanderID uint32
+	StoreupID   uint32
+	AwardIndex  uint32
+}
+
 type CommanderCommission struct {
 	CommanderID  uint32
 	CollectionID uint32
