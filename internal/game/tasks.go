@@ -111,6 +111,7 @@ func (game *Game) registerTasks() {
 	packets.Handle(game.handleClientTaskEvent)
 	packets.Handle(game.handleSubmitActivityTasks)
 	packets.Handle(game.handleHandbookGetTasks)
+	game.registerJuus()
 }
 
 // taskPushes is what game.go sent before tasksLoginPushes existed: no tasks.
