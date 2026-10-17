@@ -67,7 +67,9 @@ type arenaShopConfig struct {
 	List5  [][2]uint32 `json:"commodity_list_5"`
 }
 
-// arenaShopID is the arena_data_shop row the merit shop draws from.
+// arenaShopID is the arena_data_shop row the merit shop draws from, the one
+// the client reads its refresh prices from (MilitaryShopPage,
+// RefreshMilitaryShopCommand: pg.arena_data_shop[1]).
 const arenaShopID = 1
 
 var arenaShop arenaShopConfig
@@ -85,6 +87,8 @@ func loadArenaShop() error {
 	return nil
 }
 
+// arenaShopCommonPicks is how many goods come from commodity_list_common:
+// five in the captured shop (ten goods), which no table or Lua says.
 const arenaShopCommonPicks = 5
 
 // arenaShopGoods draws the merit shop's goods (each pick by weight, the
