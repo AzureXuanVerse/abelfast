@@ -24,6 +24,8 @@ func (game *Game) registerFleets() {
 	packets.Handle(game.handleChapterOp)
 	packets.Handle(game.handleChapterBattleResult)
 	packets.Handle(game.handleRemasterInfo)
+	packets.Handle(game.handleBeginStage)
+	packets.Handle(game.handleFinishStage)
 }
 
 // fleetsLoginPushes are this area's part of the CS_11001 burst, in the
