@@ -7,7 +7,6 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/protobuf"
-	"github.com/ggmolly/belfast/internal/protocol"
 )
 
 // handleChargeList answers GetChargeListCommand: nothing bought, so every
@@ -56,8 +55,6 @@ func (game *Game) handleShopStreet(client *connection.Client, req *protobuf.CS_2
 	street := &protobuf.SHOPPINGSTREET{
 		Lv:            proto.Uint32(1),
 		NextFlashTime: proto.Uint32(uint32(nextExerciseReset(time.Now()).Unix())),
-		LvUpTime:      proto.Uint32(0),
-		FlashCount:    proto.Uint32(0),
 	}
 	for _, goods := range shopStreetGoods {
 		street.GoodsList = append(street.GoodsList, &protobuf.STREETGOODS{
@@ -71,7 +68,7 @@ func (game *Game) handleShopStreet(client *connection.Client, req *protobuf.CS_2
 // (gameroom_shop_template): goods lists the purchases, none yet; it
 // refreshes with the month.
 func (game *Game) handleMiniGameShop(client *connection.Client, req *protobuf.CS_26150) error {
-	return client.Send(protocol.FillRequired(&protobuf.SC_26151{
+	return client.Send(&protobuf.SC_26151{
 		NextFlashTime: proto.Uint32(uint32(nextMonth(time.Now()).Unix())),
-	}))
+	})
 }

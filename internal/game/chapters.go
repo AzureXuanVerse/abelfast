@@ -14,7 +14,6 @@ import (
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/protobuf"
-	"github.com/ggmolly/belfast/internal/protocol"
 )
 
 // ChapterConst attachments (CHAPTERCELLINFO_P13.item_type)
@@ -619,9 +618,6 @@ func chapterList(ctx context.Context, queries *db.Queries, commanderID uint32) (
 	}
 	msg := &protobuf.SC_13001{
 		ReactChapter: &protobuf.REACTCHAPTER_INFO{},
-		Oil:          proto.Uint32(0),
-		TimeAcc:      proto.Uint32(0),
-		ExtraTimeMax: proto.Uint32(0),
 	}
 	for _, row := range rows {
 		msg.ChapterList = append(msg.ChapterList, &protobuf.CHAPTERINFO{
@@ -635,13 +631,13 @@ func chapterList(ctx context.Context, queries *db.Queries, commanderID uint32) (
 			PassCount:        proto.Uint32(row.PassCount),
 		})
 	}
-	return protocol.FillRequired(msg), nil
+	return msg, nil
 }
 
 // currentChapter is SC_13000: the sortie in progress, if any, so the client
 // goes back into it. Repairs aren't counted yet.
 func currentChapter(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobuf.SC_13000, error) {
-	msg := &protobuf.SC_13000{DailyRepairCount: proto.Uint32(0)}
+	msg := &protobuf.SC_13000{}
 	session, err := loadChapter(ctx, queries, commanderID)
 	if err != nil {
 		return nil, err

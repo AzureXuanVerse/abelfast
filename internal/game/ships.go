@@ -13,7 +13,6 @@ import (
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/protobuf"
-	"github.com/ggmolly/belfast/internal/protocol"
 )
 
 const (
@@ -128,7 +127,7 @@ func shipInfo(ship db.Ship) *protobuf.SHIPINFO {
 	if ship.IsLocked {
 		locked = 1
 	}
-	return protocol.FillRequired(&protobuf.SHIPINFO{
+	return &protobuf.SHIPINFO{
 		Id:                  proto.Uint32(ship.ID),
 		TemplateId:          proto.Uint32(ship.TemplateID),
 		Level:               proto.Uint32(ship.Level),
@@ -145,7 +144,7 @@ func shipInfo(ship db.Ship) *protobuf.SHIPINFO {
 		ChangeNameTimestamp: proto.Uint32(ship.ChangeNameTimestamp),
 		MaxLevel:            proto.Uint32(ship.MaxLevel),
 		CommonFlag:          proto.Uint32(ship.CommonFlag),
-	})
+	}
 }
 
 // fullShipInfo is the SHIPINFO of a ship with its slots and skills.
@@ -153,7 +152,7 @@ func fullShipInfo(ship db.Ship, equips []db.ShipEquipment, skills []db.ShipSkill
 	info := shipInfo(ship)
 	info.EquipInfoList = make([]*protobuf.EQUIPSKIN_INFO, shipEquipSlots)
 	for i := range info.EquipInfoList {
-		info.EquipInfoList[i] = &protobuf.EQUIPSKIN_INFO{Id: proto.Uint32(0), SkinId: proto.Uint32(0)}
+		info.EquipInfoList[i] = &protobuf.EQUIPSKIN_INFO{}
 	}
 	for _, equip := range equips {
 		if equip.Pos >= 1 && equip.Pos <= shipEquipSlots {
@@ -394,7 +393,7 @@ func collectionState(ctx context.Context, queries *db.Queries, commanderID uint3
 	for _, trophy := range trophies {
 		stored[trophy.TrophyID] = trophy
 	}
-	msg := &protobuf.SC_17001{DailyDiscuss: proto.Uint32(0)}
+	msg := &protobuf.SC_17001{}
 	for _, id := range archiveTrophies {
 		trophy := stored[id]
 		msg.ProgressList = append(msg.ProgressList, &protobuf.ACHIEVEMENT_INFO{
@@ -446,7 +445,7 @@ func SetTrophy(ctx context.Context, queries *db.Queries, commanderID, trophyID, 
 		return nil, err
 	}
 	return &protobuf.SC_17002{ProgressList: []*protobuf.ACHIEVEMENT_INFO{{
-		Id: proto.Uint32(trophyID), Progress: proto.Uint32(progress), Timestamp: proto.Uint32(0),
+		Id: proto.Uint32(trophyID), Progress: proto.Uint32(progress),
 	}}}, nil
 }
 

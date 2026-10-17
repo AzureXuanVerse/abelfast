@@ -77,9 +77,6 @@ var buildDurations = map[uint32]uint32{2: 1200, 3: 1500, 4: 1800, 5: 3600, 6: 54
 func buildDocks() *protobuf.SC_12024 {
 	return &protobuf.SC_12024{
 		WorklistCount: proto.Uint32(buildWorkCount),
-		DrawCount_1:   proto.Uint32(0),
-		DrawCount_10:  proto.Uint32(0),
-		ExchangeCount: proto.Uint32(0),
 	}
 }
 

@@ -119,7 +119,6 @@ func (game *Game) tasksLoginPushes(ctx context.Context, commander db.Commander) 
 			Id:         proto.Uint32(task.TaskID),
 			Progress:   proto.Uint32(task.Progress),
 			AcceptTime: proto.Uint32(task.AcceptTime),
-			SubmitTime: proto.Uint32(0),
 		}
 	}
 	weekly, err := game.weeklyInfo(ctx, game.DB.Queries, commander.ID)

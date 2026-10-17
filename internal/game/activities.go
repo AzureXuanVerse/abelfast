@@ -14,7 +14,6 @@ import (
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/protobuf"
-	"github.com/ggmolly/belfast/internal/protocol"
 )
 
 // drop is a reward: a DROP_TYPE_* (const.lua), an id and a count.
@@ -326,7 +325,7 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 		err = errActivityRefused
 	}
 	if errors.Is(err, errActivityRefused) || errors.Is(err, errUnsupportedDrop) {
-		return client.Send(protocol.FillRequired(&protobuf.SC_11203{Result: proto.Uint32(1)}))
+		return client.Send(&protobuf.SC_11203{Result: proto.Uint32(1)})
 	}
 	if err != nil {
 		return err

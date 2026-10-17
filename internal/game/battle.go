@@ -114,7 +114,7 @@ func (session *chapterSession) battleCell(id uint32) *protobuf.CHAPTERCELLINFO_P
 func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_40003) error {
 	ctx := context.Background()
 	if req.GetSystem() != systemScenario {
-		return client.Send(&protobuf.SC_40004{Result: proto.Uint32(0), PlayerExp: proto.Uint32(0), Mvp: proto.Uint32(0)})
+		return client.Send(&protobuf.SC_40004{Result: proto.Uint32(0)})
 	}
 	session, err := loadChapter(ctx, game.DB.Queries, client.CommanderID)
 	if err != nil {
@@ -126,7 +126,7 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 	}
 	expedition, known := expeditionTemplates[req.GetData()]
 	if cell == nil || !known {
-		return client.Send(&protobuf.SC_40004{Result: proto.Uint32(1), PlayerExp: proto.Uint32(0), Mvp: proto.Uint32(0)})
+		return client.Send(&protobuf.SC_40004{Result: proto.Uint32(1)})
 	}
 	group := session.activeGroup()
 	score := min(req.GetScore(), scoreS)
@@ -141,7 +141,7 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 		byID[ship.ID] = ship
 	}
 
-	reply := &protobuf.SC_40004{Result: proto.Uint32(0), PlayerExp: proto.Uint32(0)}
+	reply := &protobuf.SC_40004{Result: proto.Uint32(0)}
 	var events []TaskEvent
 	if win {
 		events = append(events, TaskEvent{SubType: TaskSubWin, Count: 1})
@@ -192,7 +192,6 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 			ShipId:   proto.Uint32(ship.ID),
 			Exp:      proto.Uint32(gained),
 			Intimacy: proto.Uint32(maxIntimacy + affinity),
-			Energy:   proto.Uint32(0),
 		})
 		addShipExp(&ship, gained)
 		ship.Intimacy = min(ship.Intimacy+affinity, maxIntimacy)

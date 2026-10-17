@@ -263,7 +263,7 @@ func (game *Game) juusGroups(ctx context.Context, commanderID uint32) (*protobuf
 	for _, topic := range topics {
 		group, ok := groups[topic.ShipGroup]
 		if !ok {
-			group = &protobuf.JUUS_GROUP{Id: proto.Uint32(topic.ShipGroup), SkinId: proto.Uint32(0), Favorite: proto.Uint32(0)}
+			group = &protobuf.JUUS_GROUP{Id: proto.Uint32(topic.ShipGroup)}
 			groups[topic.ShipGroup] = group
 			msg.Groups = append(msg.Groups, group)
 		}

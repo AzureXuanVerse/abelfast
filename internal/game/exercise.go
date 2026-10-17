@@ -67,11 +67,9 @@ func (game *Game) handleSeasonInfo(client *connection.Client, req *protobuf.CS_1
 		return err
 	}
 	reply := &protobuf.SC_18002{
-		Score:               proto.Uint32(0),
 		Rank:                proto.Uint32(uint32(rank)),
 		FightCount:          proto.Uint32(exerciseFightCount),
 		FightCountResetTime: proto.Uint32(uint32(nextExerciseReset(time.Now()).Unix())),
-		FlashTargetCount:    proto.Uint32(0),
 	}
 	if starter, ok := starterShip(commander, ships); ok {
 		reply.VanguardShipIdList = []uint32{starter.ID}
@@ -154,11 +152,10 @@ func (game *Game) handleMilitaryShop(client *connection.Client, req *protobuf.CS
 	now := time.Now()
 	next := nextDay(now)
 	reply := &protobuf.SC_18101{
-		FlashCount:    proto.Uint32(0),
 		NextFlashTime: proto.Uint32(uint32(next.Unix())),
 	}
 	for _, id := range arenaShopGoods(shops[arenaShopID], client.CommanderID, next) {
-		reply.ArenaShopList = append(reply.ArenaShopList, &protobuf.ARENASHOP{ShopId: proto.Uint32(id), Count: proto.Uint32(0)})
+		reply.ArenaShopList = append(reply.ArenaShopList, &protobuf.ARENASHOP{ShopId: proto.Uint32(id)})
 	}
 	return client.Send(reply)
 }

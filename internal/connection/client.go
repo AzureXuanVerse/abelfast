@@ -85,7 +85,9 @@ func newClient(conn net.Conn, server *Server) *Client {
 }
 
 // Send buffers a server message, its packet id is taken from the message
-// name (SC_<id>). The pushes queued so far go out before it.
+// name (SC_<id>). The pushes queued so far go out before it. Required fields
+// left unset are sent as their zero value (protocol.FillRequired), so a
+// message only spells out the fields that carry meaning.
 func (client *Client) Send(msg proto.Message) error {
 	return client.buffer(msg, &client.writeBuffer)
 }
@@ -110,7 +112,7 @@ func (client *Client) buffer(msg proto.Message, dst *[]byte) error {
 	if err != nil {
 		return err
 	}
-	payload, err := proto.Marshal(msg)
+	payload, err := proto.Marshal(protocol.FillRequired(msg))
 	if err != nil {
 		return fmt.Errorf("SC_%d: %w", id, err)
 	}

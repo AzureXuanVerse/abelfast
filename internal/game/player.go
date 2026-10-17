@@ -10,7 +10,6 @@ import (
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/protobuf"
-	"github.com/ggmolly/belfast/internal/protocol"
 )
 
 // registerPlayer installs the player area's handlers.
@@ -159,41 +158,41 @@ func (game *Game) playerLoginPushes(ctx context.Context, commander db.Commander)
 		// PlayerProxy: no benefit buffs
 		&protobuf.SC_11015{},
 		// RefluxProxy: not a returning player
-		&protobuf.SC_11752{Active: proto.Uint32(0)},
+		&protobuf.SC_11752{},
 		// SystemTipProxy (island delegation tips): nothing to collect
-		protocol.FillRequired(&protobuf.SC_21536{}),
+		&protobuf.SC_21536{},
 		navalAcademy(),
 		// GameRoomProxy: no game room coins or scores
-		protocol.FillRequired(&protobuf.SC_26120{}),
+		&protobuf.SC_26120{},
 		// CommanderProxy: no cat commanders, boxes or presets
-		protocol.FillRequired(&protobuf.SC_25001{}),
+		&protobuf.SC_25001{},
 		// ShipSkinProxy: no skins owned
 		&protobuf.SC_12201{},
 		technology(),
 		// TechnologyProxy blueprints (PR ships): none
-		protocol.FillRequired(&protobuf.SC_63100{}),
+		&protobuf.SC_63100{},
 		// TechnologyNationProxy: no fleet tech
 		&protobuf.SC_64000{},
 		// DailyLevelProxy: no daily challenge played
-		protocol.FillRequired(&protobuf.SC_13201{}),
+		&protobuf.SC_13201{},
 		// ShopsProxy: nothing bought this month
 		&protobuf.SC_16200{Month: proto.Uint32(uint32(serverNow().Month()))},
 		// WorldProxy: Operation Siren open, not started (captured)
-		&protobuf.SC_33114{IsWorldOpen: proto.Uint32(1), Progress: proto.Uint32(0)},
+		&protobuf.SC_33114{IsWorldOpen: proto.Uint32(1)},
 		backyard,
 		// ApartmentProxy / Dorm3dInsProxy: no dorm 3D
-		protocol.FillRequired(&protobuf.SC_28000{}),
+		&protobuf.SC_28000{},
 		// MailProxy: empty mailbox
-		&protobuf.SC_30001{UnreadNumber: proto.Uint32(0), TotalNumber: proto.Uint32(0)},
+		&protobuf.SC_30001{},
 		// CompensateProxy: no compensation mail
-		&protobuf.SC_30101{Number: proto.Uint32(0), MaxTimestamp: proto.Uint32(0)},
+		&protobuf.SC_30101{},
 		// FriendProxy: no friends or requests
 		&protobuf.SC_50000{},
 		activities,
 		// ActivityPermanentProxy: no permanent (archived) event running
 		&protobuf.SC_11210{},
 		// ActivityRemasterProxy: no remaster ticket timer
-		protocol.FillRequired(&protobuf.SC_11213{}),
+		&protobuf.SC_11213{},
 		// ServerNoticeProxy: belfast has no announcements
 		&protobuf.SC_11300{},
 		// PlayerProxy: everything is loaded
@@ -226,14 +225,14 @@ func (game *Game) playerInfo(ctx context.Context, commander db.Commander, ships 
 	if len(characters) == 0 {
 		// commanders created before secretaries were stored
 		if ship, ok := starterShip(commander, ships); ok {
-			characters = []*protobuf.KVDATA{{Key: proto.Uint32(ship.ID), Value: proto.Uint32(0)}}
+			characters = []*protobuf.KVDATA{{Key: proto.Uint32(ship.ID)}}
 		}
 	}
 	icon := commander.Icon
 	if icon == 0 {
 		icon = commander.StarterShip
 	}
-	return protocol.FillRequired(&protobuf.SC_11003{
+	return &protobuf.SC_11003{
 		Id:              proto.Uint32(commander.ID),
 		Name:            proto.String(commander.Name),
 		Level:           proto.Uint32(commander.Level),
@@ -249,31 +248,30 @@ func (game *Game) playerInfo(ctx context.Context, commander db.Commander, ships 
 		RegisterTime:    proto.Uint32(uint32(commander.RegisteredAt)),
 		ShipCount:       proto.Uint32(uint32(len(ships))),
 		CommanderBagMax: proto.Uint32(commander.CommanderBagMax),
-		Display:         protocol.FillRequired(&protobuf.DISPLAYINFO{Icon: proto.Uint32(icon)}),
-		Appreciation:    protocol.FillRequired(&protobuf.APPRECIATIONINFO{}),
+		Display:         &protobuf.DISPLAYINFO{Icon: proto.Uint32(icon)},
 		MailStoreroomLv: proto.Uint32(commander.MailStoreroomLv),
 		BattleUi:        proto.Uint32(0), // item_data_battleui "Standard"
 		NewGuideIndex:   proto.Uint32(commander.NewGuideIndex),
 		StoryList:       stories,
-	}), nil
+	}, nil
 }
 
 // navalAcademy is SC_22001, NavalAcademyProxy's state: oil field, merchant
 // and classroom at level 1 (their template tables start there), two skill
 // classes (captured), no lessons.
 func navalAcademy() *protobuf.SC_22001 {
-	return protocol.FillRequired(&protobuf.SC_22001{
+	return &protobuf.SC_22001{
 		OilWellLevel:  proto.Uint32(1),
 		GoldWellLevel: proto.Uint32(1),
 		ClassLv:       proto.Uint32(1),
 		SkillClassNum: proto.Uint32(2),
-	})
+	}
 }
 
 // technology is SC_63000, TechnologyProxy's research state: nothing started,
 // no catch-up research.
 func technology() *protobuf.SC_63000 {
-	return protocol.FillRequired(&protobuf.SC_63000{})
+	return &protobuf.SC_63000{}
 }
 
 // dorm is SC_19001, the backyard (DormProxy): level 1 (dorm_data_template 1),
@@ -291,13 +289,13 @@ func (game *Game) dorm(ctx context.Context, commander db.Commander) (*protobuf.S
 	if loadTime == 0 {
 		loadTime = uint32(commander.RegisteredAt)
 	}
-	return protocol.FillRequired(&protobuf.SC_19001{
+	return &protobuf.SC_19001{
 		Lv:              proto.Uint32(1),
 		FurnitureIdList: list,
 		FloorNum:        proto.Uint32(1),
 		ExpPos:          proto.Uint32(2),
 		LoadTime:        proto.Uint32(loadTime),
-	}), nil
+	}, nil
 }
 
 // handleDormPopEvents answers BackYardRequestPopEventCommand (CS_19009): the

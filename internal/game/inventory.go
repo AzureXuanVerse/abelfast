@@ -9,7 +9,6 @@ import (
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/protobuf"
-	"github.com/ggmolly/belfast/internal/protocol"
 )
 
 // player_resource ids
@@ -245,7 +244,7 @@ func (game *Game) handleSellItems(client *connection.Client, req *protobuf.CS_15
 	if err != nil && !refused(err) {
 		return err
 	}
-	return client.Send(protocol.FillRequired(&protobuf.SC_15009{Result: result(err == nil)}))
+	return client.Send(&protobuf.SC_15009{Result: result(err == nil)})
 }
 
 // handleTracking takes the client's analytics events (CS_10991), no reply.

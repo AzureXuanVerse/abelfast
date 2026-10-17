@@ -8,7 +8,6 @@ import (
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/protobuf"
-	"github.com/ggmolly/belfast/internal/protocol"
 )
 
 // maxChatRoom is the highest world chat room ChangeChatRoomCommand allows.
@@ -19,7 +18,6 @@ const maxChatRoom = 99
 // failed attempts.
 func (game *Game) handleSecondaryPassword(client *connection.Client, req *protobuf.CS_11603) error {
 	return client.Send(&protobuf.SC_11604{
-		State:     proto.Uint32(0),
 		FailCount: proto.Uint32(0),
 		FailCd:    proto.Uint32(0),
 		Notice:    proto.String(""),
@@ -50,20 +48,20 @@ func (game *Game) handleClientReport(client *connection.Client, req *protobuf.CS
 // 1 with its first slot open (op_flag 7) and empty (captured; there are no
 // cat commanders yet).
 func (game *Game) handleCommanderHome(client *connection.Client, req *protobuf.CS_25026) error {
-	return client.Send(protocol.FillRequired(&protobuf.SC_25027{
+	return client.Send(&protobuf.SC_25027{
 		Level: proto.Uint32(1),
-		Slots: []*protobuf.COMMANDERHOMESLOT{protocol.FillRequired(&protobuf.COMMANDERHOMESLOT{
+		Slots: []*protobuf.COMMANDERHOMESLOT{{
 			Id:     proto.Uint32(1),
 			OpFlag: proto.Uint32(7),
 			Style:  proto.Uint32(1),
-		})},
-	}))
+		}},
+	})
 }
 
 // handleWorldBoss answers GetWorldBossCommand (Operation Siren's world
 // boss): no boss summoned or fought, own boss level 1.
 func (game *Game) handleWorldBoss(client *connection.Client, req *protobuf.CS_34501) error {
-	return client.Send(protocol.FillRequired(&protobuf.SC_34502{SelfBossLv: proto.Uint32(1)}))
+	return client.Send(&protobuf.SC_34502{SelfBossLv: proto.Uint32(1)})
 }
 
 // handleMetaPTData answers MetaPTDataRequestCommand, the META ship points of
@@ -71,7 +69,7 @@ func (game *Game) handleWorldBoss(client *connection.Client, req *protobuf.CS_34
 func (game *Game) handleMetaPTData(client *connection.Client, req *protobuf.CS_34001) error {
 	reply := &protobuf.SC_34002{}
 	for _, group := range req.GetGroupId() {
-		reply.MetaShipList = append(reply.MetaShipList, protocol.FillRequired(&protobuf.META_SHIP_INFO{GroupId: proto.Uint32(group)}))
+		reply.MetaShipList = append(reply.MetaShipList, &protobuf.META_SHIP_INFO{GroupId: proto.Uint32(group)})
 	}
 	return client.Send(reply)
 }
