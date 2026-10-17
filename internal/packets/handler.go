@@ -37,7 +37,11 @@ func Handle[Req any, PReq interface {
 	handlers[id] = append(handlers[id], func(client *connection.Client, payload []byte) error {
 		req := PReq(new(Req))
 		if err := proto.Unmarshal(payload, req); err != nil {
-			return err
+			// the client sometimes sends payloads that aren't valid protobuf
+			// (CS_15008 is a lone 0x01 after login); the official server still
+			// answers them, so handle them as an empty request
+			logger.WithFields("Handler", logger.FieldValue("packet", id), logger.FieldValue("payload", fmt.Sprintf("%x", payload)), logger.FieldValue("error", err)).Warn("unparsable request handled as empty")
+			req = PReq(new(Req))
 		}
 		return fn(client, req)
 	})
