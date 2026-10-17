@@ -46,6 +46,13 @@ type medalGoodsConfig struct {
 	Group         uint32 `json:"group"`
 	Order         uint32 `json:"order"`
 	PurchaseLimit uint32 `json:"goods_purchase_limit"`
+	// what one purchase gives: num of a drop of type, goods[1] or, for
+	// goods_type medalGoodsSelectable, one of goods (MedalGoods)
+	Type      uint32   `json:"type"`
+	Goods     []uint32 `json:"goods"`
+	GoodsType uint32   `json:"goods_type"`
+	Num       uint32   `json:"num"`
+	Price     uint32   `json:"price"` // in medals of honor, per purchase
 }
 
 var medalGoods map[uint32]medalGoodsConfig
@@ -100,16 +107,22 @@ func medalShopGoods(commanderID uint32, next time.Time) []uint32 {
 }
 
 // handleMedalShop answers GetMedalShopCommand: this month's medal exchange,
-// every purchase left (count is what can still be bought); it refreshes with
-// the month.
+// count is what can still be bought of each goods (its purchase limit less
+// what was bought from this stock, MedalShopCommand); it refreshes with the
+// month.
 func (game *Game) handleMedalShop(client *connection.Client, req *protobuf.CS_16106) error {
 	next := nextMonth(time.Now())
+	bought, err := medalShopPurchases(context.Background(), game.DB.Queries, client.CommanderID, next)
+	if err != nil {
+		return err
+	}
 	reply := &protobuf.SC_16107{
 		Result:        result(nil),
 		ItemFlashTime: proto.Uint32(uint32(next.Unix())),
 	}
 	for _, id := range medalShopGoods(client.CommanderID, next) {
-		reply.GoodList = append(reply.GoodList, &protobuf.GOODS_INFO_P16{Id: proto.Uint32(id), Count: proto.Uint32(medalGoods[id].PurchaseLimit)})
+		left := medalGoods[id].PurchaseLimit - min(bought[id], medalGoods[id].PurchaseLimit)
+		reply.GoodList = append(reply.GoodList, &protobuf.GOODS_INFO_P16{Id: proto.Uint32(id), Count: proto.Uint32(left)})
 	}
 	return client.Send(reply)
 }

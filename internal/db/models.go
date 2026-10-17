@@ -145,6 +145,13 @@ type CommanderJuusTopic struct {
 	ReadFlag    bool
 }
 
+type CommanderMedalShopPurchase struct {
+	CommanderID uint32
+	GoodsID     uint32
+	FlashTime   int64
+	Count       uint32
+}
+
 type CommanderResource struct {
 	CommanderID uint32
 	ResourceID  uint32

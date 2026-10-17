@@ -124,6 +124,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleChargeList)
 	packets.Handle(game.handleShopping)
 	packets.Handle(game.handleMedalShop)
+	packets.Handle(game.handleMedalShopPurchase)
 	packets.Handle(game.handleShopStreet)
 	packets.Handle(game.handleMiniGameShop)
 	packets.Handle(game.handleSeasonInfo)
