@@ -12,7 +12,6 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
-	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
@@ -121,11 +120,10 @@ func taskList(ctx context.Context, queries *db.Queries, commanderID uint32) (*pr
 
 // activityTasksList is SC_20201, the tasks of the open task activities
 // (TotalTaskProxy).
-func (game *Game) activityTasksList(ctx context.Context, queries *db.Queries, commanderID uint32, now time.Time) *protobuf.SC_20201 {
+func (game *Game) activityTasksList(ctx context.Context, queries *db.Queries, commanderID uint32, now time.Time) (*protobuf.SC_20201, error) {
 	activities, err := game.activityTaskLists(ctx, queries, commanderID, now)
 	if err != nil {
-		// without config data there are no activity tasks, the rest still works
-		logger.WithFields("Tasks", logger.FieldValue("error", err)).Warn("activity tasks unavailable")
+		return nil, err
 	}
 	msg := &protobuf.SC_20201{}
 	for _, activity := range activities {
@@ -139,7 +137,7 @@ func (game *Game) activityTasksList(ctx context.Context, queries *db.Queries, co
 		}
 		msg.Info = append(msg.Info, info)
 	}
-	return msg
+	return msg, nil
 }
 
 // weeklyInfo is SC_20101.info, the weekly missions: their progress, the
@@ -181,12 +179,8 @@ func grantTasksStarter(ctx context.Context, queries *db.Queries, commander db.Co
 			return err
 		}
 	}
-	pages, err := handbookPageConfigs.get()
-	if err != nil {
-		return err
-	}
 	var unlockTasks []uint32
-	for _, page := range pages {
+	for _, page := range handbookPageConfigs {
 		for _, id := range page.Unlock {
 			if !slices.Contains(unlockTasks, id) {
 				unlockTasks = append(unlockTasks, id)
@@ -207,10 +201,6 @@ func grantTasksStarter(ctx context.Context, queries *db.Queries, commander db.Co
 // grouped by tens: 10001-10007, 10011-10016...) open at level that the
 // commander doesn't have yet, and returns them.
 func unlockWeeklyTasks(ctx context.Context, queries *db.Queries, commanderID uint32, level uint32) ([]uint32, error) {
-	configs, err := weeklyTaskConfigs.get()
-	if err != nil {
-		return nil, err
-	}
 	current, err := queries.ListWeeklyTasks(ctx, commanderID)
 	if err != nil {
 		return nil, err
@@ -220,7 +210,7 @@ func unlockWeeklyTasks(ctx context.Context, queries *db.Queries, commanderID uin
 		have[task.TaskID/10] = true
 	}
 	first := map[uint32]weeklyTaskConfig{}
-	for _, config := range configs {
+	for _, config := range weeklyTaskConfigs {
 		if step, ok := first[config.ID/10]; !ok || config.ID < step.ID {
 			first[config.ID/10] = config
 		}
@@ -280,17 +270,13 @@ func initialProgress(config taskConfig, counters map[taskCounterKey]uint32) uint
 // acceptTasks gives the commander the tasks they don't have yet and returns
 // them as SC_20003 (nil when there is none). Unknown task ids are skipped.
 func acceptTasks(ctx context.Context, queries *db.Queries, commanderID uint32, ids []uint32, now uint32) (*protobuf.SC_20003, error) {
-	configs, err := taskConfigs.get()
-	if err != nil {
-		return nil, err
-	}
 	counters, err := listTaskCounters(ctx, queries, commanderID)
 	if err != nil {
 		return nil, err
 	}
 	added := &protobuf.SC_20003{}
 	for _, id := range ids {
-		config, ok := configs[id]
+		config, ok := taskConfigs[id]
 		if !ok {
 			continue
 		}
@@ -333,15 +319,6 @@ func (game *Game) applyTaskEvents(ctx context.Context, queries *db.Queries, comm
 	if len(events) == 0 {
 		return nil, nil
 	}
-	configs, err := taskConfigs.get()
-	if err != nil {
-		return nil, err
-	}
-	weeklyConfigs, err := weeklyTaskConfigs.get()
-	if err != nil {
-		return nil, err
-	}
-
 	counters, err := listTaskCounters(ctx, queries, commanderID)
 	if err != nil {
 		return nil, err
@@ -397,7 +374,7 @@ func (game *Game) applyTaskEvents(ctx context.Context, queries *db.Queries, comm
 	}
 	taskProgress := &protobuf.SC_20002{}
 	for _, task := range tasks {
-		config, ok := configs[task.TaskID]
+		config, ok := taskConfigs[task.TaskID]
 		if !ok {
 			continue
 		}
@@ -423,7 +400,7 @@ func (game *Game) applyTaskEvents(ctx context.Context, queries *db.Queries, comm
 	}
 	weeklyProgress := &protobuf.SC_20102{}
 	for _, task := range weekly {
-		config, ok := weeklyConfigs[task.TaskID]
+		config, ok := weeklyTaskConfigs[task.TaskID]
 		if !ok {
 			continue
 		}
@@ -459,7 +436,7 @@ func (game *Game) applyTaskEvents(ctx context.Context, queries *db.Queries, comm
 	for _, activity := range activities {
 		info := &protobuf.ACT_TASK_LIST{ActId: proto.Uint32(activity.id)}
 		for _, task := range activity.tasks {
-			config, ok := configs[task.taskID]
+			config, ok := taskConfigs[task.taskID]
 			if !ok || task.finished {
 				continue
 			}
@@ -497,10 +474,6 @@ type taskActivity struct {
 // taskActivityTypes running at now) with their tasks and the commander's
 // progress on them.
 func (game *Game) activityTaskLists(ctx context.Context, queries *db.Queries, commanderID uint32, now time.Time) ([]taskActivity, error) {
-	configs, err := activityConfigs.get()
-	if err != nil {
-		return nil, err
-	}
 	rows, err := queries.ListActivityTasks(ctx, commanderID)
 	if err != nil {
 		return nil, err
@@ -510,7 +483,7 @@ func (game *Game) activityTaskLists(ctx context.Context, queries *db.Queries, co
 		stored[[2]uint32{row.ActID, row.TaskID}] = row
 	}
 	var ids []uint32
-	for id, config := range configs {
+	for id, config := range activityConfigs {
 		if taskActivityTypes[config.Type] {
 			if _, _, open := activityWindow(config, now); open {
 				ids = append(ids, id)
@@ -520,10 +493,7 @@ func (game *Game) activityTaskLists(ctx context.Context, queries *db.Queries, co
 	slices.Sort(ids)
 	var activities []taskActivity
 	for _, id := range ids {
-		taskIDs, err := activityTaskIDs(configs[id], now)
-		if err != nil {
-			return nil, err
-		}
+		taskIDs := activityTaskIDs(activityConfigs[id], now)
 		activity := taskActivity{id: id}
 		for _, taskID := range taskIDs {
 			row := stored[[2]uint32{id, taskID}]
@@ -539,21 +509,17 @@ func (game *Game) activityTaskLists(ctx context.Context, queries *db.Queries, co
 // opening each week (group_mask) since the activity started
 // (CrusingTaskLayer, GetServerOverWeek). Each group is listed backwards, as
 // the capture does.
-func activityTaskIDs(config activityConfig, now time.Time) ([]uint32, error) {
+func activityTaskIDs(config activityConfig, now time.Time) []uint32 {
 	ids := parseIDList(config.ConfigData)
 	if config.Type != activityTypeCruise {
-		return ids, nil
-	}
-	groups, err := battlepassTaskGroups.get()
-	if err != nil {
-		return nil, err
+		return ids
 	}
 	start, _, _ := activityWindow(config, now)
 	weekStart := start.Unix() - (start.Unix()-mondayReference)%(7*86400)
 	weeks := uint32((now.Unix() - weekStart + 7*86400 - 1) / (7 * 86400))
 	var tasks []uint32
 	for _, groupID := range ids {
-		group, ok := groups[groupID]
+		group, ok := battlepassTaskGroups[groupID]
 		if !ok || (group.IsOntime == 1 && group.GroupMask > weeks) {
 			continue
 		}
@@ -564,7 +530,7 @@ func activityTaskIDs(config activityConfig, now time.Time) ([]uint32, error) {
 		slices.Reverse(groupTasks)
 		tasks = append(tasks, groupTasks...)
 	}
-	return tasks, nil
+	return tasks
 }
 
 // activityWindow reads activity_template.time: "always", or
@@ -624,11 +590,7 @@ func awardChoice(config taskConfig, chosen []*protobuf.DROPINFO) [][]uint32 {
 // before the reply, as in the capture; the client drops the task itself.
 func (game *Game) handleSubmitTask(client *connection.Client, req *protobuf.CS_20005) error {
 	ctx := context.Background()
-	configs, err := taskConfigs.get()
-	if err != nil {
-		return err
-	}
-	config, ok := configs[req.GetId()]
+	config, ok := taskConfigs[req.GetId()]
 	task, err := game.DB.GetTask(ctx, db.GetTaskParams{CommanderID: client.CommanderID, TaskID: req.GetId()})
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
@@ -697,10 +659,6 @@ func (game *Game) handleClientTaskEvent(client *connection.Client, req *protobuf
 // removal (SC_20204), then the rewards.
 func (game *Game) handleSubmitActivityTasks(client *connection.Client, req *protobuf.CS_20205) error {
 	ctx := context.Background()
-	configs, err := taskConfigs.get()
-	if err != nil {
-		return err
-	}
 	activities, err := game.activityTaskLists(ctx, game.DB.Queries, client.CommanderID, time.Now())
 	if err != nil {
 		return err
@@ -720,7 +678,7 @@ func (game *Game) handleSubmitActivityTasks(client *connection.Client, req *prot
 		return client.Send(&protobuf.SC_20206{Result: result(errRefused)})
 	}
 	for _, task := range claimed {
-		if config, ok := configs[task.taskID]; !ok || task.finished || task.progress < config.TargetNum {
+		if config, ok := taskConfigs[task.taskID]; !ok || task.finished || task.progress < config.TargetNum {
 			return client.Send(&protobuf.SC_20206{Result: result(errRefused)})
 		}
 	}
@@ -731,7 +689,7 @@ func (game *Game) handleSubmitActivityTasks(client *connection.Client, req *prot
 			if err := tx.FinishActivityTask(ctx, db.FinishActivityTaskParams{CommanderID: client.CommanderID, ActID: req.GetActId(), TaskID: task.taskID, Progress: task.progress}); err != nil {
 				return err
 			}
-			awards := configDrops(configs[task.taskID].AwardDisplay)
+			awards := configDrops(taskConfigs[task.taskID].AwardDisplay)
 			if err := tx.grantDrops(awards); err != nil {
 				return err
 			}

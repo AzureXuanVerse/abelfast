@@ -49,12 +49,8 @@ func (game *Game) handbookLoginPush(ctx context.Context, commander db.Commander)
 // unlock tasks (sub_type 114, target the page); a task that unlocks a page or
 // a page's tasks (unlock, task_list[i][1]) only finishes.
 func handbookTaskClaimed(ctx context.Context, queries *db.Queries, commanderID uint32, taskID uint32) ([]TaskEvent, error) {
-	pages, err := handbookPageConfigs.get()
-	if err != nil {
-		return nil, err
-	}
 	var events []TaskEvent
-	for _, page := range pages {
+	for _, page := range handbookPageConfigs {
 		isPageTask, isUnlockTask := false, slices.Contains(page.Unlock, taskID)
 		for _, entry := range page.TaskList {
 			if len(entry) > 0 && slices.Contains(entry[0], taskID) {
@@ -90,11 +86,7 @@ func handbookTaskClaimed(ctx context.Context, queries *db.Queries, commanderID u
 // The capture lists them backwards.
 func (game *Game) handleHandbookGetTasks(client *connection.Client, req *protobuf.CS_22302) error {
 	ctx := context.Background()
-	pages, err := handbookPageConfigs.get()
-	if err != nil {
-		return err
-	}
-	page, ok := pages[req.GetId()]
+	page, ok := handbookPageConfigs[req.GetId()]
 	index := int(req.GetIndex()) - 1
 	if !ok || index < 0 || index >= len(page.TaskList) || len(page.TaskList[index]) == 0 {
 		return client.Send(&protobuf.SC_22303{Result: result(errRefused)})
@@ -102,10 +94,11 @@ func (game *Game) handleHandbookGetTasks(client *connection.Client, req *protobu
 	tasks := slices.Clone(page.TaskList[index][0])
 	slices.Reverse(tasks)
 	var added *protobuf.SC_20003
-	err = game.DB.InTx(ctx, func(queries *db.Queries) error {
+	err := game.DB.InTx(ctx, func(queries *db.Queries) error {
 		if err := queries.CreateHandbookPage(ctx, db.CreateHandbookPageParams{CommanderID: client.CommanderID, PageID: page.ID}); err != nil {
 			return err
 		}
+		var err error
 		added, err = acceptTasks(ctx, queries, client.CommanderID, tasks, uint32(time.Now().Unix()))
 		return err
 	})

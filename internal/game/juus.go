@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -25,24 +24,26 @@ import (
 // (activity_ins_template is_active 1: InitByServer), as first pushed by the
 // official server: an SC_11706 in text format, server/juus_posts.txtpb of the
 // data dir. Without it there are no posts.
-var juusPosts = sync.OnceValues(func() (map[uint32]*protobuf.INS_MESSAGE, error) {
+var juusPosts map[uint32]*protobuf.INS_MESSAGE
+
+func loadJuusPosts() error {
+	juusPosts = map[uint32]*protobuf.INS_MESSAGE{}
 	text, err := os.ReadFile(filepath.Join(regionDataDir(), "server", "juus_posts.txtpb"))
 	if errors.Is(err, fs.ErrNotExist) {
-		return map[uint32]*protobuf.INS_MESSAGE{}, nil
+		return nil
 	}
 	if err != nil {
-		return nil, err
+		return err
 	}
 	var list protobuf.SC_11706
 	if err := prototext.Unmarshal(text, &list); err != nil {
-		return nil, fmt.Errorf("juus posts: %w", err)
+		return fmt.Errorf("juus posts: %w", err)
 	}
-	posts := make(map[uint32]*protobuf.INS_MESSAGE, len(list.InsMessageList))
 	for _, post := range list.InsMessageList {
-		posts[post.GetId()] = post
+		juusPosts[post.GetId()] = post
 	}
-	return posts, nil
-})
+	return nil
+}
 
 // juusReply is an NPC answer to the commander's comment, posted delay
 // seconds after it.
@@ -93,10 +94,25 @@ type juusRedPacketConfig struct {
 }
 
 var (
-	juusTopicConfigs     = &configTable[juusTopicConfig]{name: "activity_ins_chat_group"}
-	juusWordConfigs      = &configTable[juusWordConfig]{name: "activity_ins_chat_language"}
-	juusRedPacketConfigs = &configTable[juusRedPacketConfig]{name: "activity_ins_redpackage"}
+	juusTopicConfigs     map[uint32]juusTopicConfig
+	juusWordConfigs      map[uint32]juusWordConfig
+	juusRedPacketConfigs map[uint32]juusRedPacketConfig
 )
+
+// loadJuusData reads the Juus chats and the posts the server sends.
+func loadJuusData() error {
+	for _, load := range []func() error{
+		loadTable("activity_ins_chat_group", &juusTopicConfigs),
+		loadTable("activity_ins_chat_language", &juusWordConfigs),
+		loadTable("activity_ins_redpackage", &juusRedPacketConfigs),
+		loadJuusPosts,
+	} {
+		if err := load(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 func (game *Game) registerJuus() {
 	packets.Handle(game.handleJuusPostOp)
@@ -110,11 +126,7 @@ func (game *Game) registerJuus() {
 // juusMessage is a post as the commander sees it: liked, read, and their
 // comment with the answers it got.
 func juusMessage(row db.CommanderJuusPost) *protobuf.INS_MESSAGE {
-	posts, err := juusPosts()
-	if err != nil {
-		return nil
-	}
-	base, ok := posts[row.PostID]
+	base, ok := juusPosts[row.PostID]
 	if !ok {
 		return nil
 	}
@@ -178,7 +190,7 @@ func (game *Game) handleJuusPostOp(client *connection.Client, req *protobuf.CS_1
 	ctx := context.Background()
 	key := db.GetJuusPostParams{CommanderID: client.CommanderID, PostID: req.GetId()}
 	if req.GetCmd() == juusOpUpdate {
-		if posts, err := juusPosts(); err != nil || posts[req.GetId()] == nil {
+		if juusPosts[req.GetId()] == nil {
 			return client.Send(&protobuf.SC_11702{Result: result(errRefused)})
 		}
 		if err := game.DB.CreateJuusPost(ctx, db.CreateJuusPostParams{CommanderID: client.CommanderID, PostID: req.GetId()}); err != nil {
@@ -288,14 +300,10 @@ func (game *Game) juusGroups(ctx context.Context, commanderID uint32) (*protobuf
 // time.
 func (game *Game) handleJuusActivateTopics(client *connection.Client, req *protobuf.CS_11722) error {
 	ctx := context.Background()
-	topics, err := juusTopicConfigs.get()
-	if err != nil {
-		return err
-	}
 	now := uint32(time.Now().Unix())
 	reply := &protobuf.SC_11723{OpTime: proto.Uint32(now)}
 	for _, id := range req.GetChatGroupIdList() {
-		topic, ok := topics[id]
+		topic, ok := juusTopicConfigs[id]
 		if !ok {
 			reply.ResultList = append(reply.ResultList, *result(errRefused))
 			continue
@@ -343,11 +351,7 @@ func (game *Game) handleJuusChatReply(client *connection.Client, req *protobuf.C
 
 // juusRedPacket is the drop of a red packet chat line, nil for other lines.
 func juusRedPacket(chatID uint32) []uint32 {
-	words, err := juusWordConfigs.get()
-	if err != nil {
-		return nil
-	}
-	word, ok := words[chatID]
+	word, ok := juusWordConfigs[chatID]
 	if !ok || word.Type != juusWordRedPacket {
 		return nil
 	}
@@ -358,11 +362,7 @@ func juusRedPacket(chatID uint32) []uint32 {
 	case float64:
 		id = uint64(param)
 	}
-	packets, err := juusRedPacketConfigs.get()
-	if err != nil {
-		return nil
-	}
-	if packet, ok := packets[uint32(id)]; ok && len(packet.Content) >= 3 {
+	if packet, ok := juusRedPacketConfigs[uint32(id)]; ok && len(packet.Content) >= 3 {
 		return packet.Content
 	}
 	return nil

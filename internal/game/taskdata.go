@@ -56,12 +56,29 @@ type handbookPageConfig struct {
 }
 
 var (
-	taskConfigs          = &configTable[taskConfig]{name: "task_data_template"}
-	weeklyTaskConfigs    = &configTable[weeklyTaskConfig]{name: "weekly_task_template"}
-	activityConfigs      = &configTable[activityConfig]{name: "activity_template"}
-	battlepassTaskGroups = &configTable[battlepassTaskGroup]{name: "battlepass_task_group"}
-	handbookPageConfigs  = &configTable[handbookPageConfig]{name: "tutorial_handbook_task"}
+	taskConfigs          map[uint32]taskConfig
+	weeklyTaskConfigs    map[uint32]weeklyTaskConfig
+	activityConfigs      map[uint32]activityConfig
+	battlepassTaskGroups map[uint32]battlepassTaskGroup
+	handbookPageConfigs  map[uint32]handbookPageConfig
 )
+
+// loadTaskData reads the tasks, weekly missions, activities, cruise pass
+// task groups and commander manual pages.
+func loadTaskData() error {
+	for _, load := range []func() error{
+		loadTable("task_data_template", &taskConfigs),
+		loadTable("weekly_task_template", &weeklyTaskConfigs),
+		loadTable("activity_template", &activityConfigs),
+		loadTable("battlepass_task_group", &battlepassTaskGroups),
+		loadTable("tutorial_handbook_task", &handbookPageConfigs),
+	} {
+		if err := load(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // taskTarget is a task's target_id: "0" / "" / [] for any target, an id, a
 // list of ids, or a [">=", n] threshold.

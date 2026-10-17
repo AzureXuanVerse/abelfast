@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 
 	"github.com/ggmolly/belfast/internal/region"
 )
@@ -85,29 +84,27 @@ func readConfigTable[T any](name string) (map[uint32]T, error) {
 	return table, nil
 }
 
-// configTable loads a config table once and keeps it for the process.
-type configTable[T any] struct {
-	name string
-	once sync.Once
-	rows map[uint32]T
-	err  error
+// loadTable reads a config table into *table as is.
+func loadTable[T any](name string, table *map[uint32]T) func() error {
+	return func() (err error) {
+		*table, err = readConfigTable[T](name)
+		return err
+	}
 }
 
-func (table *configTable[T]) get() (map[uint32]T, error) {
-	table.once.Do(func() {
-		table.rows, table.err = readConfigTable[T](table.name)
-	})
-	return table.rows, table.err
-}
-
-// loadGameData builds what the handlers index directly (ships, construction,
-// equipment, the campaign, sign-in drops...) from the config tables, once at
-// startup.
+// loadGameData reads every config table the handlers use, once at startup:
+// as is (loadTable) or into what the handlers index (ships, construction,
+// the campaign, tasks...).
 func loadGameData() error {
 	for _, load := range []func() error{
 		loadShipData,
 		loadChapterData,
 		loadSignInData,
+		loadTaskData,
+		loadJuusData,
+		loadBuildTimes,
+		loadTable("constellation_challenge_month", &limitChallengeMonths),
+		loadArenaShop,
 	} {
 		if err := load(); err != nil {
 			return err

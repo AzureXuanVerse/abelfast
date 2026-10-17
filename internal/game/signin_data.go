@@ -9,8 +9,11 @@ import (
 // sign-in of each month (index 0 is January).
 var monthSignDrops [12][31][]uint32
 
-// loadSignInData reads the monthly sign-in drops.
+// loadSignInData reads the monthly sign-in drops and the 7-day login ones.
 func loadSignInData() error {
+	if err := loadTable("activity_7_day_sign", &sevenDaySignConfigs)(); err != nil {
+		return err
+	}
 	months, err := readConfigTable[map[string]json.RawMessage]("activity_month_sign")
 	if err != nil {
 		return err

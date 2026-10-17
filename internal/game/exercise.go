@@ -2,6 +2,7 @@ package game
 
 import (
 	"context"
+	"fmt"
 	"math/rand/v2"
 	"time"
 
@@ -97,7 +98,20 @@ type arenaShopConfig struct {
 // arenaShopID is the arena_data_shop row the merit shop draws from.
 const arenaShopID = 1
 
-var arenaShopConfigs = &configTable[arenaShopConfig]{name: "arena_data_shop"}
+var arenaShop arenaShopConfig
+
+func loadArenaShop() error {
+	shops, err := readConfigTable[arenaShopConfig]("arena_data_shop")
+	if err != nil {
+		return err
+	}
+	shop, ok := shops[arenaShopID]
+	if !ok {
+		return fmt.Errorf("config table arena_data_shop in %s: no shop %d", regionDataDir(), arenaShopID)
+	}
+	arenaShop = shop
+	return nil
+}
 
 const arenaShopCommonPicks = 5
 
@@ -145,16 +159,12 @@ func arenaShopGoods(shop arenaShopConfig, commanderID uint32, day time.Time) []u
 // handleMilitaryShop answers GetMilitaryShopCommand, the merit shop: today's
 // goods, nothing bought, no manual refresh; it refreshes at midnight.
 func (game *Game) handleMilitaryShop(client *connection.Client, req *protobuf.CS_18100) error {
-	shops, err := arenaShopConfigs.get()
-	if err != nil {
-		return err
-	}
 	now := time.Now()
 	next := nextDay(now)
 	reply := &protobuf.SC_18101{
 		NextFlashTime: proto.Uint32(uint32(next.Unix())),
 	}
-	for _, id := range arenaShopGoods(shops[arenaShopID], client.CommanderID, next) {
+	for _, id := range arenaShopGoods(arenaShop, client.CommanderID, next) {
 		reply.ArenaShopList = append(reply.ArenaShopList, &protobuf.ARENASHOP{ShopId: proto.Uint32(id)})
 	}
 	return client.Send(reply)

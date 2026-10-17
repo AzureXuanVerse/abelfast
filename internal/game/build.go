@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"sync"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -50,20 +49,22 @@ var rarityByRateName = map[string]uint32{"Common": 2, "Rare": 3, "Elite": 4, "Su
 // of the data dir, scraped from the wiki by internal/tools/wiki_build_times.py
 // (Hatsuharu's 1500 s matches the official capture). Without it, or for a
 // ship it doesn't list, buildDurations by rarity is used.
-var buildTimes = sync.OnceValues(func() (map[uint32]uint32, error) {
+var buildTimes map[uint32]uint32
+
+func loadBuildTimes() error {
+	buildTimes = map[uint32]uint32{}
 	raw, err := os.ReadFile(filepath.Join(regionDataDir(), "server", "build_times.json"))
 	if errors.Is(err, fs.ErrNotExist) {
-		return map[uint32]uint32{}, nil
+		return nil
 	}
 	if err != nil {
-		return nil, err
+		return err
 	}
-	var times map[uint32]uint32
-	if err := json.Unmarshal(raw, &times); err != nil {
-		return nil, fmt.Errorf("build times: %w", err)
+	if err := json.Unmarshal(raw, &buildTimes); err != nil {
+		return fmt.Errorf("build times: %w", err)
 	}
-	return times, nil
-})
+	return nil
+}
 
 // buildDurations is how long a build takes by the rarity of what it yields,
 // for ships without a known construction time (guessed, Rare's from the
@@ -154,11 +155,7 @@ func pickBuildShip(pool buildPool) (template uint32, duration uint32, ok bool) {
 	}
 	ships := candidates[rarity]
 	template = ships[rand.IntN(len(ships))]
-	times, err := buildTimes()
-	if err != nil {
-		logger.WithFields("Build", logger.FieldValue("error", err)).Warn("build times not loaded")
-	}
-	if seconds, ok := times[template]; ok {
+	if seconds, ok := buildTimes[template]; ok {
 		return template, seconds, true
 	}
 	logger.WithFields("Build", logger.FieldValue("template", template)).Warn("no construction time, using the rarity's")

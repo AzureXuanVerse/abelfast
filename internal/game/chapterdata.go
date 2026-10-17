@@ -82,23 +82,17 @@ const (
 	expeditionTypeBoss    = 99
 )
 
+// expeditionTemplate is an expedition_data_template row.
 type expeditionTemplate struct {
-	exp   uint32 // base ship exp
-	kind  uint32
-	level uint32
-}
-
-var expeditionTemplates map[uint32]expeditionTemplate
-
-// expedition_data_template row
-type expeditionConfig struct {
-	Exp   uint32 `json:"exp"`
+	Exp   uint32 `json:"exp"` // base ship exp
 	Type  uint32 `json:"type"`
 	Level uint32 `json:"level"`
 }
 
+var expeditionTemplates map[uint32]expeditionTemplate
+
 func (expedition expeditionTemplate) isBoss() bool {
-	return expedition.kind == expeditionTypeBoss || expedition.kind == expeditionTypeMulBoss
+	return expedition.Type == expeditionTypeBoss || expedition.Type == expeditionTypeMulBoss
 }
 
 type dropRef struct {
@@ -197,13 +191,8 @@ func loadChapterData() error {
 		chapterTemplates[id] = template
 	}
 
-	expeditions, err := readConfigTable[expeditionConfig]("expedition_data_template")
-	if err != nil {
+	if expeditionTemplates, err = readConfigTable[expeditionTemplate]("expedition_data_template"); err != nil {
 		return err
-	}
-	expeditionTemplates = make(map[uint32]expeditionTemplate, len(expeditions))
-	for id, row := range expeditions {
-		expeditionTemplates[id] = expeditionTemplate{exp: row.Exp, kind: row.Type, level: row.Level}
 	}
 
 	items, err := readConfigTable[virtualItemConfig]("item_virtual_data_statistics")

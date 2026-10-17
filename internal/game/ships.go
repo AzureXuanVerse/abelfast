@@ -81,8 +81,8 @@ func (tx *Tx) AddShip(templateID uint32) (*protobuf.SHIPINFO, error) {
 	equips := make([]db.ShipEquipment, shipEquipSlots)
 	for i := range equips {
 		equips[i] = db.ShipEquipment{ShipID: row.ID, Pos: uint32(i + 1)}
-		if i < len(template.Equips) {
-			equips[i].EquipID = template.Equips[i]
+		if given := template.equips(); i < len(given) {
+			equips[i].EquipID = given[i]
 		}
 		if err := queries.SetShipEquipment(ctx, db.SetShipEquipmentParams{ShipID: row.ID, Pos: equips[i].Pos, EquipID: equips[i].EquipID}); err != nil {
 			return nil, err

@@ -255,7 +255,7 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 // scenarioExpRate, x1.2 when happy, x mvp_exp_percent for the MVP and
 // x flagship_exp_percent for the flagship.
 func shipBattleExp(expedition expeditionTemplate, score uint32, ship db.Ship, flagship, mvp bool) uint32 {
-	exp := float64(expedition.exp) * rankExpRate[score] * scenarioExpRate
+	exp := float64(expedition.Exp) * rankExpRate[score] * scenarioExpRate
 	if ship.Energy >= happyEnergyFrom {
 		exp *= happyExpRate
 	}
