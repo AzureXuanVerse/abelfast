@@ -14,10 +14,56 @@ type Commander struct {
 	NewGuideIndex uint32
 }
 
+type CommanderActivityTask struct {
+	CommanderID uint32
+	ActID       uint32
+	TaskID      uint32
+	Progress    uint32
+	Finished    bool
+}
+
+type CommanderHandbookFinished struct {
+	CommanderID uint32
+	PageID      uint32
+	TaskID      uint32
+}
+
+type CommanderHandbookPage struct {
+	CommanderID uint32
+	PageID      uint32
+	Pt          uint32
+	Award       uint32
+}
+
 type CommanderItem struct {
 	CommanderID uint32
 	ItemID      uint32
 	Count       uint32
+}
+
+type CommanderJuusPost struct {
+	CommanderID    uint32
+	PostID         uint32
+	IsGood         bool
+	IsRead         bool
+	CommentDiscuss uint32
+	CommentIndex   uint32
+	CommentTime    uint32
+}
+
+type CommanderJuusReply struct {
+	CommanderID uint32
+	TopicID     uint32
+	ChatID      uint32
+	Value       uint32
+}
+
+type CommanderJuusTopic struct {
+	CommanderID uint32
+	TopicID     uint32
+	ShipGroup   uint32
+	OpTime      uint32
+	ReadFlag    bool
 }
 
 type CommanderResource struct {
@@ -29,6 +75,38 @@ type CommanderResource struct {
 type CommanderStory struct {
 	CommanderID uint32
 	StoryID     uint32
+}
+
+type CommanderTask struct {
+	CommanderID uint32
+	TaskID      uint32
+	Progress    uint32
+	AcceptTime  uint32
+	SubmitTime  uint32
+}
+
+type CommanderTaskCounter struct {
+	CommanderID uint32
+	SubType     uint32
+	Target      uint32
+	Value       uint32
+}
+
+type CommanderVirtualItem struct {
+	CommanderID uint32
+	ItemID      uint32
+	Amount      uint32
+}
+
+type CommanderWeekly struct {
+	CommanderID uint32
+	RewardLv    uint32
+}
+
+type CommanderWeeklyTask struct {
+	CommanderID uint32
+	TaskID      uint32
+	Progress    uint32
 }
 
 type Setting struct {
