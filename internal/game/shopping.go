@@ -9,6 +9,7 @@ import (
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/gamedata"
+	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -291,6 +292,7 @@ func (game *Game) handleShopping(client *connection.Client, req *protobuf.CS_160
 		return err
 	}
 	if err != nil {
+		logger.WithFields("Shop", logger.FieldValue("id", req.GetId()), logger.FieldValue("number", req.GetNumber())).Warn("purchase refused")
 		drops = nil
 	}
 	return client.Send(&protobuf.SC_16002{Result: result(err), DropList: drops})
