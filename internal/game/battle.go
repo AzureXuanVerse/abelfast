@@ -18,6 +18,7 @@ const systemScenario = 1
 // ys.Battle.BattleConst.BattleScore: above C is a win (Chapter:writeBack)
 const (
 	scoreC = 1
+	scoreA = 3
 	scoreS = 4
 )
 
@@ -141,6 +142,22 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 	}
 
 	reply := &protobuf.SC_40004{Result: proto.Uint32(0), PlayerExp: proto.Uint32(0)}
+	var events []TaskEvent
+	if win {
+		events = append(events, TaskEvent{SubType: TaskSubWin, Count: 1})
+		if score >= scoreA {
+			events = append(events, TaskEvent{SubType: TaskSubWinA, Count: 1})
+		}
+		if score >= scoreS {
+			events = append(events, TaskEvent{SubType: TaskSubWinS, Count: 1})
+		}
+		if expedition.isBoss() {
+			events = append(events, TaskEvent{SubType: TaskSubDefeatBoss, Count: 1})
+		}
+		if kills := uint32(len(req.GetKillIdList())); kills > 0 {
+			events = append(events, TaskEvent{SubType: TaskSubDefeatEnemy, Count: kills})
+		}
+	}
 	mvp := uint32(0)
 	best := uint32(0)
 	for _, stat := range req.GetStatistics() {
@@ -166,6 +183,7 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 			}
 		}
 		gained := shipBattleExp(expedition, score, ship, ship.ID == flagship, ship.ID == mvp)
+		events = append(events, TaskEvent{SubType: TaskSubSortieExp, Count: gained})
 		affinity := uint32(0)
 		if win {
 			affinity = battleAffinity(ship.ID == flagship, ship.ID == mvp)
@@ -228,8 +246,11 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 	if err != nil {
 		return err
 	}
-	// capture: archive updates (SC_17002) before the result, the new ships
-	// (SC_12042) after it
+	// capture: task progress and archive updates (SC_17002) before the
+	// result, the new ships (SC_12042) after it
+	if err := game.taskEvent(ctx, client, append(events, got.Events...)...); err != nil {
+		return err
+	}
 	if err := sendAll(client, got.Pushes); err != nil {
 		return err
 	}

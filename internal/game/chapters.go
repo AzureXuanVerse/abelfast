@@ -309,6 +309,9 @@ func (game *Game) handleTracking13101(client *connection.Client, req *protobuf.C
 	if err != nil {
 		return err
 	}
+	if err := game.taskEvent(ctx, client, TaskEvent{SubType: TaskSubSpendOil, Count: template.oil}); err != nil {
+		return err
+	}
 	return client.Send(&protobuf.SC_13102{Result: proto.Uint32(0), CurrentChapter: session.info})
 }
 
@@ -370,6 +373,7 @@ func (game *Game) retreat(ctx context.Context, client *connection.Client, sessio
 		}
 		return client.Send(opReply(0))
 	}
+	var events []TaskEvent
 	err := game.DB.InTx(ctx, func(queries *db.Queries) error {
 		if session.won() {
 			progress, err := chapterProgress(ctx, queries, client.CommanderID, session.template.id)
@@ -378,6 +382,9 @@ func (game *Game) retreat(ctx context.Context, client *connection.Client, sessio
 			}
 			if progress.Progress >= 100 {
 				progress.PassCount++
+			}
+			if progress.Progress < 100 && progress.Progress+session.template.progressBoss >= 100 {
+				events = append(events, TaskEvent{SubType: TaskSubClearStage, Target: session.template.id, Count: 1})
 			}
 			progress.Progress = min(progress.Progress+session.template.progressBoss, 100)
 			progress.DefeatCount++
@@ -389,6 +396,9 @@ func (game *Game) retreat(ctx context.Context, client *connection.Client, sessio
 		return queries.DeleteChapterState(ctx, client.CommanderID)
 	})
 	if err != nil {
+		return err
+	}
+	if err := game.taskEvent(ctx, client, events...); err != nil {
 		return err
 	}
 	return client.Send(opReply(0))

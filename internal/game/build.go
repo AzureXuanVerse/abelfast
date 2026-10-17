@@ -213,6 +213,10 @@ func (game *Game) handleBuildShip(client *connection.Client, req *protobuf.CS_12
 		for _, build := range started {
 			reply.BuildInfo = append(reply.BuildInfo, buildInfo(build))
 		}
+		// capture: the task progress (SC_20102, SC_20202) comes before SC_12003
+		if err := game.taskEvent(ctx, client, TaskEvent{SubType: TaskSubBuild, Count: count}); err != nil {
+			return err
+		}
 	}
 	return client.Send(reply)
 }
@@ -263,6 +267,12 @@ func (game *Game) handleBuildQuickFinish(client *connection.Client, req *protobu
 	})
 	if err != nil && !refused(err) {
 		return err
+	}
+	if err == nil {
+		// capture: the task progress (SC_20202) comes before SC_12009
+		if err := game.taskEvent(ctx, client, TaskEvent{SubType: TaskSubUseItem, Target: ItemQuickFinisher, Count: uint32(len(finished))}); err != nil {
+			return err
+		}
 	}
 	return client.Send(&protobuf.SC_12009{Result: result(err == nil), PosList: finished})
 }

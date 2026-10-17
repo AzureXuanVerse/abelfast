@@ -180,6 +180,11 @@ func (game *Game) handleUpgradeShipEquipment(client *connection.Client, req *pro
 	if err != nil && !refused(err) {
 		return err
 	}
+	if err == nil {
+		if err := game.taskEvent(ctx, client, TaskEvent{SubType: TaskSubEnhanceGear, Count: 1}); err != nil {
+			return err
+		}
+	}
 	return client.Send(&protobuf.SC_14003{Result: result(err == nil)})
 }
 
@@ -204,6 +209,11 @@ func (game *Game) handleComposeEquipment(client *connection.Client, req *protobu
 	}
 	if err != nil && !refused(err) {
 		return err
+	}
+	if err == nil {
+		if err := game.taskEvent(ctx, client, TaskEvent{SubType: TaskSubCraftGear, Count: req.GetNum()}); err != nil {
+			return err
+		}
 	}
 	return client.Send(&protobuf.SC_14007{Result: result(err == nil)})
 }
