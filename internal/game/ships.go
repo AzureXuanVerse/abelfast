@@ -222,8 +222,9 @@ func grantShipsStarter(tx *Tx, commander db.Commander) error {
 	if err := grantStarterItems(tx); err != nil {
 		return err
 	}
-	// Renovation Merit Medal (decor tokens spent) starts at 14 (captured)
-	if err := queries.SetTrophy(ctx, db.SetTrophyParams{CommanderID: commanderID, TrophyID: 10041, Progress: 14}); err != nil {
+	// Renovation Merit Medal (medal_template 10041, decor tokens spent) counts
+	// the starter backyard as bought (captured 14)
+	if err := queries.SetTrophy(ctx, db.SetTrophyParams{CommanderID: commanderID, TrophyID: 10041, Progress: starterFurnitureTokens}); err != nil {
 		return err
 	}
 	return setShipTrophies(ctx, queries, commanderID)

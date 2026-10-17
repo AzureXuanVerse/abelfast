@@ -19,5 +19,6 @@ func loadGameData() error {
 		gamedata.Load("honormedal_goods_list", &medalGoods),
 		loadEducateData,
 		loadNewCommander,
+		loadStarterFurniture,
 	)
 }
