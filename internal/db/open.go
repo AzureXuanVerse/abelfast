@@ -1,6 +1,7 @@
 // Package db is belfast's SQLite storage. The schema lives in numbered
 // migrations/*.sql files, the queries in queries/*.sql, compiled to Go by sqlc
-// (`make sqlc`); everything else in this package but open.go is generated.
+// (`make sqlc`); everything else in this package but open.go and types.go
+// (column types sqlc maps to) is generated.
 package db
 
 import (

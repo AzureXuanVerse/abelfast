@@ -13,3 +13,6 @@ sql:
           # to int64 and bool itself.
           - db_type: INTEGER
             go_type: uint32
+          - column: commander_activities.data1_list
+            go_type:
+              type: IDList

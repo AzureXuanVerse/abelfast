@@ -43,9 +43,9 @@ type activityConfig struct {
 	ConfigData json.RawMessage `json:"config_data"`
 	Time       json.RawMessage `json:"time"`
 
-	// for the activities with tasks (taskActivityTypes, task lists)
-	tasks  []uint32       // config_data
 	window activityWindow // time
+	// for the activities with tasks (taskActivityTypes, task lists)
+	tasks []uint32 // config_data
 }
 
 // activityWindow is an activity_template.time: "always", or
@@ -168,11 +168,12 @@ func loadTaskData() error {
 	}
 	taskActivities = nil
 	for id, config := range activityConfigs {
+		config.window = parseActivityWindow(config.Time)
+		activityConfigs[id] = config
 		if !taskActivityTypes[config.Type] && config.Type != activityTypeTaskList {
 			continue
 		}
 		config.tasks = parseIDList(config.ConfigData)
-		config.window = parseActivityWindow(config.Time)
 		activityConfigs[id] = config
 		if taskActivityTypes[config.Type] {
 			taskActivities = append(taskActivities, config)

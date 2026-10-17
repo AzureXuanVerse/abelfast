@@ -81,7 +81,7 @@ type SaveActivityParams struct {
 	Data2       uint32
 	Data3       uint32
 	Data4       uint32
-	Data1List   string
+	Data1List   IDList
 }
 
 func (q *Queries) SaveActivity(ctx context.Context, arg SaveActivityParams) error {
