@@ -179,14 +179,14 @@ func (game *Game) handleJuusPostOp(client *connection.Client, req *protobuf.CS_1
 	key := db.GetJuusPostParams{CommanderID: client.CommanderID, PostID: req.GetId()}
 	if req.GetCmd() == juusOpUpdate {
 		if posts, err := juusPosts(); err != nil || posts[req.GetId()] == nil {
-			return client.Send(&protobuf.SC_11702{Result: proto.Uint32(resultFailed)})
+			return client.Send(&protobuf.SC_11702{Result: result(errRefused)})
 		}
 		if err := game.DB.CreateJuusPost(ctx, db.CreateJuusPostParams{CommanderID: client.CommanderID, PostID: req.GetId()}); err != nil {
 			return err
 		}
 	}
 	if _, err := game.DB.GetJuusPost(ctx, key); errors.Is(err, sql.ErrNoRows) {
-		return client.Send(&protobuf.SC_11702{Result: proto.Uint32(resultFailed)})
+		return client.Send(&protobuf.SC_11702{Result: result(errRefused)})
 	} else if err != nil {
 		return err
 	}
@@ -204,7 +204,7 @@ func (game *Game) handleJuusPostOp(client *connection.Client, req *protobuf.CS_1
 	if err != nil {
 		return err
 	}
-	return client.Send(&protobuf.SC_11702{Result: proto.Uint32(0), Data: juusMessage(row)})
+	return client.Send(&protobuf.SC_11702{Result: result(nil), Data: juusMessage(row)})
 }
 
 // handleJuusComment posts the comment option the commander picked (discuss is
@@ -215,7 +215,7 @@ func (game *Game) handleJuusComment(client *connection.Client, req *protobuf.CS_
 	key := db.GetJuusPostParams{CommanderID: client.CommanderID, PostID: req.GetId()}
 	row, err := game.DB.GetJuusPost(ctx, key)
 	if errors.Is(err, sql.ErrNoRows) {
-		return client.Send(&protobuf.SC_11704{Result: proto.Uint32(resultFailed)})
+		return client.Send(&protobuf.SC_11704{Result: result(errRefused)})
 	} else if err != nil {
 		return err
 	}
@@ -228,7 +228,7 @@ func (game *Game) handleJuusComment(client *connection.Client, req *protobuf.CS_
 		}
 	}
 	if !valid {
-		return client.Send(&protobuf.SC_11704{Result: proto.Uint32(resultFailed)})
+		return client.Send(&protobuf.SC_11704{Result: result(errRefused)})
 	}
 	if err := game.DB.CommentJuusPost(ctx, db.CommentJuusPostParams{
 		CommentDiscuss: req.GetDiscuss(),
@@ -242,7 +242,7 @@ func (game *Game) handleJuusComment(client *connection.Client, req *protobuf.CS_
 	if row, err = game.DB.GetJuusPost(ctx, key); err != nil {
 		return err
 	}
-	return client.Send(&protobuf.SC_11704{Result: proto.Uint32(0), Data: juusMessage(row)})
+	return client.Send(&protobuf.SC_11704{Result: result(nil), Data: juusMessage(row)})
 }
 
 // juusGroups is SC_11711, the Juus chats (InstagramChatProxy): the unlocked
@@ -263,7 +263,7 @@ func (game *Game) juusGroups(ctx context.Context, commanderID uint32) (*protobuf
 	for _, topic := range topics {
 		group, ok := groups[topic.ShipGroup]
 		if !ok {
-			group = &protobuf.JUUS_GROUP{Id: proto.Uint32(topic.ShipGroup), SkinId: proto.Uint32(0), Favorite: proto.Uint32(0)}
+			group = &protobuf.JUUS_GROUP{Id: proto.Uint32(topic.ShipGroup)}
 			groups[topic.ShipGroup] = group
 			msg.Groups = append(msg.Groups, group)
 		}
@@ -297,13 +297,13 @@ func (game *Game) handleJuusActivateTopics(client *connection.Client, req *proto
 	for _, id := range req.GetChatGroupIdList() {
 		topic, ok := topics[id]
 		if !ok {
-			reply.ResultList = append(reply.ResultList, resultFailed)
+			reply.ResultList = append(reply.ResultList, *result(errRefused))
 			continue
 		}
 		if _, err := game.DB.ActivateJuusTopic(ctx, db.ActivateJuusTopicParams{CommanderID: client.CommanderID, TopicID: id, ShipGroup: topic.ShipGroup, OpTime: now}); err != nil {
 			return err
 		}
-		reply.ResultList = append(reply.ResultList, 0)
+		reply.ResultList = append(reply.ResultList, *result(nil))
 	}
 	return client.Send(reply)
 }
@@ -315,18 +315,17 @@ func (game *Game) handleJuusActivateTopics(client *connection.Client, req *proto
 func (game *Game) handleJuusChatReply(client *connection.Client, req *protobuf.CS_11712) error {
 	ctx := context.Background()
 	now := uint32(time.Now().Unix())
-	reply := &protobuf.SC_11713{Result: proto.Uint32(0), OpTime: proto.Uint32(now)}
-	var events []TaskEvent
-	err := game.DB.InTx(ctx, func(queries *db.Queries) error {
-		touched, err := queries.TouchJuusTopic(ctx, db.TouchJuusTopicParams{OpTime: now, CommanderID: client.CommanderID, TopicID: req.GetChatGroupId()})
+	reply := &protobuf.SC_11713{Result: result(nil), OpTime: proto.Uint32(now)}
+	err := game.tx(ctx, client, func(tx *Tx) error {
+		touched, err := tx.TouchJuusTopic(ctx, db.TouchJuusTopicParams{OpTime: now, CommanderID: client.CommanderID, TopicID: req.GetChatGroupId()})
 		if err != nil {
 			return err
 		}
 		if touched == 0 {
-			reply.Result = proto.Uint32(resultFailed)
+			reply.Result = result(errRefused)
 			return nil
 		}
-		if err := queries.AddJuusReply(ctx, db.AddJuusReplyParams{CommanderID: client.CommanderID, TopicID: req.GetChatGroupId(), ChatID: req.GetChatId(), Value: req.GetValue()}); err != nil {
+		if err := tx.AddJuusReply(ctx, db.AddJuusReplyParams{CommanderID: client.CommanderID, TopicID: req.GetChatGroupId(), ChatID: req.GetChatId(), Value: req.GetValue()}); err != nil {
 			return err
 		}
 		drop := juusRedPacket(req.GetChatId())
@@ -334,14 +333,9 @@ func (game *Game) handleJuusChatReply(client *connection.Client, req *protobuf.C
 			return nil
 		}
 		reply.DropList = configDrops([][]uint32{drop})
-		got, err := grantDrops(ctx, queries, client.CommanderID, reply.DropList)
-		events = got.Events
-		return err
+		return tx.grantDrops(reply.DropList)
 	})
 	if err != nil {
-		return err
-	}
-	if err := game.taskEvent(ctx, client, events...); err != nil {
 		return err
 	}
 	return client.Send(reply)
@@ -388,5 +382,5 @@ func (game *Game) handleJuusTopicsRead(client *connection.Client, req *protobuf.
 			return err
 		}
 	}
-	return client.Send(&protobuf.SC_11721{Result: proto.Uint32(0)})
+	return client.Send(&protobuf.SC_11721{Result: result(nil)})
 }

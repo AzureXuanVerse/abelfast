@@ -7,13 +7,12 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/protobuf"
-	"github.com/ggmolly/belfast/internal/protocol"
 )
 
 // handleAuctionGameInit answers the auction minigame state the client asks
 // for right after loading (AuctionGameInitCommand): nothing played yet.
 func (game *Game) handleAuctionGameInit(client *connection.Client, req *protobuf.CS_23430) error {
-	return client.Send(protocol.FillRequired(&protobuf.SC_23431{}))
+	return client.Send(&protobuf.SC_23431{})
 }
 
 // handleAppreciationVersion takes the gallery / music version the client
@@ -47,9 +46,9 @@ func (game *Game) handleLimitChallenge(client *connection.Client, req *protobuf.
 	if err != nil {
 		return err
 	}
-	reply := &protobuf.SC_24021{Result: proto.Uint32(0)}
+	reply := &protobuf.SC_24021{Result: result(nil)}
 	for _, stage := range months[uint32(serverNow().Month())].Stage {
-		reply.Awards = append(reply.Awards, &protobuf.KVDATA{Key: proto.Uint32(stage), Value: proto.Uint32(0)})
+		reply.Awards = append(reply.Awards, &protobuf.KVDATA{Key: proto.Uint32(stage)})
 	}
 	return client.Send(reply)
 }

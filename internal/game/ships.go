@@ -13,7 +13,6 @@ import (
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/protobuf"
-	"github.com/ggmolly/belfast/internal/protocol"
 )
 
 const (
@@ -30,15 +29,6 @@ const (
 	starterGiftShip = 106011
 )
 
-// errRefused rejects a request the client shouldn't have sent (unknown id,
-// someone else's ship...): the reply carries a non-zero result.
-var errRefused = errors.New("refused")
-
-// refused tells whether err only means the request is turned down.
-func refused(err error) bool {
-	return errors.Is(err, ErrNotEnough) || errors.Is(err, errRefused)
-}
-
 func (game *Game) registerShips() {
 	packets.Handle(game.handleBuildShip)
 	packets.Handle(game.handleBuildQuickFinish)
@@ -50,7 +40,7 @@ func (game *Game) registerShips() {
 	packets.Handle(game.handleLoveLetters)
 	packets.Handle(game.handleUpgradeShipEquipment)
 	packets.Handle(game.handleComposeEquipment)
-	packets.Handle(game.handleSellItems)
+	packets.HandleLenient(game.handleSellItems)
 }
 
 // NewShip returns the row for a freshly obtained ship: level 1, morale and
@@ -73,19 +63,20 @@ func NewShip(commanderID uint32, templateID uint32) db.CreateShipParams {
 	return params
 }
 
-// AddShip gives a commander a new ship of templateID, with the equipment
+// AddShip gives the commander a new ship of templateID, with the equipment
 // (ship_data_template equip_id_1..3) and skills (buff_list, level 1) it comes
-// with, and records it in the archives. pushes holds the SC_17002 to send
-// when that unlocked a new archive entry (the official server sends it before
-// the reply or push carrying the ship).
-func AddShip(ctx context.Context, queries *db.Queries, commanderID, templateID uint32) (ship *protobuf.SHIPINFO, pushes []proto.Message, err error) {
+// with, and records it in the archives. When that unlocks a new archive entry
+// its SC_17002 is pushed (the official server sends it before the reply or
+// push carrying the ship).
+func (tx *Tx) AddShip(templateID uint32) (*protobuf.SHIPINFO, error) {
+	ctx, queries := tx.ctx, tx.Queries
 	template, ok := shipTemplates[templateID]
 	if !ok {
-		return nil, nil, fmt.Errorf("ship template %d: %w", templateID, errRefused)
+		return nil, fmt.Errorf("ship template %d: %w", templateID, errRefused)
 	}
-	row, err := queries.CreateShip(ctx, NewShip(commanderID, templateID))
+	row, err := queries.CreateShip(ctx, NewShip(tx.commanderID, templateID))
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	equips := make([]db.ShipEquipment, shipEquipSlots)
 	for i := range equips {
@@ -94,24 +85,24 @@ func AddShip(ctx context.Context, queries *db.Queries, commanderID, templateID u
 			equips[i].EquipID = template.Equips[i]
 		}
 		if err := queries.SetShipEquipment(ctx, db.SetShipEquipmentParams{ShipID: row.ID, Pos: equips[i].Pos, EquipID: equips[i].EquipID}); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 	skills := make([]db.ShipSkill, len(template.Skills))
 	for i, skill := range template.Skills {
 		skills[i] = db.ShipSkill{ShipID: row.ID, SkillID: skill, Level: 1}
 		if err := queries.AddShipSkill(ctx, db.AddShipSkillParams{ShipID: row.ID, SkillID: skill, Level: 1}); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 	push, err := recordShipGroup(ctx, queries, row)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if push != nil {
-		pushes = append(pushes, push)
+		tx.push(push)
 	}
-	return fullShipInfo(row, equips, skills), pushes, nil
+	return fullShipInfo(row, equips, skills), nil
 }
 
 // NewShipsPush is SC_12042, ships obtained outside of a reply (drops...),
@@ -127,7 +118,7 @@ func shipInfo(ship db.Ship) *protobuf.SHIPINFO {
 	if ship.IsLocked {
 		locked = 1
 	}
-	return protocol.FillRequired(&protobuf.SHIPINFO{
+	return &protobuf.SHIPINFO{
 		Id:                  proto.Uint32(ship.ID),
 		TemplateId:          proto.Uint32(ship.TemplateID),
 		Level:               proto.Uint32(ship.Level),
@@ -144,7 +135,7 @@ func shipInfo(ship db.Ship) *protobuf.SHIPINFO {
 		ChangeNameTimestamp: proto.Uint32(ship.ChangeNameTimestamp),
 		MaxLevel:            proto.Uint32(ship.MaxLevel),
 		CommonFlag:          proto.Uint32(ship.CommonFlag),
-	})
+	}
 }
 
 // fullShipInfo is the SHIPINFO of a ship with its slots and skills.
@@ -152,7 +143,7 @@ func fullShipInfo(ship db.Ship, equips []db.ShipEquipment, skills []db.ShipSkill
 	info := shipInfo(ship)
 	info.EquipInfoList = make([]*protobuf.EQUIPSKIN_INFO, shipEquipSlots)
 	for i := range info.EquipInfoList {
-		info.EquipInfoList[i] = &protobuf.EQUIPSKIN_INFO{Id: proto.Uint32(0), SkinId: proto.Uint32(0)}
+		info.EquipInfoList[i] = &protobuf.EQUIPSKIN_INFO{}
 	}
 	for _, equip := range equips {
 		if equip.Pos >= 1 && equip.Pos <= shipEquipSlots {
@@ -167,12 +158,9 @@ func fullShipInfo(ship db.Ship, equips []db.ShipEquipment, skills []db.ShipSkill
 	return info
 }
 
-// ShipInfos is the SHIPINFO of every ship of a commander, by id.
-func ShipInfos(ctx context.Context, queries *db.Queries, commanderID uint32) ([]*protobuf.SHIPINFO, error) {
-	ships, err := queries.ListShipsByCommander(ctx, commanderID)
-	if err != nil {
-		return nil, err
-	}
+// shipList is SC_12001, BayProxy's ships: the SHIPINFO of each of ships
+// (the commander's, by id) with their slots and skills.
+func shipList(ctx context.Context, queries *db.Queries, commanderID uint32, ships []db.Ship) (*protobuf.SC_12001, error) {
 	equips, err := queries.ListShipEquipmentsByCommander(ctx, commanderID)
 	if err != nil {
 		return nil, err
@@ -189,11 +177,11 @@ func ShipInfos(ctx context.Context, queries *db.Queries, commanderID uint32) ([]
 	for _, skill := range skills {
 		skillsByShip[skill.ShipID] = append(skillsByShip[skill.ShipID], skill)
 	}
-	infos := make([]*protobuf.SHIPINFO, len(ships))
+	msg := &protobuf.SC_12001{Shiplist: make([]*protobuf.SHIPINFO, len(ships))}
 	for i, ship := range ships {
-		infos[i] = fullShipInfo(ship, equipsByShip[ship.ID], skillsByShip[ship.ID])
+		msg.Shiplist[i] = fullShipInfo(ship, equipsByShip[ship.ID], skillsByShip[ship.ID])
 	}
-	return infos, nil
+	return msg, nil
 }
 
 // shipEquipments is the 5 slots of one of the commander's ships,
@@ -223,18 +211,21 @@ func shipEquipments(ctx context.Context, queries *db.Queries, commanderID, shipI
 
 // grantShipsStarter gives a new commander the starter ship they chose and
 // Long Island, equipped, and the starting bag (SC_12001 / SC_15001 of the
-// capture).
+// capture). What a new commander starts with is no progress: the task events
+// and pushes it records are dropped.
 func grantShipsStarter(ctx context.Context, queries *db.Queries, commander db.Commander) error {
+	tx := newTx(ctx, queries, commander.ID)
 	for _, template := range []uint32{commander.StarterShip, starterGiftShip} {
-		if _, _, err := AddShip(ctx, queries, commander.ID, template); err != nil {
+		if _, err := tx.AddShip(template); err != nil {
 			return err
 		}
 	}
-	return grantStarterRest(ctx, queries, commander.ID)
+	return grantStarterRest(tx)
 }
 
-func grantStarterRest(ctx context.Context, queries *db.Queries, commanderID uint32) error {
-	if err := grantStarterItems(ctx, queries, commanderID); err != nil {
+func grantStarterRest(tx *Tx) error {
+	ctx, queries, commanderID := tx.ctx, tx.Queries, tx.commanderID
+	if err := grantStarterItems(tx); err != nil {
 		return err
 	}
 	// Renovation Merit Medal (decor tokens spent) starts at 14 (captured)
@@ -243,42 +234,6 @@ func grantStarterRest(ctx context.Context, queries *db.Queries, commanderID uint
 	}
 	_, err := ShipTrophyPushes(ctx, queries, commanderID)
 	return err
-}
-
-// shipsLoginPushes are the login burst messages of the ship, construction,
-// equipment and bag proxies, in the official order: SC_17001, SC_12024,
-// SC_12001, SC_14001, SC_14101, SC_15001, SC_12031.
-func (game *Game) shipsLoginPushes(ctx context.Context, commander db.Commander) ([]proto.Message, error) {
-	queries := game.DB.Queries
-	collection, err := collectionState(ctx, queries, commander.ID)
-	if err != nil {
-		return nil, err
-	}
-	docks, err := buildDocksState(ctx, queries, commander.ID)
-	if err != nil {
-		return nil, err
-	}
-	ships, err := ShipInfos(ctx, queries, commander.ID)
-	if err != nil {
-		return nil, err
-	}
-	equipments, err := queries.ListEquipments(ctx, commander.ID)
-	if err != nil {
-		return nil, err
-	}
-	items, err := queries.ListItems(ctx, commander.ID)
-	if err != nil {
-		return nil, err
-	}
-	return []proto.Message{
-		collection,
-		docks,
-		&protobuf.SC_12001{Shiplist: ships},
-		equipmentDepot(equipments),
-		&protobuf.SC_14101{}, // no equipment skins
-		bag(items),
-		energyTick(commander, time.Now().Unix()),
-	}, nil
 }
 
 // energyTick is SC_12031, the last morale tick: they run every
@@ -306,7 +261,7 @@ func (game *Game) handleShipLock(client *connection.Client, req *protobuf.CS_120
 	if err != nil {
 		return err
 	}
-	return client.Send(&protobuf.SC_12023{Result: proto.Uint32(0)})
+	return client.Send(&protobuf.SC_12023{Result: result(nil)})
 }
 
 // handleShipEquip puts equipment from the depot in a ship slot, or empties
@@ -314,8 +269,8 @@ func (game *Game) handleShipLock(client *connection.Client, req *protobuf.CS_120
 // CS_12006). What was in the slot goes back to the depot.
 func (game *Game) handleShipEquip(client *connection.Client, req *protobuf.CS_12006) error {
 	ctx := context.Background()
-	err := game.DB.InTx(ctx, func(queries *db.Queries) error {
-		slots, err := shipEquipments(ctx, queries, client.CommanderID, req.GetShipId())
+	err := game.tx(ctx, client, func(tx *Tx) error {
+		slots, err := shipEquipments(ctx, tx.Queries, client.CommanderID, req.GetShipId())
 		if err != nil {
 			return err
 		}
@@ -325,23 +280,23 @@ func (game *Game) handleShipEquip(client *connection.Client, req *protobuf.CS_12
 		}
 		slot := slots[pos-1]
 		if req.GetEquipId() != 0 {
-			if err := SpendEquipment(ctx, queries, client.CommanderID, req.GetEquipId(), 1); err != nil {
+			if err := tx.SpendEquipment(req.GetEquipId(), 1); err != nil {
 				return err
 			}
 		} else if slot.EquipID == 0 {
 			return errRefused
 		}
 		if slot.EquipID != 0 {
-			if err := AddEquipment(ctx, queries, client.CommanderID, slot.EquipID, 1); err != nil {
+			if err := tx.AddEquipment(slot.EquipID, 1); err != nil {
 				return err
 			}
 		}
-		return queries.SetShipEquipment(ctx, db.SetShipEquipmentParams{ShipID: slot.ShipID, Pos: pos, EquipID: req.GetEquipId(), SkinID: slot.SkinID})
+		return tx.SetShipEquipment(ctx, db.SetShipEquipmentParams{ShipID: slot.ShipID, Pos: pos, EquipID: req.GetEquipId(), SkinID: slot.SkinID})
 	})
 	if err != nil && !refused(err) {
 		return err
 	}
-	return client.Send(&protobuf.SC_12007{Result: result(err == nil)})
+	return client.Send(&protobuf.SC_12007{Result: result(err)})
 }
 
 // handleLoveLetters answers GetAllLoveLetterLevelDataCommand (CS_12406):
@@ -390,7 +345,7 @@ func collectionState(ctx context.Context, queries *db.Queries, commanderID uint3
 	for _, trophy := range trophies {
 		stored[trophy.TrophyID] = trophy
 	}
-	msg := &protobuf.SC_17001{DailyDiscuss: proto.Uint32(0)}
+	msg := &protobuf.SC_17001{}
 	for _, id := range archiveTrophies {
 		trophy := stored[id]
 		msg.ProgressList = append(msg.ProgressList, &protobuf.ACHIEVEMENT_INFO{
@@ -442,7 +397,7 @@ func SetTrophy(ctx context.Context, queries *db.Queries, commanderID, trophyID, 
 		return nil, err
 	}
 	return &protobuf.SC_17002{ProgressList: []*protobuf.ACHIEVEMENT_INFO{{
-		Id: proto.Uint32(trophyID), Progress: proto.Uint32(progress), Timestamp: proto.Uint32(0),
+		Id: proto.Uint32(trophyID), Progress: proto.Uint32(progress),
 	}}}, nil
 }
 

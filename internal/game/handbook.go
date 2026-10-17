@@ -97,7 +97,7 @@ func (game *Game) handleHandbookGetTasks(client *connection.Client, req *protobu
 	page, ok := pages[req.GetId()]
 	index := int(req.GetIndex()) - 1
 	if !ok || index < 0 || index >= len(page.TaskList) || len(page.TaskList[index]) == 0 {
-		return client.Send(&protobuf.SC_22303{Result: proto.Uint32(resultFailed)})
+		return client.Send(&protobuf.SC_22303{Result: result(errRefused)})
 	}
 	tasks := slices.Clone(page.TaskList[index][0])
 	slices.Reverse(tasks)
@@ -113,9 +113,9 @@ func (game *Game) handleHandbookGetTasks(client *connection.Client, req *protobu
 		return err
 	}
 	if added != nil {
-		if err := client.Send(added); err != nil {
+		if err := client.Push(added); err != nil {
 			return err
 		}
 	}
-	return client.Send(&protobuf.SC_22303{Result: proto.Uint32(0)})
+	return client.Send(&protobuf.SC_22303{Result: result(nil)})
 }

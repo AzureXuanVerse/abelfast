@@ -77,9 +77,6 @@ var buildDurations = map[uint32]uint32{2: 1200, 3: 1500, 4: 1800, 5: 3600, 6: 54
 func buildDocks() *protobuf.SC_12024 {
 	return &protobuf.SC_12024{
 		WorklistCount: proto.Uint32(buildWorkCount),
-		DrawCount_1:   proto.Uint32(0),
-		DrawCount_10:  proto.Uint32(0),
-		ExchangeCount: proto.Uint32(0),
 	}
 }
 
@@ -197,22 +194,22 @@ func (game *Game) handleBuildShip(client *connection.Client, req *protobuf.CS_12
 	var started []db.Build
 	err := errRefused
 	if ok && req.GetCosttype() == 0 && count >= 1 && count <= maxBuilds {
-		err = game.DB.InTx(ctx, func(queries *db.Queries) error {
-			builds, err := queries.ListBuilds(ctx, client.CommanderID)
+		err = game.tx(ctx, client, func(tx *Tx) error {
+			builds, err := tx.ListBuilds(ctx, client.CommanderID)
 			if err != nil {
 				return err
 			}
 			if len(builds)+int(count) > maxBuilds {
 				return errRefused
 			}
-			state, err := buildState(ctx, queries, client.CommanderID)
+			state, err := buildState(ctx, tx.Queries, client.CommanderID)
 			if err != nil {
 				return err
 			}
-			if err := SpendResource(ctx, queries, client.CommanderID, ResourceGold, pool.Gold*count); err != nil {
+			if err := tx.SpendResource(ResourceGold, pool.Gold*count); err != nil {
 				return err
 			}
-			if err := SpendItem(ctx, queries, client.CommanderID, pool.Item, pool.ItemCount*count); err != nil {
+			if err := tx.SpendItem(pool.Item, pool.ItemCount*count); err != nil {
 				return err
 			}
 			for i := range count {
@@ -224,7 +221,7 @@ func (game *Game) handleBuildShip(client *connection.Client, req *protobuf.CS_12
 					return errRefused
 				}
 				start := buildStart(builds, now)
-				build, err := queries.CreateBuild(ctx, db.CreateBuildParams{
+				build, err := tx.CreateBuild(ctx, db.CreateBuildParams{
 					CommanderID: client.CommanderID,
 					PoolID:      req.GetId(),
 					TemplateID:  template,
@@ -238,7 +235,9 @@ func (game *Game) handleBuildShip(client *connection.Client, req *protobuf.CS_12
 				builds = append(builds, build)
 				started = append(started, build)
 			}
-			return queries.AddBuildCounts(ctx, db.AddBuildCountsParams{
+			// capture: the task progress (SC_20102, SC_20202) comes before SC_12003
+			tx.event(TaskEvent{SubType: TaskSubBuild, Count: count})
+			return tx.AddBuildCounts(ctx, db.AddBuildCountsParams{
 				CommanderID: client.CommanderID, BuildCount: count, ExchangeCount: pool.ExchangeCount * count,
 			})
 		})
@@ -246,14 +245,10 @@ func (game *Game) handleBuildShip(client *connection.Client, req *protobuf.CS_12
 	if err != nil && !refused(err) {
 		return err
 	}
-	reply := &protobuf.SC_12003{Result: result(err == nil)}
+	reply := &protobuf.SC_12003{Result: result(err)}
 	if err == nil {
 		for _, build := range started {
 			reply.BuildInfo = append(reply.BuildInfo, buildInfo(build))
-		}
-		// capture: the task progress (SC_20102, SC_20202) comes before SC_12003
-		if err := game.taskEvent(ctx, client, TaskEvent{SubType: TaskSubBuild, Count: count}); err != nil {
-			return err
 		}
 	}
 	return client.Send(reply)
@@ -281,8 +276,10 @@ func (game *Game) handleBuildQuickFinish(client *connection.Client, req *protobu
 	ctx := context.Background()
 	now := time.Now().Unix()
 	var finished []uint32
-	err := game.DB.InTx(ctx, func(queries *db.Queries) error {
-		builds, err := queries.ListBuilds(ctx, client.CommanderID)
+	// capture: the task progress of the Quick Finishers used (SC_20202) comes
+	// before SC_12009
+	err := game.tx(ctx, client, func(tx *Tx) error {
+		builds, err := tx.ListBuilds(ctx, client.CommanderID)
 		if err != nil {
 			return err
 		}
@@ -291,7 +288,7 @@ func (game *Game) handleBuildQuickFinish(client *connection.Client, req *protobu
 			if build.FinishTime <= now {
 				continue
 			}
-			if err := SpendItem(ctx, queries, client.CommanderID, ItemQuickFinisher, 1); err != nil {
+			if err := tx.SpendItem(ItemQuickFinisher, 1); err != nil {
 				return err
 			}
 			builds[positions[i]-1].StartTime = min(build.StartTime, now)
@@ -301,18 +298,12 @@ func (game *Game) handleBuildQuickFinish(client *connection.Client, req *protobu
 		if len(finished) == 0 {
 			return errRefused
 		}
-		return rescheduleBuilds(ctx, queries, builds, now)
+		return rescheduleBuilds(ctx, tx.Queries, builds, now)
 	})
 	if err != nil && !refused(err) {
 		return err
 	}
-	if err == nil {
-		// capture: the task progress (SC_20202) comes before SC_12009
-		if err := game.taskEvent(ctx, client, TaskEvent{SubType: TaskSubUseItem, Target: ItemQuickFinisher, Count: uint32(len(finished))}); err != nil {
-			return err
-		}
-	}
-	return client.Send(&protobuf.SC_12009{Result: result(err == nil), PosList: finished})
+	return client.Send(&protobuf.SC_12009{Result: result(err), PosList: finished})
 }
 
 // rescheduleBuilds saves builds after some finished early: the ones not
@@ -356,9 +347,8 @@ func (game *Game) handleCollectBuilds(client *connection.Client, req *protobuf.C
 	ctx := context.Background()
 	now := time.Now().Unix()
 	var ships []*protobuf.SHIPINFO
-	var pushes []proto.Message
-	err := game.DB.InTx(ctx, func(queries *db.Queries) error {
-		builds, err := queries.ListBuilds(ctx, client.CommanderID)
+	err := game.tx(ctx, client, func(tx *Tx) error {
+		builds, err := tx.ListBuilds(ctx, client.CommanderID)
 		if err != nil {
 			return err
 		}
@@ -367,15 +357,14 @@ func (game *Game) handleCollectBuilds(client *connection.Client, req *protobuf.C
 			if build.FinishTime > now {
 				continue
 			}
-			ship, shipPushes, err := AddShip(ctx, queries, client.CommanderID, build.TemplateID)
+			ship, err := tx.AddShip(build.TemplateID)
 			if err != nil {
 				return err
 			}
-			if err := queries.DeleteBuild(ctx, build.ID); err != nil {
+			if err := tx.DeleteBuild(ctx, build.ID); err != nil {
 				return err
 			}
 			ships = append(ships, ship)
-			pushes = append(pushes, shipPushes...)
 		}
 		if len(ships) == 0 {
 			return errRefused
@@ -385,17 +374,12 @@ func (game *Game) handleCollectBuilds(client *connection.Client, req *protobuf.C
 	if err != nil && !refused(err) {
 		return err
 	}
-	for _, push := range pushes {
-		if err := client.Send(push); err != nil {
-			return err
-		}
-	}
-	return client.Send(&protobuf.SC_12026{Result: result(err == nil), ShipList: ships})
+	return client.Send(&protobuf.SC_12026{Result: result(err), ShipList: ships})
 }
 
 // handleConfirmBuilds acknowledges the "ships collected while away"
 // notification (GetShipConfirmCommand, CS_12045, SC_11003.taking_ship_list);
 // builds are only ever collected by the player, so there is nothing to clear.
 func (game *Game) handleConfirmBuilds(client *connection.Client, req *protobuf.CS_12045) error {
-	return client.Send(&protobuf.SC_12046{Result: proto.Uint32(0)})
+	return client.Send(&protobuf.SC_12046{Result: result(nil)})
 }

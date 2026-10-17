@@ -5,20 +5,19 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/protobuf"
-	"github.com/ggmolly/belfast/internal/protocol"
 )
 
 // handleGuildInfo answers GetGuildInfoCommand. A guild id of 0 means the
 // commander isn't in one (GuildProxy then exits it); the official server
 // still fills policy, faction and level with 1.
 func (game *Game) handleGuildInfo(client *connection.Client, req *protobuf.CS_60037) error {
-	return client.Send(protocol.FillRequired(&protobuf.SC_60000{Guild: &protobuf.GUILD_INFO{
+	return client.Send(&protobuf.SC_60000{Guild: &protobuf.GUILD_INFO{
 		Base: &protobuf.GUILD_BASE_INFO{
 			Policy:  proto.Uint32(1),
 			Faction: proto.Uint32(1),
 			Level:   proto.Uint32(1),
 		},
-	}}))
+	}})
 }
 
 // publicGuildTechs are the public guild technologies a commander outside a
@@ -32,7 +31,7 @@ func (game *Game) handlePublicGuildTech(client *connection.Client, req *protobuf
 	reply := &protobuf.SC_62101{}
 	for _, tech := range publicGuildTechs {
 		reply.Technologys = append(reply.Technologys, &protobuf.GUILD_TECHNOLOGY{
-			Id: proto.Uint32(tech[0]), State: proto.Uint32(0), Progress: proto.Uint32(tech[1]),
+			Id: proto.Uint32(tech[0]), Progress: proto.Uint32(tech[1]),
 		})
 	}
 	return client.Send(reply)
@@ -41,13 +40,13 @@ func (game *Game) handlePublicGuildTech(client *connection.Client, req *protobuf
 // handleGuildUserInfo answers GuildGetUserInfoCommand: no donations or
 // benefits yet, today's donation tasks (guild_donate_task ids, captured).
 func (game *Game) handleGuildUserInfo(client *connection.Client, req *protobuf.CS_60102) error {
-	return client.Send(protocol.FillRequired(&protobuf.SC_60103{UserInfo: &protobuf.USER_GUILD_INFO{
+	return client.Send(&protobuf.SC_60103{UserInfo: &protobuf.USER_GUILD_INFO{
 		DonateTasks: []uint32{1, 2, 20},
-	}}))
+	}})
 }
 
 // handleGuildShop answers GetGuildShopCommand: outside a guild the shop is
 // empty and never refreshes.
 func (game *Game) handleGuildShop(client *connection.Client, req *protobuf.CS_60033) error {
-	return client.Send(protocol.FillRequired(&protobuf.SC_60034{Result: proto.Uint32(0)}))
+	return client.Send(&protobuf.SC_60034{Result: result(nil)})
 }

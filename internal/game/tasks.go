@@ -18,7 +18,7 @@ import (
 )
 
 // task_data_template / weekly_task_template sub_type: what a task counts.
-// Other areas report these through taskEvent when they happen.
+// Requests record them on their Tx when they happen.
 const (
 	TaskSubDefeatEnemy    = 11   // enemy ships sunk in a battle
 	TaskSubWin            = 20   // battles won
@@ -87,10 +87,6 @@ const activityTypeCruise = 54
 
 var taskActivityTypes = map[uint32]bool{13: true, 54: true, 130: true, 132: true, 89: true, 100: true, 121: true}
 
-// Results for requests that can't be honoured (the client shows
-// ERROR_MESSAGE[result]); 1 is the generic failure.
-const resultFailed = 1
-
 // TaskEvent is something that happened that tasks count.
 type TaskEvent struct {
 	SubType uint32 // task_data_template.sub_type, see TaskSub*
@@ -106,32 +102,32 @@ func (game *Game) registerTasks() {
 	game.registerJuus()
 }
 
-// tasksLoginPushes are TaskProxy's tasks (SC_20001), the weekly missions
-// (SC_20101) and the tasks of task activities (SC_20201), in that order.
-func (game *Game) tasksLoginPushes(ctx context.Context, commander db.Commander) ([]proto.Message, error) {
-	tasks, err := game.DB.ListTasks(ctx, commander.ID)
+// taskList is SC_20001, TaskProxy's tasks.
+func taskList(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobuf.SC_20001, error) {
+	tasks, err := queries.ListTasks(ctx, commanderID)
 	if err != nil {
 		return nil, err
 	}
-	taskList := &protobuf.SC_20001{Info: make([]*protobuf.TASKINFO, len(tasks))}
+	msg := &protobuf.SC_20001{Info: make([]*protobuf.TASKINFO, len(tasks))}
 	for i, task := range tasks {
-		taskList.Info[i] = &protobuf.TASKINFO{
+		msg.Info[i] = &protobuf.TASKINFO{
 			Id:         proto.Uint32(task.TaskID),
 			Progress:   proto.Uint32(task.Progress),
 			AcceptTime: proto.Uint32(task.AcceptTime),
-			SubmitTime: proto.Uint32(0),
 		}
 	}
-	weekly, err := game.weeklyInfo(ctx, game.DB.Queries, commander.ID)
-	if err != nil {
-		return nil, err
-	}
-	activities, err := game.activityTaskLists(ctx, game.DB.Queries, commander.ID, time.Now())
+	return msg, nil
+}
+
+// activityTasksList is SC_20201, the tasks of the open task activities
+// (TotalTaskProxy).
+func (game *Game) activityTasksList(ctx context.Context, queries *db.Queries, commanderID uint32, now time.Time) *protobuf.SC_20201 {
+	activities, err := game.activityTaskLists(ctx, queries, commanderID, now)
 	if err != nil {
 		// without config data there are no activity tasks, the rest still works
 		logger.WithFields("Tasks", logger.FieldValue("error", err)).Warn("activity tasks unavailable")
 	}
-	totalTasks := &protobuf.SC_20201{}
+	msg := &protobuf.SC_20201{}
 	for _, activity := range activities {
 		info := &protobuf.ACT_TASK_INIT_LIST{ActId: proto.Uint32(activity.id)}
 		for _, task := range activity.tasks {
@@ -141,11 +137,13 @@ func (game *Game) tasksLoginPushes(ctx context.Context, commander db.Commander) 
 			}
 			info.Tasks = append(info.Tasks, &protobuf.ACT_TASK{Id: proto.Uint32(task.taskID), Progress: proto.Uint32(task.progress)})
 		}
-		totalTasks.Info = append(totalTasks.Info, info)
+		msg.Info = append(msg.Info, info)
 	}
-	return []proto.Message{taskList, &protobuf.SC_20101{Info: weekly}, totalTasks}, nil
+	return msg
 }
 
+// weeklyInfo is SC_20101.info, the weekly missions: their progress, the
+// points earned and the reward level claimed.
 func (game *Game) weeklyInfo(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobuf.WEEKLY_INFO, error) {
 	tasks, err := queries.ListWeeklyTasks(ctx, commanderID)
 	if err != nil {
@@ -324,40 +322,13 @@ func (game *Game) acceptTasksPush(ctx context.Context, client *connection.Client
 	if err != nil || added == nil {
 		return err
 	}
-	return client.Send(added)
-}
-
-// taskEvent records what the commander did and pushes the progress of the
-// tasks it counts for: SC_20002 (tasks), SC_20102 (weekly missions), SC_20103
-// (weekly missions unlocked by a level up), SC_20202 (activity tasks). The
-// capture sends them before the reply of the request that caused them, so
-// call it before sending yours. Missing config data is logged, not returned,
-// so it never breaks the caller's request.
-func (game *Game) taskEvent(ctx context.Context, client *connection.Client, events ...TaskEvent) error {
-	var pushes []proto.Message
-	err := game.DB.InTx(ctx, func(queries *db.Queries) error {
-		var err error
-		pushes, err = game.applyTaskEvents(ctx, queries, client.CommanderID, events)
-		return err
-	})
-	if err != nil {
-		logger.WithFields("Tasks", logger.FieldValue("commander", client.CommanderID), logger.FieldValue("error", err)).Warn("task progress not updated")
-		return nil
-	}
-	return sendAll(client, pushes)
-}
-
-func sendAll(client *connection.Client, messages []proto.Message) error {
-	for _, message := range messages {
-		if err := client.Send(message); err != nil {
-			return err
-		}
-	}
-	return nil
+	return client.Push(added)
 }
 
 // applyTaskEvents stores events (counters and task progress) and returns the
-// progress pushes to send.
+// progress pushes to send: SC_20002 (tasks), SC_20102 (weekly missions),
+// SC_20103 (weekly missions unlocked by a level up), SC_20202 (activity
+// tasks). Game.tx runs it for the events a request records.
 func (game *Game) applyTaskEvents(ctx context.Context, queries *db.Queries, commanderID uint32, events []TaskEvent) ([]proto.Message, error) {
 	if len(events) == 0 {
 		return nil, nil
@@ -663,50 +634,45 @@ func (game *Game) handleSubmitTask(client *connection.Client, req *protobuf.CS_2
 		return err
 	}
 	if err != nil || !ok || task.SubmitTime != 0 || task.Progress < config.TargetNum {
-		return client.Send(&protobuf.SC_20006{Result: proto.Uint32(resultFailed)})
+		return client.Send(&protobuf.SC_20006{Result: result(errRefused)})
 	}
 	drops := config.AwardDisplay
 	if len(req.GetChoiceAward()) > 0 {
 		if drops = awardChoice(config, req.GetChoiceAward()); drops == nil {
-			return client.Send(&protobuf.SC_20006{Result: proto.Uint32(resultFailed)})
+			return client.Send(&protobuf.SC_20006{Result: result(errRefused)})
 		}
 	}
 	now := uint32(time.Now().Unix())
-	reply := &protobuf.SC_20006{Result: proto.Uint32(0)}
-	var pushes []proto.Message
-	err = game.DB.InTx(ctx, func(queries *db.Queries) error {
-		if _, err := queries.SubmitTask(ctx, db.SubmitTaskParams{SubmitTime: now, CommanderID: client.CommanderID, TaskID: task.TaskID}); err != nil {
+	reply := &protobuf.SC_20006{Result: result(nil)}
+	var next *protobuf.SC_20003
+	err = game.tx(ctx, client, func(tx *Tx) error {
+		if _, err := tx.SubmitTask(ctx, db.SubmitTaskParams{SubmitTime: now, CommanderID: client.CommanderID, TaskID: task.TaskID}); err != nil {
 			return err
 		}
 		reply.AwardList = configDrops(drops)
-		got, err := grantDrops(ctx, queries, client.CommanderID, reply.AwardList)
+		if err := tx.grantDrops(reply.AwardList); err != nil {
+			return err
+		}
+		handbookEvents, err := handbookTaskClaimed(ctx, tx.Queries, client.CommanderID, task.TaskID)
 		if err != nil {
 			return err
 		}
-		events := got.Events
-		handbookEvents, err := handbookTaskClaimed(ctx, queries, client.CommanderID, task.TaskID)
-		if err != nil {
+		tx.event(handbookEvents...)
+		// the next tasks start from the counters the claim updated, its
+		// progress doesn't count for them
+		tx.afterEvents(func() error {
+			next, err = acceptTasks(ctx, tx.Queries, client.CommanderID, parseIDList(config.NextTask), now)
 			return err
-		}
-		pushes, err = game.applyTaskEvents(ctx, queries, client.CommanderID, append(events, handbookEvents...))
-		if err != nil {
-			return err
-		}
-		pushes = append(got.before(), pushes...)
-		next, err := acceptTasks(ctx, queries, client.CommanderID, parseIDList(config.NextTask), now)
-		if err != nil {
-			return err
-		}
-		if next != nil {
-			pushes = append(pushes, next)
-		}
+		})
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	if err := sendAll(client, pushes); err != nil {
-		return err
+	if next != nil {
+		if err := client.Push(next); err != nil {
+			return err
+		}
 	}
 	return client.Send(reply)
 }
@@ -715,10 +681,14 @@ func (game *Game) handleSubmitTask(client *connection.Client, req *protobuf.CS_2
 // (MiniGameTaskProgressUpdateCommand: event_type is the task's sub_type, e.g.
 // 2020 "visit the events page"), pushes it and replies.
 func (game *Game) handleClientTaskEvent(client *connection.Client, req *protobuf.CS_20016) error {
-	if err := game.taskEvent(context.Background(), client, TaskEvent{SubType: req.GetEventType(), Target: req.GetEventTarget(), Count: req.GetEventCount()}); err != nil {
+	err := game.tx(context.Background(), client, func(tx *Tx) error {
+		tx.event(TaskEvent{SubType: req.GetEventType(), Target: req.GetEventTarget(), Count: req.GetEventCount()})
+		return nil
+	})
+	if err != nil {
 		return err
 	}
-	return client.Send(&protobuf.SC_20017{Result: proto.Uint32(0)})
+	return client.Send(&protobuf.SC_20017{Result: result(nil)})
 }
 
 // handleSubmitActivityTasks claims finished activity tasks
@@ -747,43 +717,33 @@ func (game *Game) handleSubmitActivityTasks(client *connection.Client, req *prot
 		}
 	}
 	if len(claimed) != len(req.GetTaskIds()) {
-		return client.Send(&protobuf.SC_20206{Result: proto.Uint32(resultFailed)})
+		return client.Send(&protobuf.SC_20206{Result: result(errRefused)})
 	}
 	for _, task := range claimed {
 		if config, ok := configs[task.taskID]; !ok || task.finished || task.progress < config.TargetNum {
-			return client.Send(&protobuf.SC_20206{Result: proto.Uint32(resultFailed)})
+			return client.Send(&protobuf.SC_20206{Result: result(errRefused)})
 		}
 	}
-	reply := &protobuf.SC_20206{Result: proto.Uint32(0)}
+	reply := &protobuf.SC_20206{Result: result(nil)}
 	removed := &protobuf.ACT_TASK_LIST{ActId: proto.Uint32(req.GetActId())}
-	var pushes []proto.Message
-	err = game.DB.InTx(ctx, func(queries *db.Queries) error {
-		var events []TaskEvent
-		var before []proto.Message
+	err = game.tx(ctx, client, func(tx *Tx) error {
 		for _, task := range claimed {
-			if err := queries.FinishActivityTask(ctx, db.FinishActivityTaskParams{CommanderID: client.CommanderID, ActID: req.GetActId(), TaskID: task.taskID, Progress: task.progress}); err != nil {
+			if err := tx.FinishActivityTask(ctx, db.FinishActivityTaskParams{CommanderID: client.CommanderID, ActID: req.GetActId(), TaskID: task.taskID, Progress: task.progress}); err != nil {
 				return err
 			}
 			awards := configDrops(configs[task.taskID].AwardDisplay)
-			got, err := grantDrops(ctx, queries, client.CommanderID, awards)
-			if err != nil {
+			if err := tx.grantDrops(awards); err != nil {
 				return err
 			}
 			reply.AwardList = append(reply.AwardList, awards...)
-			events = append(events, got.Events...)
-			before = append(before, got.before()...)
 			removed.Tasks = append(removed.Tasks, &protobuf.ACT_TASK{Id: proto.Uint32(task.taskID), Progress: proto.Uint32(task.progress)})
 		}
-		var err error
-		pushes, err = game.applyTaskEvents(ctx, queries, client.CommanderID, events)
-		pushes = append(before, pushes...)
-		return err
+		return nil
 	})
 	if err != nil {
 		return err
 	}
-	pushes = append(pushes, &protobuf.SC_20204{Info: []*protobuf.ACT_TASK_LIST{removed}})
-	if err := sendAll(client, pushes); err != nil {
+	if err := client.Push(&protobuf.SC_20204{Info: []*protobuf.ACT_TASK_LIST{removed}}); err != nil {
 		return err
 	}
 	return client.Send(reply)

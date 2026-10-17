@@ -5,7 +5,6 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/protobuf"
-	"github.com/ggmolly/belfast/internal/protocol"
 )
 
 // educateAttrs are child_data 1's attributes: stats, personality, talents.
@@ -43,10 +42,10 @@ func (game *Game) handleEducate(client *connection.Client, req *protobuf.CS_2700
 		NewGamePlusCount:    proto.Uint32(1),
 	}
 	for _, id := range educateAttrs {
-		child.Attrs = append(child.Attrs, &protobuf.CHILD_ATTR{Id: proto.Uint32(id), Val: proto.Uint32(0)})
+		child.Attrs = append(child.Attrs, &protobuf.CHILD_ATTR{Id: proto.Uint32(id)})
 	}
 	for _, id := range []uint32{101, 102, 103} {
-		child.Tasks = append(child.Tasks, &protobuf.CHILD_TASK{Id: proto.Uint32(id), Progress: proto.Uint32(0)})
+		child.Tasks = append(child.Tasks, &protobuf.CHILD_TASK{Id: proto.Uint32(id)})
 	}
 	for _, shop := range educateShops {
 		data := &protobuf.CHILD_SHOP_DATA{ShopId: proto.Uint32(shop.id)}
@@ -55,7 +54,7 @@ func (game *Game) handleEducate(client *connection.Client, req *protobuf.CS_2700
 		}
 		child.Shop = append(child.Shop, data)
 	}
-	return client.Send(protocol.FillRequired(&protobuf.SC_27001{Result: proto.Uint32(0), Child: child}))
+	return client.Send(&protobuf.SC_27001{Result: result(nil), Child: child})
 }
 
 // newEducateStarts are each TB character's (child2_data) starting state on
@@ -99,11 +98,11 @@ func (game *Game) handleNewEducate(client *connection.Client, req *protobuf.CS_2
 		tb.Res = &protobuf.TBRES{Attrs: kvList(start.attrs), Resource: kvList(start.resources)}
 		tb.Benefit = &protobuf.TBBENEFIT{Actives: []*protobuf.TBBF{{Id: proto.Uint32(start.benefit), Round: proto.Uint32(1)}}}
 	}
-	return client.Send(protocol.FillRequired(&protobuf.SC_29002{
-		Result:    proto.Uint32(0),
+	return client.Send(&protobuf.SC_29002{
+		Result:    result(nil),
 		Tb:        tb,
 		Permanent: &protobuf.TBPERMANENT{NgPlusCount: proto.Uint32(1)},
-	}))
+	})
 }
 
 // handleEducateEndings answers EducateGetEndingsCommand: no TB ending reached.

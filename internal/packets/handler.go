@@ -20,7 +20,8 @@ var handlers = map[int][]handler{}
 
 // Handle registers fn for the client message it takes, the packet id is taken
 // from the message name (CS_<id>). Handlers registered for the same packet run
-// in registration order.
+// in registration order. A payload that doesn't decode is an error, which
+// closes the connection.
 //
 //	packets.Handle(func(client *connection.Client, req *protobuf.CS_10800) error {
 //		return client.Send(&protobuf.SC_10801{...})
@@ -29,6 +30,28 @@ func Handle[Req any, PReq interface {
 	*Req
 	proto.Message
 }](fn func(client *connection.Client, req PReq) error) {
+	register(fn, false)
+}
+
+// HandleLenient is Handle for a request the client may send empty. The
+// client's Packer.Pack (net/packer.lua) frames an empty serialized message
+// with a size of 6 (5 + 1) but writes no payload, so the frame carries one
+// stray byte the client never wrote (0x01 in the capture), which isn't valid
+// protobuf (field number 0). SellItemCommand / FragmentSellCommand send
+// CS_15008 with an empty item_list after login and the official server
+// answers it (SC_15009 result 0). That lone byte is decoded as the empty
+// message; anything else that doesn't decode is still an error.
+func HandleLenient[Req any, PReq interface {
+	*Req
+	proto.Message
+}](fn func(client *connection.Client, req PReq) error) {
+	register(fn, true)
+}
+
+func register[Req any, PReq interface {
+	*Req
+	proto.Message
+}](fn func(client *connection.Client, req PReq) error, lenient bool) {
 	id, err := protocol.ClientPacketID(PReq(new(Req)))
 	if err != nil {
 		panic(err)
@@ -36,12 +59,11 @@ func Handle[Req any, PReq interface {
 	logger.LogEvent("Handler", "Added", fmt.Sprintf("CS_%d", id), logger.LOG_LEVEL_DEBUG)
 	handlers[id] = append(handlers[id], func(client *connection.Client, payload []byte) error {
 		req := PReq(new(Req))
+		if lenient && len(payload) == 1 {
+			return fn(client, req)
+		}
 		if err := proto.Unmarshal(payload, req); err != nil {
-			// the client sometimes sends payloads that aren't valid protobuf
-			// (CS_15008 is a lone 0x01 after login); the official server still
-			// answers them, so handle them as an empty request
-			logger.WithFields("Handler", logger.FieldValue("packet", id), logger.FieldValue("payload", fmt.Sprintf("%x", payload)), logger.FieldValue("error", err)).Warn("unparsable request handled as empty")
-			req = PReq(new(Req))
+			return fmt.Errorf("decoding %x: %w", payload, err)
 		}
 		return fn(client, req)
 	})

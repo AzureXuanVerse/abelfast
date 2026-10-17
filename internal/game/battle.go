@@ -61,7 +61,7 @@ func (game *Game) handleBeginStage(client *connection.Client, req *protobuf.CS_4
 			return err
 		}
 		if session == nil || session.battleCell(req.GetData()) == nil {
-			return client.Send(&protobuf.SC_40002{Result: proto.Uint32(1)})
+			return client.Send(&protobuf.SC_40002{Result: result(errRefused)})
 		}
 	}
 	ships, err := game.DB.ListShipsByCommander(ctx, client.CommanderID)
@@ -88,7 +88,7 @@ func (game *Game) handleBeginStage(client *connection.Client, req *protobuf.CS_4
 	if err != nil {
 		return err
 	}
-	return client.Send(&protobuf.SC_40002{Result: proto.Uint32(0), Key: proto.Uint32(rand.Uint32N(10000))})
+	return client.Send(&protobuf.SC_40002{Result: result(nil), Key: proto.Uint32(rand.Uint32N(10000))})
 }
 
 // battleCell is the cell the active fleet fights on, if it holds expedition id.
@@ -114,7 +114,7 @@ func (session *chapterSession) battleCell(id uint32) *protobuf.CHAPTERCELLINFO_P
 func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_40003) error {
 	ctx := context.Background()
 	if req.GetSystem() != systemScenario {
-		return client.Send(&protobuf.SC_40004{Result: proto.Uint32(0), PlayerExp: proto.Uint32(0), Mvp: proto.Uint32(0)})
+		return client.Send(&protobuf.SC_40004{Result: result(nil)})
 	}
 	session, err := loadChapter(ctx, game.DB.Queries, client.CommanderID)
 	if err != nil {
@@ -126,7 +126,7 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 	}
 	expedition, known := expeditionTemplates[req.GetData()]
 	if cell == nil || !known {
-		return client.Send(&protobuf.SC_40004{Result: proto.Uint32(1), PlayerExp: proto.Uint32(0), Mvp: proto.Uint32(0)})
+		return client.Send(&protobuf.SC_40004{Result: result(errRefused)})
 	}
 	group := session.activeGroup()
 	score := min(req.GetScore(), scoreS)
@@ -141,7 +141,7 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 		byID[ship.ID] = ship
 	}
 
-	reply := &protobuf.SC_40004{Result: proto.Uint32(0), PlayerExp: proto.Uint32(0)}
+	reply := &protobuf.SC_40004{Result: result(nil)}
 	var events []TaskEvent
 	if win {
 		events = append(events, TaskEvent{SubType: TaskSubWin, Count: 1})
@@ -192,7 +192,6 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 			ShipId:   proto.Uint32(ship.ID),
 			Exp:      proto.Uint32(gained),
 			Intimacy: proto.Uint32(maxIntimacy + affinity),
-			Energy:   proto.Uint32(0),
 		})
 		addShipExp(&ship, gained)
 		ship.Intimacy = min(ship.Intimacy+affinity, maxIntimacy)
@@ -215,8 +214,12 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 		session.info.ContinuousKillCount = proto.Uint32(0)
 	}
 
-	var got granted
-	err = game.DB.InTx(ctx, func(queries *db.Queries) error {
+	// capture: task progress and archive updates (SC_17002) before the
+	// result, the new ships (SC_12042) after it
+	err = game.tx(ctx, client, func(tx *Tx) error {
+		queries := tx.Queries
+		tx.newShipsAfterReply = true
+		tx.event(events...)
 		for _, ship := range updated {
 			if err := saveShipBattleState(ctx, queries, ship); err != nil {
 				return err
@@ -237,8 +240,7 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 			}
 		}
 		// TODO(player area): add reply.PlayerExp to the commander's exp/level
-		got, err = grantDrops(ctx, queries, client.CommanderID, reply.DropInfo)
-		if err != nil {
+		if err := tx.grantDrops(reply.DropInfo); err != nil {
 			return err
 		}
 		return session.save(ctx, queries, client.CommanderID)
@@ -246,21 +248,7 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 	if err != nil {
 		return err
 	}
-	// capture: task progress and archive updates (SC_17002) before the
-	// result, the new ships (SC_12042) after it
-	if err := game.taskEvent(ctx, client, append(events, got.Events...)...); err != nil {
-		return err
-	}
-	if err := sendAll(client, got.Pushes); err != nil {
-		return err
-	}
-	if err := client.Send(reply); err != nil {
-		return err
-	}
-	if len(got.Ships) == 0 {
-		return nil
-	}
-	return client.Send(NewShipsPush(got.Ships...))
+	return client.Send(reply)
 }
 
 // shipBattleExp is the exp a ship gets for a battle: expedition exp x rank x
@@ -352,11 +340,6 @@ func scenarioDrops(template *chapterTemplate, expedition expeditionTemplate) []*
 	drops = appendDraws(drops, techPacks, bossTechPacks)
 	drops = appendDraws(drops, parts, bossGearParts)
 	return appendDraws(drops, ships, bossShips)
-}
-
-// dropInfo is one DROPINFO of a reward.
-func dropInfo(kind, id, number uint32) *protobuf.DROPINFO {
-	return &protobuf.DROPINFO{Type: proto.Uint32(kind), Id: proto.Uint32(id), Number: proto.Uint32(number)}
 }
 
 // appendDraws draws count times from pool, merging repeats (the capture's

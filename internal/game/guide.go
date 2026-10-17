@@ -3,8 +3,6 @@ package game
 import (
 	"context"
 
-	"google.golang.org/protobuf/proto"
-
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/protobuf"
@@ -25,5 +23,5 @@ func (game *Game) handleStoryRead(client *connection.Client, req *protobuf.CS_11
 	if err := game.DB.AddStory(context.Background(), db.AddStoryParams{CommanderID: client.CommanderID, StoryID: req.GetStoryId()}); err != nil {
 		return err
 	}
-	return client.Send(&protobuf.SC_11018{Result: proto.Uint32(0)})
+	return client.Send(&protobuf.SC_11018{Result: result(nil)})
 }

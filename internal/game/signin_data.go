@@ -7,7 +7,7 @@ import (
 
 // monthSignDrops are activity_month_sign[month].dayN: the drop of the Nth
 // sign-in of each month (index 0 is January).
-var monthSignDrops [12][31]drop
+var monthSignDrops [12][31][]uint32
 
 // loadSignInData reads the monthly sign-in drops.
 func loadSignInData() error {
@@ -17,12 +17,12 @@ func loadSignInData() error {
 	}
 	for month := range monthSignDrops {
 		for day := range monthSignDrops[month] {
-			var drops [][3]uint32
+			var drops [][]uint32
 			field := fmt.Sprintf("day%d", day+1)
-			if json.Unmarshal(months[uint32(month+1)][field], &drops) != nil || len(drops) == 0 {
+			if json.Unmarshal(months[uint32(month+1)][field], &drops) != nil || len(drops) == 0 || len(drops[0]) < 3 {
 				return fmt.Errorf("config table activity_month_sign in %s: no %s in month %d", regionDataDir(), field, month+1)
 			}
-			monthSignDrops[month][day] = drop{drops[0][0], drops[0][1], drops[0][2]}
+			monthSignDrops[month][day] = drops[0]
 		}
 	}
 	return nil
