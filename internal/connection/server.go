@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"slices"
 	"sync"
 	"syscall"
 	"time"
@@ -175,17 +176,13 @@ func isClosedConnError(err error) bool {
 		errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET)
 }
 
-var httpMethods = [][]byte{[]byte("GET "), []byte("POST"), []byte("HEAD"), []byte("PUT "), []byte("OPTI"), []byte("DELE"), []byte("PATC")}
+// httpMethods are the first 4 bytes of an HTTP request.
+var httpMethods = []string{"GET ", "POST", "HEAD", "PUT ", "OPTI", "DELE", "PATC"}
 
 // isHTTPRequest reports whether the first bytes of a connection start an HTTP
 // request. A frame's third byte is always 0x00, so the two never overlap.
 func isHTTPRequest(head []byte) bool {
-	for _, method := range httpMethods {
-		if bytes.Equal(head, method) {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(httpMethods, string(head))
 }
 
 // httpIdleTimeout is how long an HTTP connection may wait for its next request.
