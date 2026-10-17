@@ -40,6 +40,8 @@ func (game *Game) handleChangeChatRoom(client *connection.Client, req *protobuf.
 
 // handleClientReport takes CS_12299, sent by the C# side of the client after
 // loading; there is no reply.
+//
+//belfast:static
 func (game *Game) handleClientReport(client *connection.Client, req *protobuf.CS_12299) error {
 	return nil
 }

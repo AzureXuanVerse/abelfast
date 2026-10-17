@@ -253,6 +253,8 @@ func (game *Game) handleSellItems(client *connection.Client, req *protobuf.CS_15
 }
 
 // handleTracking takes the client's analytics events (CS_10991), no reply.
+//
+//belfast:static
 func (game *Game) handleTracking(client *connection.Client, req *protobuf.CS_10991) error {
 	return nil
 }

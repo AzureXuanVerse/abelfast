@@ -100,6 +100,7 @@ func (gateway *Gateway) serverList() []*protobuf.SERVERINFO {
 	return list
 }
 
+//belfast:static
 func (gateway *Gateway) handleVersionCheck(client *connection.Client, req *protobuf.CS_10800) error {
 	msg, err := gateway.version(req)
 	if err != nil {
@@ -108,12 +109,15 @@ func (gateway *Gateway) handleVersionCheck(client *connection.Client, req *proto
 	return client.Send(msg)
 }
 
+//belfast:static
 func (gateway *Gateway) handleServerState(client *connection.Client, req *protobuf.CS_10018) error {
 	return client.Send(&protobuf.SC_10019{Serverlist: gateway.serverList()})
 }
 
 // handleLogin accepts any SDK login: arg2 is the SDK account uid, the account
 // id is derived from it so it stays the same across logins and restarts.
+//
+//belfast:static
 func (gateway *Gateway) handleLogin(client *connection.Client, req *protobuf.CS_10020) error {
 	account := accountID(req.GetArg2())
 	ticket := gateway.issueTicket(account)

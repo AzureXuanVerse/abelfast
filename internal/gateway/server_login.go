@@ -93,6 +93,8 @@ func (gateway *Gateway) handleCreatePlayer(client *connection.Client, req *proto
 // handleHeartbeat answers the client's ping (ConnectionMgr:resetHBTimer),
 // sent on every connection; the client only times the reply, state is unused.
 // Unanswered, it resends forever and eventually reconnects.
+//
+//belfast:static
 func (gateway *Gateway) handleHeartbeat(client *connection.Client, req *protobuf.CS_10100) error {
 	return client.Send(&protobuf.SC_10101{State: proto.Uint32(0)})
 }
