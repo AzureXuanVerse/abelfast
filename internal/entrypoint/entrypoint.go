@@ -47,7 +47,7 @@ func Run() {
 	(&game.Game{DB: store}).Register()
 
 	server := connection.NewServer(*listen, packets.Dispatch)
-	server.HTTP = gw.HTTP()
+	server.HTTPResponse = gateway.ProbeResponse
 
 	// wait for SIGINT
 	sigChannel := make(chan os.Signal, 1)

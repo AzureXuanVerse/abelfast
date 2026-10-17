@@ -7,7 +7,6 @@ package gateway
 import (
 	"fmt"
 	"hash/fnv"
-	"net/http"
 	"sync"
 	"time"
 
@@ -46,6 +45,10 @@ func (server Server) info() *protobuf.SERVERINFO {
 		ProxyPort: proto.Uint32(server.Port),
 	}
 }
+
+// ProbeResponse answers the SDK's reachability probe (GET /?cmd=test?) as
+// the official gateway does (captured).
+var ProbeResponse = []byte("HTTP/1.1 200 OK\r\nContent-Type: text/plain;charset=utf-8\r\nContent-Length: 8\r\nConnection: keep-alive\r\n\r\nbad args")
 
 // versionTTL is how long an upstream SC_10801 is reused.
 const versionTTL = 10 * time.Minute
@@ -87,15 +90,6 @@ func (gateway *Gateway) Register() {
 	packets.Handle(gateway.handleServerLogin)
 	packets.Handle(gateway.handleHeartbeat)
 	packets.Handle(gateway.handleCreatePlayer)
-}
-
-// HTTP answers the SDK's reachability probe (GET /?cmd=test?) the way the
-// official gateway does.
-func (gateway *Gateway) HTTP() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain;charset=utf-8")
-		w.Write([]byte("bad args"))
-	})
 }
 
 func (gateway *Gateway) serverList() []*protobuf.SERVERINFO {
