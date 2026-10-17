@@ -29,21 +29,18 @@ const (
 	activityTypeIslandDrawAward = 800 // DrawAwardActivity reads data1KeyValueList[1]
 )
 
-// activities whose ACTIVITYINFO the server computes
-const (
-	// ACTIVITY_TYPE_MILITARY_EXERCISE: always running, a new season every
-	// exerciseSeasonLength (its activity_template timer is a 2017 one);
-	// data1 is the season start
-	activityExerciseSeason = 7
-	activityMonthSign      = 6
-)
+// ActivityConst.ACTIVITY_TYPE_MILITARY_EXERCISE: always running, a new
+// season every exerciseSeasonLength (its activity_template timer is a 2017
+// one); data1 is the season start. Like activityTypeMonthSign, its
+// ACTIVITYINFO is computed by the server.
+const activityTypeMilitaryExercise = 7
 
 // openActivities are the activities running at now: activity_template rows
 // whose time is "always" or a timer containing now, and the exercise season.
 func openActivities(now time.Time) []activityConfig {
 	var open []activityConfig
-	for id, config := range activityConfigs {
-		if config.Time.Open(now) || id == activityExerciseSeason {
+	for _, config := range activityConfigs {
+		if config.Time.Open(now) || config.Type == activityTypeMilitaryExercise {
 			open = append(open, config)
 		}
 	}
@@ -54,7 +51,7 @@ func openActivities(now time.Time) []activityConfig {
 // openActivity is activity id's config, if it runs at now.
 func openActivity(id uint32, now time.Time) (activityConfig, bool) {
 	config, ok := activityConfigs[id]
-	return config, ok && (config.Time.Open(now) || id == activityExerciseSeason)
+	return config, ok && (config.Time.Open(now) || config.Type == activityTypeMilitaryExercise)
 }
 
 // newActivityState is what a new commander's ACTIVITYINFO of an activity
@@ -126,11 +123,11 @@ func (game *Game) activityList(ctx context.Context, commander db.Commander) (*pr
 		if !config.Time.End.IsZero() {
 			stopTime = uint32(config.Time.End.Unix())
 		}
-		switch config.ID {
-		case activityExerciseSeason:
+		switch config.Type {
+		case activityTypeMilitaryExercise:
 			start := periodStart(now, exerciseSeasonLength)
 			stopTime, state.Data1 = uint32(start.Add(exerciseSeasonLength).Unix()-1), uint32(start.Unix())
-		case activityMonthSign:
+		case activityTypeMonthSign:
 			state = monthSignState(state, now)
 		}
 		info := &protobuf.ACTIVITYINFO{
