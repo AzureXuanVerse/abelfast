@@ -21,7 +21,9 @@ dump
 # and will be moved later to another location
 packets/protobuf_src
 internal/proto
+internal/tools
 wg/
+.direnv/
 
 # Node stuff
 web/src/node_modules
