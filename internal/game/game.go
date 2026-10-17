@@ -15,25 +15,23 @@ import (
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
-// mondayReference is the "monday_0oclock_timestamp" the official EN servers
-// send (SC_11000, SC_11002): Monday 2020-11-23 00:00 in UTC-7. The client
-// derives its weekly resets from it.
-const mondayReference = 1606114800
-
 type Game struct {
 	DB *db.Store
 }
 
 // StartCommander creates what a new commander starts with (CS_10024), in
 // dependency order: ships first, the secretary and fleets point at them.
+// What a new commander starts with is no progress: the task events and
+// pushes its Tx records are dropped.
 func StartCommander(ctx context.Context, queries *db.Queries, commander db.Commander) error {
-	for _, grant := range []func(context.Context, *db.Queries, db.Commander) error{
+	tx := newTx(ctx, queries, commander.ID)
+	for _, grant := range []func(*Tx, db.Commander) error{
 		grantShipsStarter,
 		grantPlayerStarter,
 		grantFleetsStarter,
 		grantTasksStarter,
 	} {
-		if err := grant(ctx, queries, commander); err != nil {
+		if err := grant(tx, commander); err != nil {
 			return err
 		}
 	}
@@ -46,13 +44,71 @@ func (game *Game) Register() {
 	if err := loadGameData(); err != nil {
 		panic(fmt.Sprintf("game data: %v", err))
 	}
-	game.registerPlayer()
-	game.registerShips()
-	game.registerFleets()
-	game.registerTasks()
+	// the player, settings and guild
+	packets.Handle(game.handleLoadPlayerData)
+	packets.Handle(game.handleDormPopEvents)
 	packets.Handle(game.handleGuideIndex)
 	packets.Handle(game.handleStoryRead)
+	packets.Handle(game.handleSecondaryPassword)
+	packets.Handle(game.handleChangeChatRoom)
+	packets.Handle(game.handleClientReport)
+	packets.Handle(game.handleCommanderHome)
+	packets.Handle(game.handleWorldBoss)
+	packets.Handle(game.handleMetaPTData)
+	packets.Handle(game.handleGuildInfo)
+	packets.Handle(game.handlePublicGuildTech)
+	packets.Handle(game.handleGuildUserInfo)
+	packets.Handle(game.handleGuildShop)
+	// ships, builds and inventory
+	packets.Handle(game.handleBuildShip)
+	packets.Handle(game.handleBuildQuickFinish)
+	packets.Handle(game.handleBuildResults)
+	packets.Handle(game.handleCollectBuilds)
+	packets.Handle(game.handleConfirmBuilds)
+	packets.Handle(game.handleShipLock)
+	packets.Handle(game.handleShipEquip)
+	packets.Handle(game.handleLoveLetters)
+	packets.Handle(game.handleUpgradeShipEquipment)
+	packets.Handle(game.handleComposeEquipment)
+	packets.HandleLenient(game.handleSellItems)
 	packets.Handle(game.handleTracking)
+	// fleets, the campaign and battles
+	packets.Handle(game.handleUpdateFleet)
+	packets.Handle(game.handleTracking13101)
+	packets.Handle(game.handleChapterOp)
+	packets.Handle(game.handleChapterBattleResult)
+	packets.Handle(game.handleRemasterInfo)
+	packets.Handle(game.handleBeginStage)
+	packets.Handle(game.handleFinishStage)
+	// tasks and activities
+	packets.Handle(game.handleSubmitTask)
+	packets.Handle(game.handleClientTaskEvent)
+	packets.Handle(game.handleSubmitActivityTasks)
+	packets.Handle(game.handleHandbookGetTasks)
+	packets.Handle(game.handleActivityOperation)
+	// Juus
+	packets.Handle(game.handleJuusPostOp)
+	packets.Handle(game.handleJuusComment)
+	packets.Handle(game.handleJuusPosts)
+	packets.Handle(game.handleJuusGroups)
+	packets.Handle(game.handleJuusChatReply)
+	packets.Handle(game.handleJuusTopicsRead)
+	packets.Handle(game.handleJuusActivateTopics)
+	// minigames, shops, exercises, TB
+	packets.Handle(game.handleAuctionGameInit)
+	packets.Handle(game.handleAppreciationVersion)
+	packets.Handle(game.handleMiniGameHubs)
+	packets.Handle(game.handleEmojiInfo)
+	packets.Handle(game.handleLimitChallenge)
+	packets.Handle(game.handleChargeList)
+	packets.Handle(game.handleMedalShop)
+	packets.Handle(game.handleShopStreet)
+	packets.Handle(game.handleMiniGameShop)
+	packets.Handle(game.handleSeasonInfo)
+	packets.Handle(game.handleMilitaryShop)
+	packets.Handle(game.handleEducate)
+	packets.Handle(game.handleNewEducate)
+	packets.Handle(game.handleEducateEndings)
 }
 
 // login is what the login burst is built from, loaded once per CS_11001.

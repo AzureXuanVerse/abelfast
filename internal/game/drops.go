@@ -43,6 +43,7 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 				tx.newShips = append(tx.newShips, ship)
 			}
 		case kind == dropTypeVItem && id == vitemSpecializedCore:
+			// stored without counting as an obtained item (TaskSubObtainItem)
 			if err := tx.Queries.AddItem(tx.ctx, db.AddItemParams{CommanderID: tx.commanderID, ItemID: itemSpecializedCore, Count: count}); err != nil {
 				return err
 			}
@@ -53,17 +54,34 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 			}
 			tx.event(TaskEvent{SubType: TaskSubCruisePt, Count: total + count})
 		case kind == dropTypeVItem:
-			if err := tx.AddVirtualItem(tx.ctx, db.AddVirtualItemParams{CommanderID: tx.commanderID, ItemID: id, Amount: count}); err != nil {
+			if err := tx.AddVirtualItem(id, count); err != nil {
 				return err
-			}
-			if id == VirtualItemWeeklyPt {
-				tx.event(TaskEvent{SubType: TaskSubWeeklyPt, Count: count})
 			}
 		default:
 			logger.WithFields("Drops", logger.FieldValue("type", kind), logger.FieldValue("id", id)).Warn("drop not stored")
 		}
 	}
 	return nil
+}
+
+// weightedPick draws the index of one of items by weight, roll(n) being a
+// random number below n; -1 when no item weighs anything.
+func weightedPick[T any](roll func(n uint32) uint32, items []T, weight func(T) uint32) int {
+	total := uint32(0)
+	for _, item := range items {
+		total += weight(item)
+	}
+	if total == 0 {
+		return -1
+	}
+	n := roll(total)
+	for i, item := range items {
+		if n < weight(item) {
+			return i
+		}
+		n -= weight(item)
+	}
+	return -1
 }
 
 // dropInfo is one DROPINFO of a reward: a DROP_TYPE_*, an id and a count.

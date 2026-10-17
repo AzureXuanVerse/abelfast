@@ -16,7 +16,7 @@ import (
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
-// ActivityConst types belfast operates (CS_11202)
+// ActivityConst.ACTIVITY_TYPE_* belfast operates (CS_11202)
 const (
 	activityType7DaysLogin = 3
 	activityTypeMonthSign  = 6
@@ -179,7 +179,7 @@ func (game *Game) activityList(ctx context.Context, commander db.Commander) (*pr
 		}
 		switch activity.id {
 		case activityExerciseSeason:
-			start := exerciseSeasonStart(now)
+			start := periodStart(now, exerciseSeasonLength)
 			info.StopTime = proto.Uint32(uint32(start.Add(exerciseSeasonLength).Unix() - 1))
 			info.Data1 = proto.Uint32(uint32(start.Unix()))
 		case activityMonthSign:
@@ -205,12 +205,6 @@ func (game *Game) activityList(ctx context.Context, commander db.Commander) (*pr
 		reply.ActivityList = append(reply.ActivityList, info)
 	}
 	return reply, nil
-}
-
-// acceptActivityTasks hands a task list activity's tasks to the tasks area,
-// which must push them (SC_20003) before SC_11203.
-func (game *Game) acceptActivityTasks(ctx context.Context, client *connection.Client, taskIDs []uint32) error {
-	return game.acceptTasksPush(ctx, client, taskIDs...)
 }
 
 // handleActivityOperation answers ActivityOperationCommand (CS_11202). The
@@ -248,9 +242,7 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 			if err != nil {
 				return err
 			}
-			last := time.Unix(int64(state.Data2), 0).In(serverZone)
-			today := now.In(serverZone)
-			if int(state.Data1) >= len(days) || (state.Data2 != 0 && last.YearDay() == today.YearDay() && last.Year() == today.Year()) {
+			if int(state.Data1) >= len(days) || (state.Data2 != 0 && sameServerDay(time.Unix(int64(state.Data2), 0), now)) {
 				return errRefused
 			}
 			reply.AwardList = configDrops(days[state.Data1 : state.Data1+1])
@@ -282,7 +274,8 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 			return queries.SaveActivity(ctx, db.SaveActivityParams(state))
 		})
 	case activityTypeTaskList:
-		err = game.acceptActivityTasks(ctx, client, activityTaskIDs(config, now))
+		// the tasks are pushed (SC_20003) before SC_11203
+		err = game.acceptTasksPush(ctx, client, activityTaskIDs(config, now)...)
 	default:
 		err = errRefused
 	}

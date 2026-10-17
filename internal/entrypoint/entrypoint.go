@@ -41,16 +41,13 @@ func Run() {
 		Upstream:  *upstream,
 		DB:        store,
 		TicketKey: ticketKey,
-		Servers: []gateway.Server{{
-			ID: 1, Name: "Belfast", Host: *serverHost, Port: uint32(*serverPort),
-			State: gateway.StateNormal, Tag: gateway.TagNone, Sort: 0,
-		}},
+		Servers:   []gateway.Server{{ID: 1, Name: "Belfast", Host: *serverHost, Port: uint32(*serverPort)}},
 	}
 	gw.Register()
 	(&game.Game{DB: store}).Register()
 
 	server := connection.NewServer(*listen, packets.Dispatch)
-	server.HTTP = gw.HTTP()
+	server.HTTPResponse = gateway.ProbeResponse
 
 	// wait for SIGINT
 	sigChannel := make(chan os.Signal, 1)

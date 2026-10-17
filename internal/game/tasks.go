@@ -12,37 +12,31 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
-	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
 // task_data_template / weekly_task_template sub_type: what a task counts.
 // Requests record them on their Tx when they happen.
 const (
-	TaskSubDefeatEnemy    = 11   // enemy ships sunk in a battle
-	TaskSubWin            = 20   // battles won
-	TaskSubDefeatBoss     = 21   // boss fleets defeated
-	TaskSubWinA           = 23   // battles won with A rank or better
-	TaskSubWinS           = 24   // battles won with S rank
-	TaskSubDailyChallenge = 26   // daily challenge cleared, target: its stage id
-	TaskSubExercise       = 27   // exercises fought
-	TaskSubBuild          = 30   // ships built
-	TaskSubRetire         = 31   // ships retired
-	TaskSubEnhanceShip    = 34   // ship enhancements
-	TaskSubEnhanceGear    = 40   // gear upgrades
-	TaskSubCraftGear      = 42   // gear crafted
-	TaskSubAcademyLevel   = 85   // canteen / merchant level (absolute)
-	TaskSubMonthSign      = 106  // monthly login rewards collected
-	TaskSubHandbookPhase  = 114  // commander manual tasks claimed, target: page id
-	TaskSubUseItem        = 120  // items used, target: item id
-	TaskSubSpendOil       = 121  // oil spent
-	TaskSubObtainItem     = 130  // items obtained, target: item id
-	TaskSubWeeklyPt       = 161  // weekly mission points obtained
-	TaskSubLevel          = 1011 // commander level (absolute)
-	TaskSubClearStage     = 1020 // stage cleared, target: chapter id
-	TaskSubCruisePt       = 1023 // cruise pass points (absolute)
-	TaskSubStars          = 1026 // main campaign stars (absolute)
-	TaskSubSortieExp      = 1041 // ship EXP earned from sorties
+	TaskSubDefeatEnemy   = 11   // enemy ships sunk in a battle
+	TaskSubWin           = 20   // battles won
+	TaskSubDefeatBoss    = 21   // boss fleets defeated
+	TaskSubWinA          = 23   // battles won with A rank or better
+	TaskSubWinS          = 24   // battles won with S rank
+	TaskSubBuild         = 30   // ships built
+	TaskSubEnhanceGear   = 40   // gear upgrades
+	TaskSubCraftGear     = 42   // gear crafted
+	TaskSubAcademyLevel  = 85   // canteen / merchant level (absolute)
+	TaskSubHandbookPhase = 114  // commander manual tasks claimed, target: page id
+	TaskSubUseItem       = 120  // items used, target: item id
+	TaskSubSpendOil      = 121  // oil spent
+	TaskSubObtainItem    = 130  // items obtained, target: item id
+	TaskSubWeeklyPt      = 161  // weekly mission points obtained
+	TaskSubLevel         = 1011 // commander level (absolute)
+	TaskSubClearStage    = 1020 // stage cleared, target: chapter id
+	TaskSubCruisePt      = 1023 // cruise pass points (absolute)
+	TaskSubStars         = 1026 // main campaign stars (absolute)
+	TaskSubSortieExp     = 1041 // ship EXP earned from sorties
 )
 
 // Sub types whose event carries the current value (a level, a total) rather
@@ -68,37 +62,37 @@ var taskInheritedSubTypes = map[uint32]bool{
 	TaskSubStars:        true,
 }
 
-var taskInheritedCountSubTypes = map[uint32]bool{
-	TaskSubBuild: true,
-}
-
 // item_virtual_data_statistics ids earned from tasks (drop type 8)
 const (
 	VirtualItemWeeklyPt = 59012 // weekly mission points (WeekTaskProgress)
 	VirtualItemCruisePt = 59599 // cruise pass points (SubmitActiveTaskCommand)
 )
 
-// activity_template types whose tasks come in SC_20201 (TotalTaskProxy):
-// ACTIVITY_TYPE_TASKS 13, PT_CRUSING 54, PT_HEI5 130, BOSS_RUSH_DAL_COLLAB 132
-// go to TaskProxy; TASK_RYZA 89, HOTSPRING_2 100, NOT_TRACEABLE 121 to
-// ActivityTaskProxy.
-const activityTypeCruise = 54
+// ActivityConst.ACTIVITY_TYPE_* of the activities whose tasks come in
+// SC_20201 (TotalTaskProxy)
+const (
+	activityTypeTasks             = 13
+	activityTypeCruise            = 54 // PT_CRUSING
+	activityTypePtHei5            = 130
+	activityTypeBossRushDalCollab = 132
+	activityTypeTaskRyza          = 89
+	activityTypeHotspring2        = 100
+	activityTypeNotTraceable      = 121
+)
 
-var taskActivityTypes = map[uint32]bool{13: true, 54: true, 130: true, 132: true, 89: true, 100: true, 121: true}
+// taskActivityTypes are the activity_template types whose tasks come in
+// SC_20201: TaskProxy holds those of the first four, ActivityTaskProxy the
+// others'.
+var taskActivityTypes = map[uint32]bool{
+	activityTypeTasks: true, activityTypeCruise: true, activityTypePtHei5: true, activityTypeBossRushDalCollab: true,
+	activityTypeTaskRyza: true, activityTypeHotspring2: true, activityTypeNotTraceable: true,
+}
 
 // TaskEvent is something that happened that tasks count.
 type TaskEvent struct {
 	SubType uint32 // task_data_template.sub_type, see TaskSub*
 	Target  uint32 // chapter id, item id...; 0 when the event has none
 	Count   uint32 // amount to add, or the new value for absolute sub types
-}
-
-func (game *Game) registerTasks() {
-	packets.Handle(game.handleSubmitTask)
-	packets.Handle(game.handleClientTaskEvent)
-	packets.Handle(game.handleSubmitActivityTasks)
-	packets.Handle(game.handleHandbookGetTasks)
-	game.registerJuus()
 }
 
 // taskList is SC_20001, TaskProxy's tasks.
@@ -172,7 +166,8 @@ var starterTasks = []uint32{1, 7310, 7307}
 // tasks that unlock commander manual pages (tutorial_handbook_task.unlock,
 // 23501-23517) and starterTasks, plus the first step of every weekly mission
 // chain open at level 1 (weekly_task_template, 10001, 10011, ... 10141).
-func grantTasksStarter(ctx context.Context, queries *db.Queries, commander db.Commander) error {
+func grantTasksStarter(tx *Tx, commander db.Commander) error {
+	ctx, queries := tx.ctx, tx.Queries
 	// what a new commander already is, for tasks that start from it
 	for _, counter := range []TaskEvent{{SubType: TaskSubLevel, Count: 1}, {SubType: TaskSubAcademyLevel, Count: 1}} {
 		if err := queries.SetTaskCounter(ctx, db.SetTaskCounterParams{CommanderID: commander.ID, SubType: counter.SubType, Value: counter.Count}); err != nil {
@@ -260,7 +255,7 @@ func (tx *Tx) cruisePt() (uint32, error) {
 // initialProgress is where a task accepted now starts, see
 // taskInheritedSubTypes.
 func initialProgress(config taskConfig, counters map[taskCounterKey]uint32) uint32 {
-	if !taskInheritedSubTypes[config.SubType] && !(taskInheritedCountSubTypes[config.SubType] && config.AutoCommit == 0) {
+	if !taskInheritedSubTypes[config.SubType] && !(config.SubType == TaskSubBuild && config.AutoCommit == 0) {
 		return 0
 	}
 	target := config.target
@@ -565,9 +560,8 @@ func activityTaskIDs(config activityConfig, now time.Time) []uint32 {
 	if config.Type != activityTypeCruise {
 		return config.tasks
 	}
-	start := config.window.start
-	weekStart := start.Unix() - (start.Unix()-mondayReference)%(7*86400)
-	weeks := uint32((now.Unix() - weekStart + 7*86400 - 1) / (7 * 86400))
+	elapsed := now.Sub(periodStart(config.window.start, week)).Truncate(time.Second)
+	weeks := uint32((elapsed + week - 1) / week)
 	var tasks []uint32
 	for _, groupID := range config.tasks {
 		group, ok := battlepassTaskGroups[groupID]

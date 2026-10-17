@@ -11,7 +11,6 @@ import (
 
 // chapter_template.grids cell kinds (the 4th value of a grid)
 const (
-	gridNone  = 0
 	gridBorn  = 1
 	gridEnemy = 6 // an enemy spawns here (expedition_id_weight_list)
 	gridBoss  = 8 // the boss spawns here (boss_expedition_id)
@@ -87,9 +86,8 @@ const (
 
 // expeditionTemplate is an expedition_data_template row.
 type expeditionTemplate struct {
-	Exp   uint32 `json:"exp"` // base ship exp
-	Type  uint32 `json:"type"`
-	Level uint32 `json:"level"`
+	Exp  uint32 `json:"exp"` // base ship exp
+	Type uint32 `json:"type"`
 }
 
 var expeditionTemplates map[uint32]expeditionTemplate

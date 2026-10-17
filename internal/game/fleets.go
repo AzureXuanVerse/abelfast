@@ -8,7 +8,6 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
-	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -17,22 +16,12 @@ import (
 // client fills in the other ids (FormationUI.MAX_FLEET_NUM, PvP...) itself.
 var starterFleets = []uint32{1, 2, 11, 12}
 
-// registerFleets installs the formation, campaign and battle handlers.
-func (game *Game) registerFleets() {
-	packets.Handle(game.handleUpdateFleet)
-	packets.Handle(game.handleTracking13101)
-	packets.Handle(game.handleChapterOp)
-	packets.Handle(game.handleChapterBattleResult)
-	packets.Handle(game.handleRemasterInfo)
-	packets.Handle(game.handleBeginStage)
-	packets.Handle(game.handleFinishStage)
-}
-
 // grantFleetsStarter creates the starter fleets, puts the commander's ships
 // in fleet 1, the chosen starter first (capture: [Javelin, Long Island]), and
 // offers the starter commissions. It has to run after the starter ships are
 // created.
-func grantFleetsStarter(ctx context.Context, queries *db.Queries, commander db.Commander) error {
+func grantFleetsStarter(tx *Tx, commander db.Commander) error {
+	ctx, queries := tx.ctx, tx.Queries
 	for _, id := range starterFleets {
 		if err := queries.CreateFleet(ctx, db.CreateFleetParams{CommanderID: commander.ID, FleetID: id, Name: ""}); err != nil {
 			return err
@@ -60,36 +49,6 @@ func boolOrder(b bool) int {
 		return 1
 	}
 	return 0
-}
-
-// FleetShips returns the ships of a commander's fleet in formation order, for
-// areas that need the current fleet (e.g. exercises, secretary checks).
-func FleetShips(ctx context.Context, queries *db.Queries, commanderID uint32, fleetID uint32) ([]uint32, error) {
-	return queries.ListShipsOfFleet(ctx, db.ListShipsOfFleetParams{CommanderID: commanderID, FleetID: fleetID})
-}
-
-// RemoveShipsFromFleets takes ships out of every fleet, for when they leave
-// the dock (retire, enhance fodder...).
-func RemoveShipsFromFleets(ctx context.Context, queries *db.Queries, commanderID uint32, shipIDs []uint32) error {
-	rows, err := queries.ListFleetShips(ctx, commanderID)
-	if err != nil {
-		return err
-	}
-	fleets := map[uint32][]uint32{}
-	changed := map[uint32]bool{}
-	for _, row := range rows {
-		if slices.Contains(shipIDs, row.ShipID) {
-			changed[row.FleetID] = true
-			continue
-		}
-		fleets[row.FleetID] = append(fleets[row.FleetID], row.ShipID)
-	}
-	for id := range changed {
-		if err := setFleetShips(ctx, queries, commanderID, id, fleets[id]); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func setFleetShips(ctx context.Context, queries *db.Queries, commanderID uint32, fleetID uint32, shipIDs []uint32) error {

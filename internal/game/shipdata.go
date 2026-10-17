@@ -1,6 +1,7 @@
 package game
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -51,12 +52,16 @@ type buildPool struct {
 	RateTip       []string `json:"rate_tip"`
 
 	// the ships it yields (ship_data_group descriptions linking to it) by
-	// rarity, the rarities that have ships in order, their rate_tip rate
+	// rarity, the rate_tip rate of the rarities that have ships (by rarity)
 	// and the sum of those rates
 	candidates map[uint32][]uint32
-	rarities   []uint32
-	rates      map[uint32]float64
+	rates      []rarityRate
 	total      float64
+}
+
+type rarityRate struct {
+	rarity uint32
+	rate   float64
 }
 
 // equipUpgrade is an equip_data_template row: what upgrading it costs and
@@ -245,7 +250,6 @@ func loadShipData() error {
 				pool.candidates[ship.Rarity] = append(pool.candidates[ship.Rarity], group*10+1)
 			}
 		}
-		pool.rates = map[uint32]float64{}
 		for _, tip := range pool.RateTip {
 			match := rateTipPattern.FindStringSubmatch(rateTipTags.ReplaceAllString(tip, ""))
 			if match == nil {
@@ -256,13 +260,12 @@ func loadShipData() error {
 				continue
 			}
 			rarity := rarityByRateName[match[1]]
-			pool.rates[rarity] = rate
-			if len(pool.candidates[rarity]) > 0 && !slices.Contains(pool.rarities, rarity) {
-				pool.rarities = append(pool.rarities, rarity)
+			if len(pool.candidates[rarity]) > 0 && !slices.ContainsFunc(pool.rates, func(r rarityRate) bool { return r.rarity == rarity }) {
+				pool.rates = append(pool.rates, rarityRate{rarity, rate})
 				pool.total += rate
 			}
 		}
-		slices.Sort(pool.rarities)
+		slices.SortFunc(pool.rates, func(a, b rarityRate) int { return cmp.Compare(a.rarity, b.rarity) })
 		buildPools[id] = pool
 	}
 

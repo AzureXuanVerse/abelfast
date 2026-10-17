@@ -12,7 +12,6 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
-	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -29,20 +28,6 @@ const (
 	// create_time, ship id 2). She is no client data, the server picks her.
 	starterGiftShip = 106011
 )
-
-func (game *Game) registerShips() {
-	packets.Handle(game.handleBuildShip)
-	packets.Handle(game.handleBuildQuickFinish)
-	packets.Handle(game.handleBuildResults)
-	packets.Handle(game.handleCollectBuilds)
-	packets.Handle(game.handleConfirmBuilds)
-	packets.Handle(game.handleShipLock)
-	packets.Handle(game.handleShipEquip)
-	packets.Handle(game.handleLoveLetters)
-	packets.Handle(game.handleUpgradeShipEquipment)
-	packets.Handle(game.handleComposeEquipment)
-	packets.HandleLenient(game.handleSellItems)
-}
 
 // NewShip returns the row for a freshly obtained ship: level 1, morale and
 // level cap from its ship_data_template (energy, max_level).
@@ -104,12 +89,6 @@ func (tx *Tx) AddShip(templateID uint32) (*protobuf.SHIPINFO, error) {
 		tx.push(push)
 	}
 	return fullShipInfo(row, equips, skills), nil
-}
-
-// NewShipsPush is SC_12042, ships obtained outside of a reply (drops...),
-// added by BayProxy.
-func NewShipsPush(ships ...*protobuf.SHIPINFO) *protobuf.SC_12042 {
-	return &protobuf.SC_12042{ShipList: ships}
 }
 
 // shipInfo is the SHIPINFO of a ship row alone, read by BayProxy into a Ship
@@ -235,20 +214,14 @@ func shipsByID(ctx context.Context, queries *db.Queries, commanderID uint32, ids
 
 // grantShipsStarter gives a new commander the starter ship they chose and
 // Long Island, equipped, and the starting bag (SC_12001 / SC_15001 of the
-// capture). What a new commander starts with is no progress: the task events
-// and pushes it records are dropped.
-func grantShipsStarter(ctx context.Context, queries *db.Queries, commander db.Commander) error {
-	tx := newTx(ctx, queries, commander.ID)
+// capture), and sets the medals that start with progress.
+func grantShipsStarter(tx *Tx, commander db.Commander) error {
+	ctx, queries, commanderID := tx.ctx, tx.Queries, tx.commanderID
 	for _, template := range []uint32{commander.StarterShip, starterGiftShip} {
 		if _, err := tx.AddShip(template); err != nil {
 			return err
 		}
 	}
-	return grantStarterRest(tx)
-}
-
-func grantStarterRest(tx *Tx) error {
-	ctx, queries, commanderID := tx.ctx, tx.Queries, tx.commanderID
 	if err := grantStarterItems(tx); err != nil {
 		return err
 	}
@@ -256,8 +229,7 @@ func grantStarterRest(tx *Tx) error {
 	if err := queries.SetTrophy(ctx, db.SetTrophyParams{CommanderID: commanderID, TrophyID: 10041, Progress: 14}); err != nil {
 		return err
 	}
-	_, err := ShipTrophyPushes(ctx, queries, commanderID)
-	return err
+	return setShipTrophies(ctx, queries, commanderID)
 }
 
 // energyTick is SC_12031, the last morale tick: they run every
@@ -383,31 +355,24 @@ func recordShipGroup(ctx context.Context, queries *db.Queries, ship db.Ship) (*p
 	if err != nil {
 		return nil, err
 	}
-	return SetTrophy(ctx, queries, ship.CommanderID, archiveCountTrophy, uint32(groups))
-}
-
-// SetTrophy stores a medal_template progress and returns its SC_17002 push.
-func SetTrophy(ctx context.Context, queries *db.Queries, commanderID, trophyID, progress uint32) (*protobuf.SC_17002, error) {
-	if err := queries.SetTrophy(ctx, db.SetTrophyParams{CommanderID: commanderID, TrophyID: trophyID, Progress: progress}); err != nil {
+	if err := queries.SetTrophy(ctx, db.SetTrophyParams{CommanderID: ship.CommanderID, TrophyID: archiveCountTrophy, Progress: uint32(groups)}); err != nil {
 		return nil, err
 	}
 	return &protobuf.SC_17002{ProgressList: []*protobuf.ACHIEVEMENT_INFO{{
-		Id: proto.Uint32(trophyID), Progress: proto.Uint32(progress),
+		Id: proto.Uint32(archiveCountTrophy), Progress: proto.Uint32(uint32(groups)),
 	}}}, nil
 }
 
-// ShipTrophyPushes recomputes the faction medals from the commander's ships
-// and returns the SC_17002 of those that changed. The official server does
-// this after a battle (not when a ship is obtained), sending the affinity
-// ones one by one then the exp ones together, factions in descending order.
-func ShipTrophyPushes(ctx context.Context, queries *db.Queries, commanderID uint32) ([]proto.Message, error) {
+// setShipTrophies recomputes the faction medals from the commander's ships
+// and stores those that changed.
+func setShipTrophies(ctx context.Context, queries *db.Queries, commanderID uint32) error {
 	ships, err := queries.ListShipsByCommander(ctx, commanderID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	trophies, err := queries.ListTrophies(ctx, commanderID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	stored := map[uint32]uint32{}
 	for _, trophy := range trophies {
@@ -429,31 +394,15 @@ func ShipTrophyPushes(ctx context.Context, queries *db.Queries, commanderID uint
 			values[nation.exp] += ship.Exp
 		}
 	}
-	var pushes []proto.Message
-	grouped := map[string]*protobuf.SC_17002{"level120": {}, "exp": {}}
 	for _, nation := range nationTrophies {
-		for _, kind := range []struct {
-			name string
-			id   uint32
-		}{{"intimacy", nation.intimacy}, {"exp", nation.exp}, {"level120", nation.level120}} {
-			if values[kind.id] == stored[kind.id] {
+		for _, id := range []uint32{nation.intimacy, nation.exp, nation.level120} {
+			if values[id] == stored[id] {
 				continue
 			}
-			push, err := SetTrophy(ctx, queries, commanderID, kind.id, values[kind.id])
-			if err != nil {
-				return nil, err
-			}
-			if kind.name == "intimacy" {
-				pushes = append(pushes, push)
-			} else {
-				grouped[kind.name].ProgressList = append(grouped[kind.name].ProgressList, push.ProgressList...)
+			if err := queries.SetTrophy(ctx, db.SetTrophyParams{CommanderID: commanderID, TrophyID: id, Progress: values[id]}); err != nil {
+				return err
 			}
 		}
 	}
-	for _, name := range []string{"exp", "level120"} {
-		if len(grouped[name].ProgressList) > 0 {
-			pushes = append(pushes, grouped[name])
-		}
-	}
-	return pushes, nil
+	return nil
 }

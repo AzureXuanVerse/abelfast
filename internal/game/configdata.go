@@ -122,11 +122,9 @@ func readConfigRows[T any](raw []byte) (map[uint32]T, error) {
 	return table, nil
 }
 
-// gamesetConfig is a gameset row, keyed by the setting's name: key_value,
-// or description for the settings that are lists.
+// gamesetConfig is a gameset row, keyed by the setting's name.
 type gamesetConfig struct {
-	KeyValue    uint32          `json:"key_value"`
-	Description json.RawMessage `json:"description"`
+	KeyValue uint32 `json:"key_value"`
 }
 
 // readGameset reads the gameset settings.

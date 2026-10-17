@@ -1,12 +1,13 @@
 package connection
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"net"
-	"net/http"
+	"slices"
 	"sync"
 	"syscall"
 	"time"
@@ -30,9 +31,10 @@ type Server struct {
 	address    string
 	dispatcher Dispatcher
 
-	// HTTP, when set, serves connections that open with an HTTP request
-	// instead of a frame (the SDK probes the gateway port with GET /?cmd=test?).
-	HTTP http.Handler
+	// HTTPResponse, when set, answers every request of a connection that
+	// opens with an HTTP request instead of a frame (the SDK probes the
+	// gateway port with GET /?cmd=test?).
+	HTTPResponse []byte
 
 	clientsMu sync.Mutex
 	clients   map[uint64]*Client
@@ -103,7 +105,7 @@ func (server *Server) handleConnection(conn net.Conn) {
 	if _, err := io.ReadFull(conn, head[:]); err != nil {
 		return
 	}
-	if server.HTTP != nil && isHTTPRequest(head[:]) {
+	if server.HTTPResponse != nil && isHTTPRequest(head[:]) {
 		server.serveHTTP(conn, head[:])
 		return
 	}
@@ -164,11 +166,8 @@ func readPacketSize(ring *ringbuffer.RingBuffer) ([2]byte, int, error) {
 	if _, err := io.ReadFull(ring, header[:]); err != nil {
 		return header, 0, err
 	}
-	size := int(header[0])<<8 | int(header[1])
-	if size < protocol.MinFrameSize {
-		return header, 0, fmt.Errorf("invalid packet size %d", size)
-	}
-	return header, size + 2, nil
+	size, err := protocol.FrameSize(header[:])
+	return header, size, err
 }
 
 // isClosedConnError reports errors caused by the peer or the server closing the connection.
@@ -177,58 +176,37 @@ func isClosedConnError(err error) bool {
 		errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET)
 }
 
-var httpMethods = [][]byte{[]byte("GET "), []byte("POST"), []byte("HEAD"), []byte("PUT "), []byte("OPTI"), []byte("DELE"), []byte("PATC")}
+// httpMethods are the first 4 bytes of an HTTP request.
+var httpMethods = []string{"GET ", "POST", "HEAD", "PUT ", "OPTI", "DELE", "PATC"}
 
 // isHTTPRequest reports whether the first bytes of a connection start an HTTP
 // request. A frame's third byte is always 0x00, so the two never overlap.
 func isHTTPRequest(head []byte) bool {
-	for _, method := range httpMethods {
-		if bytes.Equal(head, method) {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(httpMethods, string(head))
 }
 
-// serveHTTP serves one HTTP connection (head being its already read first
-// bytes) with server.HTTP, keep-alive included, and returns once it is closed.
+// httpIdleTimeout is how long an HTTP connection may wait for its next request.
+const httpIdleTimeout = 30 * time.Second
+
+// serveHTTP answers each request of an HTTP connection (head being its
+// already read first bytes) with server.HTTPResponse until the client closes
+// it: only the request head is read, the probe has no body.
 func (server *Server) serveHTTP(conn net.Conn, head []byte) {
 	logger.WithFields("Server", logger.FieldValue("remote", conn.RemoteAddr().String())).Debug("http connection")
-	c := &httpConn{Conn: conn, reader: io.MultiReader(bytes.NewReader(head), conn), done: make(chan struct{})}
-	httpServer := &http.Server{Handler: server.HTTP, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second}
-	go httpServer.Serve(&singleConnListener{conn: c})
-	<-c.done
-}
-
-// httpConn replays the sniffed bytes and signals when net/http closes it.
-type httpConn struct {
-	net.Conn
-	reader    io.Reader
-	done      chan struct{}
-	closeOnce sync.Once
-}
-
-func (c *httpConn) Read(p []byte) (int, error) { return c.reader.Read(p) }
-
-func (c *httpConn) Close() error {
-	c.closeOnce.Do(func() { close(c.done) })
-	return c.Conn.Close()
-}
-
-// singleConnListener hands out one connection, then blocks until it is closed.
-type singleConnListener struct {
-	conn     *httpConn
-	accepted bool
-}
-
-func (l *singleConnListener) Accept() (net.Conn, error) {
-	if !l.accepted {
-		l.accepted = true
-		return l.conn, nil
+	reader := bufio.NewReader(io.MultiReader(bytes.NewReader(head), conn))
+	for {
+		conn.SetReadDeadline(time.Now().Add(httpIdleTimeout))
+		for {
+			line, err := reader.ReadSlice('\n')
+			if err != nil {
+				return
+			}
+			if len(bytes.TrimRight(line, "\r\n")) == 0 {
+				break
+			}
+		}
+		if _, err := conn.Write(server.HTTPResponse); err != nil {
+			return
+		}
 	}
-	<-l.conn.done
-	return nil, net.ErrClosed
 }
-
-func (l *singleConnListener) Close() error   { return nil }
-func (l *singleConnListener) Addr() net.Addr { return l.conn.LocalAddr() }

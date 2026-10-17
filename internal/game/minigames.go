@@ -1,8 +1,6 @@
 package game
 
 import (
-	"context"
-
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ggmolly/belfast/internal/connection"
@@ -47,14 +45,4 @@ func (game *Game) handleLimitChallenge(client *connection.Client, req *protobuf.
 		reply.Awards = append(reply.Awards, &protobuf.KVDATA{Key: proto.Uint32(stage)})
 	}
 	return client.Send(reply)
-}
-
-// handleJuusGroups answers InstagramChatCommand: no chat groups in the
-// in-game social feed yet.
-func (game *Game) handleJuusGroups(client *connection.Client, req *protobuf.CS_11710) error {
-	groups, err := game.juusGroups(context.Background(), client.CommanderID)
-	if err != nil {
-		return err
-	}
-	return client.Send(groups)
 }

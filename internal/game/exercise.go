@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand/v2"
+	"slices"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -12,38 +13,9 @@ import (
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
-// serverZone is the EN servers' clock, the one mondayReference is midnight in.
-var serverZone = time.FixedZone("UTC-7", -7*60*60)
-
-// exerciseResetHours are when exercise attempts refill, server time.
-var exerciseResetHours = []int{0, 12, 18}
-
 // exerciseFightCount is SeasonInfo.MAX_FIGHTCOUNT, the attempts a refill
 // tops up to.
 const exerciseFightCount = 10
-
-// exerciseSeasonLength is SeasonInfo.ONE_SEASON_TIME. Seasons start every
-// two weeks from mondayReference (the captured season started 153 seasons
-// after it).
-const exerciseSeasonLength = 14 * 24 * time.Hour
-
-// nextExerciseReset returns the first attempt refill after now.
-func nextExerciseReset(now time.Time) time.Time {
-	local := now.In(serverZone)
-	day := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, serverZone)
-	for _, hour := range exerciseResetHours {
-		if reset := day.Add(time.Duration(hour) * time.Hour); reset.After(now) {
-			return reset
-		}
-	}
-	return day.AddDate(0, 0, 1)
-}
-
-// exerciseSeasonStart returns when the exercise season running at now began.
-func exerciseSeasonStart(now time.Time) time.Time {
-	reference := time.Unix(mondayReference, 0)
-	return reference.Add(now.Sub(reference).Truncate(exerciseSeasonLength))
-}
 
 // handleSeasonInfo answers the exercise (PvP) season (GetSeasonInfoCommand):
 // no points, ranked behind every commander of the server (they all start at
@@ -115,42 +87,25 @@ func loadArenaShop() error {
 
 const arenaShopCommonPicks = 5
 
-// weightedPick removes and returns one id of pool, picked by weight.
-func weightedPick(random *rand.Rand, pool [][2]uint32) (uint32, [][2]uint32) {
-	total := uint32(0)
-	for _, entry := range pool {
-		total += entry[1]
-	}
-	roll := random.Uint32N(total)
-	for i, entry := range pool {
-		if roll < entry[1] {
-			rest := append(append([][2]uint32{}, pool[:i]...), pool[i+1:]...)
-			return entry[0], rest
-		}
-		roll -= entry[1]
-	}
-	panic("unreachable")
-}
-
-// arenaShopGoods draws the merit shop's goods for a commander and day. The
-// draw is seeded by both, so the shop stays the same until it refreshes
-// without being stored.
+// arenaShopGoods draws the merit shop's goods (each pick by weight, the
+// common ones without repeats) for a commander and day. The draw is seeded by
+// both, so the shop stays the same until it refreshes without being stored.
 func arenaShopGoods(shop arenaShopConfig, commanderID uint32, day time.Time) []uint32 {
 	random := rand.New(rand.NewPCG(uint64(commanderID), uint64(day.Unix())))
+	weight := func(entry [2]uint32) uint32 { return entry[1] }
 	var goods []uint32
-	pool := shop.Common
+	pool := slices.Clone(shop.Common)
 	for range arenaShopCommonPicks {
-		if len(pool) == 0 {
+		i := weightedPick(random.Uint32N, pool, weight)
+		if i < 0 {
 			break
 		}
-		var id uint32
-		id, pool = weightedPick(random, pool)
-		goods = append(goods, id)
+		goods = append(goods, pool[i][0])
+		pool = slices.Delete(pool, i, i+1)
 	}
 	for _, list := range [][][2]uint32{shop.List1, shop.List2, shop.List3, shop.List4, shop.List5} {
-		if len(list) > 0 {
-			id, _ := weightedPick(random, list)
-			goods = append(goods, id)
+		if i := weightedPick(random.Uint32N, list, weight); i >= 0 {
+			goods = append(goods, list[i][0])
 		}
 	}
 	return goods

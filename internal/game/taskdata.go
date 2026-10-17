@@ -12,8 +12,6 @@ import (
 
 // task_data_template row (TaskProxy, ActivityTaskProxy tasks)
 type taskConfig struct {
-	ID           uint32          `json:"id"`
-	Type         uint32          `json:"type"`
 	SubType      uint32          `json:"sub_type"`
 	TargetID     json.RawMessage `json:"target_id"`
 	TargetNum    uint32          `json:"target_num"`
@@ -29,12 +27,10 @@ type taskConfig struct {
 
 // weekly_task_template row (WeekPtTask)
 type weeklyTaskConfig struct {
-	ID           uint32          `json:"id"`
-	Level        uint32          `json:"level"`
-	SubType      uint32          `json:"sub_type"`
-	TargetID     json.RawMessage `json:"target_id"`
-	TargetNum    uint32          `json:"target_num"`
-	AwardDisplay []uint32        `json:"award_display"`
+	ID       uint32          `json:"id"`
+	Level    uint32          `json:"level"`
+	SubType  uint32          `json:"sub_type"`
+	TargetID json.RawMessage `json:"target_id"`
 
 	target taskTarget // target_id
 }
@@ -95,7 +91,6 @@ func (window activityWindow) open(now time.Time) bool {
 // battlepass_task_group row: the cruise pass tasks of one week (group_mask),
 // or always open when is_ontime is 0
 type battlepassTaskGroup struct {
-	ID        uint32     `json:"id"`
 	GroupMask uint32     `json:"group_mask"`
 	IsOntime  uint32     `json:"is_ontime"`
 	TaskGroup [][]uint32 `json:"task_group"`
@@ -243,44 +238,25 @@ type taskTarget struct {
 }
 
 func parseTaskTarget(raw json.RawMessage) taskTarget {
-	var text string
-	if json.Unmarshal(raw, &text) == nil {
-		text = strings.TrimSpace(text)
-		if strings.HasPrefix(text, "[") {
-			return parseTaskTarget(json.RawMessage(text))
-		}
-		id, err := strconv.ParseUint(text, 10, 32)
-		if err != nil || id == 0 {
-			return taskTarget{any: true}
-		}
-		return taskTarget{ids: []uint32{uint32(id)}}
-	}
-	var number uint32
-	if json.Unmarshal(raw, &number) == nil {
-		if number == 0 {
-			return taskTarget{any: true}
-		}
-		return taskTarget{ids: []uint32{number}}
-	}
 	var list []json.RawMessage
-	if json.Unmarshal(raw, &list) != nil || len(list) == 0 {
-		return taskTarget{any: true}
+	if json.Unmarshal(raw, &list) != nil {
+		ids := parseIDList(raw)
+		return taskTarget{any: len(ids) == 0, ids: ids}
 	}
-	if json.Unmarshal(list[0], &text) == nil && len(list) == 2 {
-		if json.Unmarshal(list[1], &number) == nil {
-			return taskTarget{min: &number}
-		}
+	var op string
+	var number uint32
+	if len(list) == 2 && json.Unmarshal(list[0], &op) == nil && json.Unmarshal(list[1], &number) == nil {
+		return taskTarget{min: &number}
 	}
-	target := taskTarget{}
+	// only the list's own ids: nested lists ([[ship type, count], ...] of
+	// the sortie exp tasks) name no target, they count for any
+	var ids []uint32
 	for _, item := range list {
 		if json.Unmarshal(item, &number) == nil {
-			target.ids = append(target.ids, number)
+			ids = append(ids, number)
 		}
 	}
-	if len(target.ids) == 0 {
-		target.any = true
-	}
-	return target
+	return taskTarget{any: len(ids) == 0, ids: ids}
 }
 
 func (target taskTarget) matches(id uint32) bool {
@@ -290,12 +266,7 @@ func (target taskTarget) matches(id uint32) bool {
 	case target.min != nil:
 		return id >= *target.min
 	}
-	for _, want := range target.ids {
-		if want == id {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(target.ids, id)
 }
 
 // parseIDList reads next_task / config_data style fields: "0", "2",

@@ -2,54 +2,13 @@ package game
 
 import (
 	"context"
-	"time"
 
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
-	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
-
-// registerPlayer installs the player area's handlers.
-func (game *Game) registerPlayer() {
-	packets.Handle(game.handleDormPopEvents)
-	packets.Handle(game.handleLoadPlayerData)
-	// settings.go
-	packets.Handle(game.handleSecondaryPassword)
-	packets.Handle(game.handleChangeChatRoom)
-	packets.Handle(game.handleClientReport)
-	packets.Handle(game.handleCommanderHome)
-	packets.Handle(game.handleWorldBoss)
-	packets.Handle(game.handleMetaPTData)
-	// minigames.go
-	packets.Handle(game.handleAuctionGameInit)
-	packets.Handle(game.handleAppreciationVersion)
-	packets.Handle(game.handleMiniGameHubs)
-	packets.Handle(game.handleEmojiInfo)
-	packets.Handle(game.handleLimitChallenge)
-	packets.Handle(game.handleJuusGroups)
-	// educate.go
-	packets.Handle(game.handleEducate)
-	packets.Handle(game.handleNewEducate)
-	packets.Handle(game.handleEducateEndings)
-	// guild.go
-	packets.Handle(game.handleGuildInfo)
-	packets.Handle(game.handlePublicGuildTech)
-	packets.Handle(game.handleGuildUserInfo)
-	packets.Handle(game.handleGuildShop)
-	// exercise.go
-	packets.Handle(game.handleSeasonInfo)
-	packets.Handle(game.handleMilitaryShop)
-	// shops.go
-	packets.Handle(game.handleChargeList)
-	packets.Handle(game.handleMedalShop)
-	packets.Handle(game.handleShopStreet)
-	packets.Handle(game.handleMiniGameShop)
-	// activities.go
-	packets.Handle(game.handleActivityOperation)
-}
 
 // player_resource ids, next to ResourceGold / ResourceOil
 const (
@@ -75,9 +34,10 @@ var starterFurniture = []uint32{1001, 1002, 1102, 1103, 1104, 1105, 1106, 1107, 
 // grantPlayerStarter sets up what a new commander starts with besides ships:
 // resources, backyard furniture, the starter ship as secretary (the avatar is the starter ship).
 // The capacities, rank, chat room... are column defaults (0001_commanders.sql).
-func grantPlayerStarter(ctx context.Context, queries *db.Queries, commander db.Commander) error {
+func grantPlayerStarter(tx *Tx, commander db.Commander) error {
+	ctx, queries := tx.ctx, tx.Queries
 	for _, resource := range starterResources {
-		if err := queries.AddResource(ctx, db.AddResourceParams{CommanderID: commander.ID, ResourceID: resource.id, Amount: resource.amount}); err != nil {
+		if err := tx.AddResource(resource.id, resource.amount); err != nil {
 			return err
 		}
 	}
@@ -104,24 +64,6 @@ func starterShip(commander db.Commander, ships []db.Ship) (db.Ship, bool) {
 		}
 	}
 	return db.Ship{}, false
-}
-
-// serverNow is the current time on the EN servers' clock.
-func serverNow() time.Time {
-	return time.Now().In(serverZone)
-}
-
-// nextMonth returns the start of the month after now, server time: when the
-// monthly shops refresh.
-func nextMonth(now time.Time) time.Time {
-	local := now.In(serverZone)
-	return time.Date(local.Year(), local.Month()+1, 1, 0, 0, 0, 0, serverZone)
-}
-
-// nextDay returns the next midnight, server time.
-func nextDay(now time.Time) time.Time {
-	local := now.In(serverZone)
-	return time.Date(local.Year(), local.Month(), local.Day()+1, 0, 0, 0, 0, serverZone)
 }
 
 // playerInfo is SC_11003, read by PlayerProxy into a Player (model/vo/player.lua).

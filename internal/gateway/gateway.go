@@ -7,7 +7,6 @@ package gateway
 import (
 	"fmt"
 	"hash/fnv"
-	"net/http"
 	"sync"
 	"time"
 
@@ -20,73 +19,47 @@ import (
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
-// State is SERVERINFO.state, the client's Server.STATUS (model/vo/server.lua).
-// The login scene colors the server by it, matching the in-game legend.
-type State uint32
-
-const (
-	StateNormal       State = 0 // green "Online"
-	StateMaintenance  State = 1 // grey "Offline", not selectable (login_loginScene_server_vindicate)
-	StateFull         State = 2 // red "Full", not selectable (login_loginScene_server_full)
-	StateRegisterFull State = 3 // orange "Busy", selectable but closed to new commanders
-)
-
-// Tag is SERVERINFO.tag_state, the badge drawn on the server.
-type Tag uint32
-
-const (
-	TagNone Tag = 0
-	TagHot  Tag = 1
-	TagNew  Tag = 2
-)
-
 // Server is one entry of the server list.
 type Server struct {
 	ID   uint32
 	Name string
 	Host string
 	Port uint32
-	// ProxyHost / ProxyPort is where the client retries when Host:Port can't
-	// be reached (ConnectionMgr:ConnectByProxy), empty means Host:Port.
-	ProxyHost string
-	ProxyPort uint32
-	State     State
-	Tag       Tag
-	// Sort orders the list. Servers with Sort 0 are the candidates for the
-	// "Featured" slot, which is also the default server of a new device
-	// (ServerProxy:setServers); without one it falls back to the last server.
-	Sort uint32
 }
 
+// info is the server's SERVERINFO: state 0 is Server.STATUS's "Online"
+// (model/vo/server.lua), tag_state 0 no badge. Servers with sort 0 are the
+// candidates for the "Featured" slot, which is also the default server of a
+// new device (ServerProxy:setServers). The proxy address is where the client
+// retries when Host:Port can't be reached (ConnectionMgr:ConnectByProxy).
 func (server Server) info() *protobuf.SERVERINFO {
-	proxyHost, proxyPort := server.ProxyHost, server.ProxyPort
-	if proxyHost == "" {
-		proxyHost, proxyPort = server.Host, server.Port
-	}
 	return &protobuf.SERVERINFO{
 		Ids:       []uint32{server.ID},
 		Ip:        proto.String(server.Host),
 		Port:      proto.Uint32(server.Port),
-		State:     proto.Uint32(uint32(server.State)),
+		State:     proto.Uint32(0),
 		Name:      proto.String(server.Name),
-		TagState:  proto.Uint32(uint32(server.Tag)),
-		Sort:      proto.Uint32(server.Sort),
-		ProxyIp:   proto.String(proxyHost),
-		ProxyPort: proto.Uint32(proxyPort),
+		TagState:  proto.Uint32(0),
+		Sort:      proto.Uint32(0),
+		ProxyIp:   proto.String(server.Host),
+		ProxyPort: proto.Uint32(server.Port),
 	}
 }
 
-// DefaultVersionTTL is how long an upstream SC_10801 is reused.
-const DefaultVersionTTL = 10 * time.Minute
+// ProbeResponse answers the SDK's reachability probe (GET /?cmd=test?) as
+// the official gateway does (captured).
+var ProbeResponse = []byte("HTTP/1.1 200 OK\r\nContent-Type: text/plain;charset=utf-8\r\nContent-Length: 8\r\nConnection: keep-alive\r\n\r\nbad args")
+
+// versionTTL is how long an upstream SC_10801 is reused.
+const versionTTL = 10 * time.Minute
 
 type Gateway struct {
 	Servers []Server
 	// Upstream is the official gateway (host:port). CS_10800 is relayed there
 	// so the asset bundle hashes in SC_10801 always match the CDN the client
 	// downloads from; the reply is passed through unchanged.
-	Upstream   string
-	VersionTTL time.Duration
-	DB         *db.Store
+	Upstream string
+	DB       *db.Store
 	// TicketKey signs the server tickets, see LoadTicketKey.
 	TicketKey []byte
 
@@ -117,15 +90,6 @@ func (gateway *Gateway) Register() {
 	packets.Handle(gateway.handleServerLogin)
 	packets.Handle(gateway.handleHeartbeat)
 	packets.Handle(gateway.handleCreatePlayer)
-}
-
-// HTTP answers the SDK's reachability probe (GET /?cmd=test?) the way the
-// official gateway does.
-func (gateway *Gateway) HTTP() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain;charset=utf-8")
-		w.Write([]byte("bad args"))
-	})
 }
 
 func (gateway *Gateway) serverList() []*protobuf.SERVERINFO {

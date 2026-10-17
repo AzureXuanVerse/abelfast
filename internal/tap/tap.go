@@ -13,7 +13,6 @@ import (
 	"io"
 	"net"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -43,31 +42,11 @@ func (s *Sink) line(fields map[string]any) {
 	fmt.Fprintf(s.w, "%s\n", data)
 }
 
-// Lines returns the sink contents so far (for buffered sinks).
-func (s *Sink) Lines() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if b, ok := s.w.(interface{ String() string }); ok {
-		return b.String()
-	}
-	return ""
-}
-
 // Tap relays connections from Listen to Upstream, capturing every frame.
 type Tap struct {
 	Listen   string
 	Upstream string
 	Sink     *Sink
-
-	// Ready is closed once the listener is bound.
-	Ready chan struct{}
-	addr  atomic.Value // string
-}
-
-// Address returns the bound listener address, or "" before Ready.
-func (t *Tap) Address() string {
-	v, _ := t.addr.Load().(string)
-	return v
 }
 
 func (t *Tap) Run() error {
@@ -76,11 +55,6 @@ func (t *Tap) Run() error {
 		return err
 	}
 	defer listener.Close()
-	if t.Ready == nil {
-		t.Ready = make(chan struct{})
-	}
-	t.addr.Store(listener.Addr().String())
-	close(t.Ready)
 	logger.LogEvent("Tap", "Run", fmt.Sprintf("listening on %s -> %s", t.Listen, t.Upstream), logger.LOG_LEVEL_INFO)
 	for {
 		conn, err := listener.Accept()
@@ -147,17 +121,16 @@ func (s *session) pump(dst io.Writer, src io.Reader, dir string, done chan<- str
 			buf = append(buf, chunk[:n]...)
 		}
 		for len(buf) > 0 {
-			if len(buf) >= 3 && buf[2] != 0x00 || len(buf) >= 2 && int(buf[0])<<8|int(buf[1]) < protocol.MinFrameSize {
+			total, sizeErr := 0, error(nil)
+			if len(buf) >= 2 {
+				total, sizeErr = protocol.FrameSize(buf)
+			}
+			if len(buf) >= 3 && buf[2] != 0x00 || sizeErr != nil {
 				s.relayRaw(dst, src, dir, buf, err == nil)
 				s.close()
 				return
 			}
-			if len(buf) < 2 {
-				break
-			}
-			size := int(buf[0])<<8 | int(buf[1])
-			total := 2 + size
-			if len(buf) < total {
+			if len(buf) < 2 || len(buf) < total {
 				break
 			}
 			frame := buf[:total]
