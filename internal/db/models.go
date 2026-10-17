@@ -288,6 +288,27 @@ type Ship struct {
 	CommonFlag          uint32
 }
 
+type ShipDiscussion struct {
+	ID          uint32
+	GroupID     uint32
+	CommanderID uint32
+	Context     string
+	PostedAt    int64
+}
+
+type ShipDiscussionReport struct {
+	DiscussionID uint32
+	CommanderID  uint32
+	Reason       string
+	ReportedAt   int64
+}
+
+type ShipDiscussionVote struct {
+	DiscussionID uint32
+	CommanderID  uint32
+	GoodOrBad    uint32
+}
+
 type ShipEquipment struct {
 	ShipID  uint32
 	Pos     uint32

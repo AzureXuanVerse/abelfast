@@ -392,7 +392,19 @@ func collectionState(ctx context.Context, queries *db.Queries, commanderID uint3
 	for _, trophy := range trophies {
 		stored[trophy.TrophyID] = trophy
 	}
-	msg := &protobuf.SC_17001{}
+	hearts, err := queries.ListShipHeartCounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	heartCounts := make(map[uint32]uint32, len(hearts))
+	for _, row := range hearts {
+		heartCounts[row.GroupID] = uint32(row.Hearts)
+	}
+	daily, err := dailyDiscussions(ctx, queries, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	msg := &protobuf.SC_17001{DailyDiscuss: proto.Uint32(daily)}
 	for _, id := range archiveTrophies {
 		trophy := stored[id]
 		msg.ProgressList = append(msg.ProgressList, &protobuf.ACHIEVEMENT_INFO{
@@ -400,12 +412,12 @@ func collectionState(ctx context.Context, queries *db.Queries, commanderID uint3
 		})
 	}
 	for _, group := range groups {
-		// heart_count is the likes of every player of the server
+		// heart_count is the likes of every commander of the server
 		msg.ShipInfoList = append(msg.ShipInfoList, &protobuf.SHIP_STATISTICS_INFO{
 			Id:          proto.Uint32(group.GroupID),
 			Star:        proto.Uint32(shipTemplates[group.GroupID*10+1].Star), // the group's base template
 			HeartFlag:   proto.Uint32(group.HeartFlag),
-			HeartCount:  proto.Uint32(0),
+			HeartCount:  proto.Uint32(heartCounts[group.GroupID]),
 			MarryFlag:   proto.Uint32(group.MarryFlag),
 			IntimacyMax: proto.Uint32(group.IntimacyMax),
 			LvMax:       proto.Uint32(group.LvMax),

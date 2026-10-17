@@ -137,6 +137,12 @@ func (game *Game) Register() {
 	packets.Handle(game.handleExtendMailStorage)
 	packets.Handle(game.handleMailStorageWithdraw)
 	packets.Handle(game.handleMailTitles)
+	// ship comments
+	packets.Handle(game.handleFetchDiscussion)
+	packets.Handle(game.handlePostDiscussion)
+	packets.Handle(game.handleReviewDiscussion)
+	packets.Handle(game.handleLikeShip)
+	packets.Handle(game.handleReportDiscussion)
 }
 
 // login is what the login burst is built from, loaded once per CS_11001.
