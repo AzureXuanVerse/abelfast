@@ -112,8 +112,9 @@ func (q *Queries) GetJuusPost(ctx context.Context, arg GetJuusPostParams) (Comma
 	return i, err
 }
 
-const likeJuusPost = `-- name: LikeJuusPost :exec
+const likeJuusPost = `-- name: LikeJuusPost :one
 UPDATE commander_juus_posts SET is_good = 1 WHERE commander_id = ? AND post_id = ?
+RETURNING commander_id, post_id, is_good, is_read, comment_discuss, comment_index, comment_time
 `
 
 type LikeJuusPostParams struct {
@@ -121,9 +122,19 @@ type LikeJuusPostParams struct {
 	PostID      uint32
 }
 
-func (q *Queries) LikeJuusPost(ctx context.Context, arg LikeJuusPostParams) error {
-	_, err := q.db.ExecContext(ctx, likeJuusPost, arg.CommanderID, arg.PostID)
-	return err
+func (q *Queries) LikeJuusPost(ctx context.Context, arg LikeJuusPostParams) (CommanderJuusPost, error) {
+	row := q.db.QueryRowContext(ctx, likeJuusPost, arg.CommanderID, arg.PostID)
+	var i CommanderJuusPost
+	err := row.Scan(
+		&i.CommanderID,
+		&i.PostID,
+		&i.IsGood,
+		&i.IsRead,
+		&i.CommentDiscuss,
+		&i.CommentIndex,
+		&i.CommentTime,
+	)
+	return i, err
 }
 
 const listJuusPosts = `-- name: ListJuusPosts :many
@@ -236,8 +247,9 @@ func (q *Queries) ReadAllJuusTopics(ctx context.Context, commanderID uint32) err
 	return err
 }
 
-const readJuusPost = `-- name: ReadJuusPost :exec
+const readJuusPost = `-- name: ReadJuusPost :one
 UPDATE commander_juus_posts SET is_read = 1 WHERE commander_id = ? AND post_id = ?
+RETURNING commander_id, post_id, is_good, is_read, comment_discuss, comment_index, comment_time
 `
 
 type ReadJuusPostParams struct {
@@ -245,9 +257,19 @@ type ReadJuusPostParams struct {
 	PostID      uint32
 }
 
-func (q *Queries) ReadJuusPost(ctx context.Context, arg ReadJuusPostParams) error {
-	_, err := q.db.ExecContext(ctx, readJuusPost, arg.CommanderID, arg.PostID)
-	return err
+func (q *Queries) ReadJuusPost(ctx context.Context, arg ReadJuusPostParams) (CommanderJuusPost, error) {
+	row := q.db.QueryRowContext(ctx, readJuusPost, arg.CommanderID, arg.PostID)
+	var i CommanderJuusPost
+	err := row.Scan(
+		&i.CommanderID,
+		&i.PostID,
+		&i.IsGood,
+		&i.IsRead,
+		&i.CommentDiscuss,
+		&i.CommentIndex,
+		&i.CommentTime,
+	)
+	return i, err
 }
 
 const readJuusTopic = `-- name: ReadJuusTopic :exec

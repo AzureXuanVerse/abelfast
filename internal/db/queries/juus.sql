@@ -7,11 +7,13 @@ SELECT * FROM commander_juus_posts WHERE commander_id = ? AND post_id = ?;
 -- name: CreateJuusPost :exec
 INSERT INTO commander_juus_posts (commander_id, post_id) VALUES (?, ?) ON CONFLICT DO NOTHING;
 
--- name: LikeJuusPost :exec
-UPDATE commander_juus_posts SET is_good = 1 WHERE commander_id = ? AND post_id = ?;
+-- name: LikeJuusPost :one
+UPDATE commander_juus_posts SET is_good = 1 WHERE commander_id = ? AND post_id = ?
+RETURNING *;
 
--- name: ReadJuusPost :exec
-UPDATE commander_juus_posts SET is_read = 1 WHERE commander_id = ? AND post_id = ?;
+-- name: ReadJuusPost :one
+UPDATE commander_juus_posts SET is_read = 1 WHERE commander_id = ? AND post_id = ?
+RETURNING *;
 
 -- name: CommentJuusPost :exec
 UPDATE commander_juus_posts SET comment_discuss = ?, comment_index = ?, comment_time = ?
