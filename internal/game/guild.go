@@ -5,6 +5,7 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/protobuf"
+	"github.com/ggmolly/belfast/internal/protocol"
 )
 
 // handleGuildInfo answers GetGuildInfoCommand. A guild id of 0 means the
@@ -32,4 +33,10 @@ func (game *Game) handleGuildInfo(client *connection.Client, req *protobuf.CS_60
 // technology outside a guild.
 func (game *Game) handlePublicGuildTech(client *connection.Client, req *protobuf.CS_62100) error {
 	return client.Send(&protobuf.SC_62101{})
+}
+
+// handleGuildUserInfo answers GuildGetUserInfoCommand / the public guild
+// data: no donations, benefits or guild tech.
+func (game *Game) handleGuildUserInfo(client *connection.Client, req *protobuf.CS_60102) error {
+	return client.Send(protocol.FillRequired(&protobuf.SC_60103{}))
 }
