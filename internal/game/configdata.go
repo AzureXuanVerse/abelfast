@@ -3,7 +3,7 @@ package game
 import "github.com/ggmolly/belfast/internal/gamedata"
 
 // loadGameData reads every config table the handlers use, once at startup:
-// as is (loadTable) or into what the handlers index (ships, construction,
+// as is (gamedata.Load) or into what the handlers index (ships, construction,
 // the campaign, tasks...).
 func loadGameData() error {
 	return gamedata.LoadAll(
@@ -14,8 +14,10 @@ func loadGameData() error {
 		loadJuusData,
 		gamedata.Load("constellation_challenge_month", &limitChallengeMonths),
 		loadArenaShop,
-		loadCommissionTeams,
+		loadCommissionData,
 		loadMedalShop,
 		loadEducateData,
+		loadNewCommander,
+		loadStarterFurniture,
 	)
 }

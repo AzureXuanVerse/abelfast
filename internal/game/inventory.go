@@ -24,14 +24,6 @@ const (
 	ItemSecretCoolant = 50002
 )
 
-// starterItems is the bag of a new commander (SC_15001 of the capture).
-var starterItems = []struct{ id, count uint32 }{
-	{ItemWisdomCube, 5},
-	{ItemQuickFinisher, 10},
-	{ItemSecretCoolant, 10},
-	{ItemOxyCola, 10},
-}
-
 // spweaponBagSize is SC_14001.spweapon_bag_size as captured for a new
 // commander.
 const spweaponBagSize = 150
@@ -110,10 +102,10 @@ func (tx *Tx) SpendEquipment(equipID, count uint32) error {
 	return err
 }
 
-// grantStarterItems fills the bag of a new commander.
+// grantStarterItems fills the bag of a new commander (new_commander.json).
 func grantStarterItems(tx *Tx) error {
-	for _, item := range starterItems {
-		if err := tx.AddItem(item.id, item.count); err != nil {
+	for _, item := range newCommander.Items {
+		if err := tx.AddItem(item.ID, item.Count); err != nil {
 			return err
 		}
 	}

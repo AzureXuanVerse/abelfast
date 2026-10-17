@@ -11,6 +11,9 @@ import (
 
 // task_data_template row (TaskProxy, ActivityTaskProxy tasks)
 type taskConfig struct {
+	Type         uint32          `json:"type"`
+	Level        uint32          `json:"level"`
+	IsHead       uint32          `json:"is_head"` // first task of its chain
 	SubType      uint32          `json:"sub_type"`
 	TargetID     json.RawMessage `json:"target_id"`
 	TargetNum    uint32          `json:"target_num"`
@@ -82,6 +85,11 @@ var (
 	// handbookUnlockTasks are the tasks that unlock pages
 	// (tutorial_handbook_task.unlock), sorted
 	handbookUnlockTasks []uint32
+
+	// weeklyBonusTasks is how many TYPE_NEW_WEEKLY tasks a commander is
+	// offered (gameset weekly_bonus_task, server side: no Lua reads it; their
+	// names end in "奖励任务", bonus task, and the capture has 2)
+	weeklyBonusTasks uint32
 )
 
 // handbookTaskPage is a commander manual page a task belongs to: as one of
@@ -95,15 +103,24 @@ type handbookTaskPage struct {
 // loadTaskData reads the tasks, weekly missions, activities, cruise pass
 // task groups and commander manual pages.
 func loadTaskData() error {
+	var gameset map[string]uint32
 	err := gamedata.LoadAll(
 		gamedata.Load("task_data_template", &taskConfigs),
 		gamedata.Load("weekly_task_template", &weeklyTaskConfigs),
 		gamedata.Load("activity_template", &activityConfigs),
 		gamedata.Load("battlepass_task_group", &battlepassTaskGroups),
 		gamedata.Load("tutorial_handbook_task", &handbookPageConfigs),
+		func() (err error) {
+			gameset, err = gamedata.Gameset()
+			return err
+		},
 	)
 	if err != nil {
 		return err
+	}
+	var ok bool
+	if weeklyBonusTasks, ok = gameset["weekly_bonus_task"]; !ok {
+		return gamedata.Missing("gameset", "weekly_bonus_task")
 	}
 	taskIDsBySubType = map[uint32][]uint32{}
 	for id, config := range taskConfigs {

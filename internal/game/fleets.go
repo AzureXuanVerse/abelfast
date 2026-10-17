@@ -11,18 +11,22 @@ import (
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
-// starterFleets are the fleets a new commander has (SC_12101 in the
-// capture): the first two surface fleets and both submarine fleets. The
-// client fills in the other ids (FormationUI.MAX_FLEET_NUM, PvP...) itself.
-var starterFleets = []uint32{1, 2, 11, 12}
+// fleetRegular is Fleet.REGULAR_FLEET_ID (model/vo/fleet.lua), the first
+// surface fleet.
+const fleetRegular = 1
 
-// grantFleetsStarter creates the starter fleets, puts the commander's ships
+// grantFleetsStarter creates the fleets of new_commander.json (the capture's
+// SC_12101: 1, 2, 11, 12). 1 and 2 are the surface fleets Fleet:isUnlock
+// never locks (3 to 6 wait for chapters 404 to 704), 11 and 12 the first two
+// submarine fleets (Fleet.SUBMARINE_FLEET_ID, of SUBMARINE_FLEET_NUMS = 4),
+// which no Lua rule picks. The client fills in the other ids
+// (FormationUI.MAX_FLEET_NUM, PvP...) itself. It puts the commander's ships
 // in fleet 1, the chosen starter first (capture: [Javelin, Long Island]), and
 // offers the starter commissions. It has to run after the starter ships are
 // created.
 func grantFleetsStarter(tx *Tx, commander db.Commander) error {
 	ctx, queries := tx.ctx, tx.Queries
-	for _, id := range starterFleets {
+	for _, id := range newCommander.Fleets {
 		if err := queries.CreateFleet(ctx, db.CreateFleetParams{CommanderID: commander.ID, FleetID: id, Name: ""}); err != nil {
 			return err
 		}
@@ -40,10 +44,10 @@ func grantFleetsStarter(tx *Tx, commander db.Commander) error {
 	for i, ship := range ships {
 		ids[i] = ship.ID
 	}
-	if err := setFleetShips(ctx, queries, commander.ID, 1, ids); err != nil {
+	if err := setFleetShips(ctx, queries, commander.ID, fleetRegular, ids); err != nil {
 		return err
 	}
-	return grantCommissionsStarter(ctx, queries, commander.ID)
+	return grantCommissionsStarter(ctx, queries, commander)
 }
 
 func setFleetShips(ctx context.Context, queries *db.Queries, commanderID uint32, fleetID uint32, shipIDs []uint32) error {

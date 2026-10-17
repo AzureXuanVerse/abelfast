@@ -2,11 +2,14 @@ package game
 
 import (
 	"context"
+	"maps"
+	"slices"
 
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
+	"github.com/ggmolly/belfast/internal/gamedata"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -17,27 +20,48 @@ const (
 	ResourceGuildCoin = 8
 )
 
-// starterResources are a new commander's resources on the official servers
-// (captured SC_11003.resource_list).
-var starterResources = []struct{ id, amount uint32 }{
-	{ResourceGold, 3000},
-	{ResourceOil, 500},
-	{ResourceOilField, 5},
-	{ResourceGoldField, 5},
-	{ResourceGuildCoin, 4000},
+var (
+	// starterFurniture is the backyard a new commander gets, one of each
+	// furniture_init_data_template row (the "Run-down" theme, captured
+	// SC_19001.furniture_id_list).
+	starterFurniture []uint32
+	// starterFurnitureTokens is what starterFurniture would cost in decor
+	// tokens (furniture_shop_template.dorm_icon_price, 1 each), the
+	// Renovation Merit Medal's starting progress (captured 14).
+	starterFurnitureTokens uint32
+)
+
+// furniture_shop_template row
+type furnitureShopConfig struct {
+	DormIconPrice uint32 `json:"dorm_icon_price"`
 }
 
-// starterFurniture is the backyard a new commander gets, the "Run-down"
-// theme's free pieces (captured SC_19001.furniture_id_list).
-var starterFurniture = []uint32{1001, 1002, 1102, 1103, 1104, 1105, 1106, 1107, 1111, 1112, 1301, 1302, 1304, 1306}
+func loadStarterFurniture() error {
+	var initial map[uint32]struct{}
+	var shop map[uint32]furnitureShopConfig
+	err := gamedata.LoadAll(
+		gamedata.Load("furniture_init_data_template", &initial),
+		gamedata.Load("furniture_shop_template", &shop),
+	)
+	if err != nil {
+		return err
+	}
+	starterFurniture = slices.Sorted(maps.Keys(initial))
+	starterFurnitureTokens = 0
+	for _, id := range starterFurniture {
+		starterFurnitureTokens += shop[id].DormIconPrice
+	}
+	return nil
+}
 
 // grantPlayerStarter sets up what a new commander starts with besides ships:
-// resources, backyard furniture, the starter ship as secretary (the avatar is the starter ship).
+// resources (new_commander.json), backyard furniture, the starter ship as
+// secretary (the avatar is the starter ship).
 // The capacities, rank, chat room... are column defaults (0001_commanders.sql).
 func grantPlayerStarter(tx *Tx, commander db.Commander) error {
 	ctx, queries := tx.ctx, tx.Queries
-	for _, resource := range starterResources {
-		if err := tx.AddResource(resource.id, resource.amount); err != nil {
+	for _, resource := range newCommander.Resources {
+		if err := tx.AddResource(resource.ID, resource.Amount); err != nil {
 			return err
 		}
 	}
