@@ -147,7 +147,7 @@ var loginBurst = []loginPush{
 		return &protobuf.SC_20101{Info: weekly}, err
 	},
 	func(game *Game, l *login) (proto.Message, error) {
-		return game.activityTasksList(l.ctx, l.queries, l.commander.ID, l.now), nil
+		return game.activityTasksList(l.ctx, l.queries, l.commander.ID, l.now)
 	},
 	func(game *Game, l *login) (proto.Message, error) { return game.dorm(l.ctx, l.commander) },
 	func(game *Game, l *login) (proto.Message, error) { return energyTick(l.commander, l.now.Unix()), nil },

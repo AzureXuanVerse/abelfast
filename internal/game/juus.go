@@ -3,13 +3,13 @@ package game
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -25,24 +25,26 @@ import (
 // (activity_ins_template is_active 1: InitByServer), as first pushed by the
 // official server: an SC_11706 in text format, server/juus_posts.txtpb of the
 // data dir. Without it there are no posts.
-var juusPosts = sync.OnceValues(func() (map[uint32]*protobuf.INS_MESSAGE, error) {
+var juusPosts map[uint32]*protobuf.INS_MESSAGE
+
+func loadJuusPosts() error {
+	juusPosts = map[uint32]*protobuf.INS_MESSAGE{}
 	text, err := os.ReadFile(filepath.Join(regionDataDir(), "server", "juus_posts.txtpb"))
 	if errors.Is(err, fs.ErrNotExist) {
-		return map[uint32]*protobuf.INS_MESSAGE{}, nil
+		return nil
 	}
 	if err != nil {
-		return nil, err
+		return err
 	}
 	var list protobuf.SC_11706
 	if err := prototext.Unmarshal(text, &list); err != nil {
-		return nil, fmt.Errorf("juus posts: %w", err)
+		return fmt.Errorf("juus posts: %w", err)
 	}
-	posts := make(map[uint32]*protobuf.INS_MESSAGE, len(list.InsMessageList))
 	for _, post := range list.InsMessageList {
-		posts[post.GetId()] = post
+		juusPosts[post.GetId()] = post
 	}
-	return posts, nil
-})
+	return nil
+}
 
 // juusReply is an NPC answer to the commander's comment, posted delay
 // seconds after it.
@@ -77,26 +79,58 @@ type juusTopicConfig struct {
 }
 
 // activity_ins_chat_language row: a chat line; type 4 is a red packet whose
-// param is an activity_ins_redpackage id
+// param is an activity_ins_redpackage id (a number or a string)
 type juusWordConfig struct {
-	ID    uint32 `json:"id"`
-	Type  uint32 `json:"type"`
-	Param any    `json:"param"`
+	Type  uint32          `json:"type"`
+	Param json.RawMessage `json:"param"`
 }
 
 const juusWordRedPacket = 4
 
 // activity_ins_redpackage row: content is the drop
 type juusRedPacketConfig struct {
-	ID      uint32   `json:"id"`
 	Content []uint32 `json:"content"`
 }
 
 var (
-	juusTopicConfigs     = &configTable[juusTopicConfig]{name: "activity_ins_chat_group"}
-	juusWordConfigs      = &configTable[juusWordConfig]{name: "activity_ins_chat_language"}
-	juusRedPacketConfigs = &configTable[juusRedPacketConfig]{name: "activity_ins_redpackage"}
+	juusTopicConfigs map[uint32]juusTopicConfig
+	// juusRedPackets are the drops of the red packet chat lines, by
+	// activity_ins_chat_language id
+	juusRedPackets map[uint32][]uint32
 )
+
+// loadJuusData reads the Juus chats and the posts the server sends.
+func loadJuusData() error {
+	var words map[uint32]juusWordConfig
+	var packets map[uint32]juusRedPacketConfig
+	err := loadAll(
+		loadTable("activity_ins_chat_group", &juusTopicConfigs),
+		loadTable("activity_ins_chat_language", &words),
+		loadTable("activity_ins_redpackage", &packets),
+		loadJuusPosts,
+	)
+	if err != nil {
+		return err
+	}
+	juusRedPackets = map[uint32][]uint32{}
+	for chatID, word := range words {
+		if word.Type != juusWordRedPacket {
+			continue
+		}
+		var id uint64
+		var text string
+		var number float64
+		if json.Unmarshal(word.Param, &text) == nil {
+			id, _ = strconv.ParseUint(text, 10, 32)
+		} else if json.Unmarshal(word.Param, &number) == nil {
+			id = uint64(number)
+		}
+		if packet, ok := packets[uint32(id)]; ok && len(packet.Content) >= 3 {
+			juusRedPackets[chatID] = packet.Content
+		}
+	}
+	return nil
+}
 
 func (game *Game) registerJuus() {
 	packets.Handle(game.handleJuusPostOp)
@@ -110,11 +144,7 @@ func (game *Game) registerJuus() {
 // juusMessage is a post as the commander sees it: liked, read, and their
 // comment with the answers it got.
 func juusMessage(row db.CommanderJuusPost) *protobuf.INS_MESSAGE {
-	posts, err := juusPosts()
-	if err != nil {
-		return nil
-	}
-	base, ok := posts[row.PostID]
+	base, ok := juusPosts[row.PostID]
 	if !ok {
 		return nil
 	}
@@ -177,7 +207,7 @@ func (game *Game) handleJuusPosts(client *connection.Client, req *protobuf.CS_11
 func (game *Game) handleJuusPostOp(client *connection.Client, req *protobuf.CS_11701) error {
 	ctx := context.Background()
 	if req.GetCmd() == juusOpUpdate {
-		if posts, err := juusPosts(); err != nil || posts[req.GetId()] == nil {
+		if juusPosts[req.GetId()] == nil {
 			return client.Send(&protobuf.SC_11702{Result: result(errRefused)})
 		}
 		if err := game.DB.CreateJuusPost(ctx, db.CreateJuusPostParams{CommanderID: client.CommanderID, PostID: req.GetId()}); err != nil {
@@ -243,8 +273,7 @@ func (game *Game) handleJuusComment(client *connection.Client, req *protobuf.CS_
 
 // juusGroups is SC_11711, the Juus chats (InstagramChatProxy): the unlocked
 // topics grouped by character, each with the commander's answers. The
-// current topic is the latest one unlocked. CS_11710's handler should reply
-// with it.
+// current topic is the latest one unlocked. CS_11710 replies with it.
 func (game *Game) juusGroups(ctx context.Context, commanderID uint32) (*protobuf.SC_11711, error) {
 	topics, err := game.DB.ListJuusTopics(ctx, commanderID)
 	if err != nil {
@@ -254,14 +283,14 @@ func (game *Game) juusGroups(ctx context.Context, commanderID uint32) (*protobuf
 	if err != nil {
 		return nil, err
 	}
-	configs, err := juusTopicConfigs.get()
-	if err != nil {
-		return nil, err
+	answers := map[uint32][]*protobuf.KEYVALUE_P11{}
+	for _, reply := range replies {
+		answers[reply.TopicID] = append(answers[reply.TopicID], &protobuf.KEYVALUE_P11{Key: proto.Uint32(reply.ChatID), Value: proto.Uint32(reply.Value)})
 	}
 	msg := &protobuf.SC_11711{}
 	groups := map[uint32]*protobuf.JUUS_GROUP{}
 	for _, topic := range topics {
-		shipGroup := configs[topic.TopicID].ShipGroup
+		shipGroup := juusTopicConfigs[topic.TopicID].ShipGroup
 		group, ok := groups[shipGroup]
 		if !ok {
 			group = &protobuf.JUUS_GROUP{Id: proto.Uint32(shipGroup)}
@@ -273,12 +302,7 @@ func (game *Game) juusGroups(ctx context.Context, commanderID uint32) (*protobuf
 		if topic.ReadFlag {
 			readFlag = 1
 		}
-		chat := &protobuf.JUUS_CHAT_GROUP{Id: proto.Uint32(topic.TopicID), OpTime: proto.Uint32(topic.OpTime), ReadFlag: proto.Uint32(readFlag)}
-		for _, reply := range replies {
-			if reply.TopicID == topic.TopicID {
-				chat.ReplyList = append(chat.ReplyList, &protobuf.KEYVALUE_P11{Key: proto.Uint32(reply.ChatID), Value: proto.Uint32(reply.Value)})
-			}
-		}
+		chat := &protobuf.JUUS_CHAT_GROUP{Id: proto.Uint32(topic.TopicID), OpTime: proto.Uint32(topic.OpTime), ReadFlag: proto.Uint32(readFlag), ReplyList: answers[topic.TopicID]}
 		group.ChatGroupList = append(group.ChatGroupList, chat)
 	}
 	return msg, nil
@@ -289,14 +313,10 @@ func (game *Game) juusGroups(ctx context.Context, commanderID uint32) (*protobuf
 // time.
 func (game *Game) handleJuusActivateTopics(client *connection.Client, req *protobuf.CS_11722) error {
 	ctx := context.Background()
-	topics, err := juusTopicConfigs.get()
-	if err != nil {
-		return err
-	}
 	now := uint32(time.Now().Unix())
 	reply := &protobuf.SC_11723{OpTime: proto.Uint32(now)}
 	for _, id := range req.GetChatGroupIdList() {
-		if _, ok := topics[id]; !ok {
+		if _, ok := juusTopicConfigs[id]; !ok {
 			reply.ResultList = append(reply.ResultList, *result(errRefused))
 			continue
 		}
@@ -328,8 +348,8 @@ func (game *Game) handleJuusChatReply(client *connection.Client, req *protobuf.C
 		if err := tx.AddJuusReply(ctx, db.AddJuusReplyParams{CommanderID: client.CommanderID, TopicID: req.GetChatGroupId(), ChatID: req.GetChatId(), Value: req.GetValue()}); err != nil {
 			return err
 		}
-		drop := juusRedPacket(req.GetChatId())
-		if drop == nil {
+		drop, ok := juusRedPackets[req.GetChatId()]
+		if !ok {
 			return nil
 		}
 		reply.DropList = configDrops([][]uint32{drop})
@@ -339,33 +359,6 @@ func (game *Game) handleJuusChatReply(client *connection.Client, req *protobuf.C
 		return err
 	}
 	return client.Send(reply)
-}
-
-// juusRedPacket is the drop of a red packet chat line, nil for other lines.
-func juusRedPacket(chatID uint32) []uint32 {
-	words, err := juusWordConfigs.get()
-	if err != nil {
-		return nil
-	}
-	word, ok := words[chatID]
-	if !ok || word.Type != juusWordRedPacket {
-		return nil
-	}
-	var id uint64
-	switch param := word.Param.(type) {
-	case string:
-		id, _ = strconv.ParseUint(param, 10, 32)
-	case float64:
-		id = uint64(param)
-	}
-	packets, err := juusRedPacketConfigs.get()
-	if err != nil {
-		return nil
-	}
-	if packet, ok := packets[uint32(id)]; ok && len(packet.Content) >= 3 {
-		return packet.Content
-	}
-	return nil
 }
 
 // handleJuusTopicsRead marks chat topics read (InstagramChatCommand

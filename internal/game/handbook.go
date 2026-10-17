@@ -18,10 +18,6 @@ import (
 // client checks page and unlock tasks against that one list,
 // CommanderManualPage.finishedTaskIds).
 func (game *Game) handbookLoginPush(ctx context.Context, commander db.Commander) (*protobuf.SC_22300, error) {
-	configs, err := handbookPageConfigs.get()
-	if err != nil {
-		return nil, err
-	}
 	pages, err := game.DB.ListHandbookPages(ctx, commander.ID)
 	if err != nil {
 		return nil, err
@@ -31,25 +27,25 @@ func (game *Game) handbookLoginPush(ctx context.Context, commander db.Commander)
 		return nil, err
 	}
 	msg := &protobuf.SC_22300{}
+	byPage := map[uint32][]uint32{}
+	seen := map[uint32]bool{}
+	for _, task := range finished {
+		byPage[task.PageID] = append(byPage[task.PageID], task.TaskID)
+		if !seen[task.TaskID] {
+			seen[task.TaskID] = true
+			msg.FinishedTaskIds = append(msg.FinishedTaskIds, task.TaskID)
+		}
+	}
+	// pt is the page's finished page tasks (task_list[i][0]); awards are never
+	// claimed yet
 	for _, id := range pages {
-		handbook := &protobuf.TUTHANDBOOK{Id: proto.Uint32(id), Award: proto.Uint32(0)}
 		pt := uint32(0)
-		for _, task := range finished {
-			if task.PageID != id {
-				continue
-			}
-			handbook.FinishedTaskIds = append(handbook.FinishedTaskIds, task.TaskID)
-			if configs[id].isPageTask(task.TaskID) {
+		for _, task := range byPage[id] {
+			if handbookPageConfigs[id].isPageTask(task) {
 				pt++
 			}
 		}
-		handbook.Pt = proto.Uint32(pt)
-		msg.Handbooks = append(msg.Handbooks, handbook)
-	}
-	for _, task := range finished {
-		if !slices.Contains(msg.FinishedTaskIds, task.TaskID) {
-			msg.FinishedTaskIds = append(msg.FinishedTaskIds, task.TaskID)
-		}
+		msg.Handbooks = append(msg.Handbooks, &protobuf.TUTHANDBOOK{Id: proto.Uint32(id), Pt: proto.Uint32(pt), FinishedTaskIds: byPage[id]})
 	}
 	return msg, nil
 }
@@ -71,30 +67,17 @@ func (page handbookPageConfig) isPageTask(taskID uint32) bool {
 // tasks (sub_type 114, target the page); a task that unlocks a page or a
 // page's tasks (unlock, task_list[i][1]) only finishes.
 func handbookTaskClaimed(ctx context.Context, queries *db.Queries, commanderID uint32, taskID uint32) ([]TaskEvent, error) {
-	pages, err := handbookPageConfigs.get()
-	if err != nil {
-		return nil, err
-	}
 	var events []TaskEvent
-	for _, page := range pages {
-		isPageTask, isUnlockTask := page.isPageTask(taskID), slices.Contains(page.Unlock, taskID)
-		for _, entry := range page.TaskList {
-			if len(entry) > 1 && slices.Contains(entry[1], taskID) {
-				isUnlockTask = true
-			}
-		}
-		if !isPageTask && !isUnlockTask {
-			continue
-		}
-		if err := queries.CreateHandbookPage(ctx, db.CreateHandbookPageParams{CommanderID: commanderID, PageID: page.ID}); err != nil {
+	for _, page := range handbookTaskPages[taskID] {
+		if err := queries.CreateHandbookPage(ctx, db.CreateHandbookPageParams{CommanderID: commanderID, PageID: page.page}); err != nil {
 			return nil, err
 		}
-		added, err := queries.AddHandbookFinished(ctx, db.AddHandbookFinishedParams{CommanderID: commanderID, PageID: page.ID, TaskID: taskID})
+		added, err := queries.AddHandbookFinished(ctx, db.AddHandbookFinishedParams{CommanderID: commanderID, PageID: page.page, TaskID: taskID})
 		if err != nil {
 			return nil, err
 		}
-		if isPageTask && added > 0 {
-			events = append(events, TaskEvent{SubType: TaskSubHandbookPhase, Target: page.ID, Count: 1})
+		if page.pageTask && added > 0 {
+			events = append(events, TaskEvent{SubType: TaskSubHandbookPhase, Target: page.page, Count: 1})
 		}
 	}
 	return events, nil
@@ -106,11 +89,7 @@ func handbookTaskClaimed(ctx context.Context, queries *db.Queries, commanderID u
 // The capture lists them backwards.
 func (game *Game) handleHandbookGetTasks(client *connection.Client, req *protobuf.CS_22302) error {
 	ctx := context.Background()
-	pages, err := handbookPageConfigs.get()
-	if err != nil {
-		return err
-	}
-	page, ok := pages[req.GetId()]
+	page, ok := handbookPageConfigs[req.GetId()]
 	index := int(req.GetIndex()) - 1
 	if !ok || index < 0 || index >= len(page.TaskList) || len(page.TaskList[index]) == 0 {
 		return client.Send(&protobuf.SC_22303{Result: result(errRefused)})
@@ -118,10 +97,11 @@ func (game *Game) handleHandbookGetTasks(client *connection.Client, req *protobu
 	tasks := slices.Clone(page.TaskList[index][0])
 	slices.Reverse(tasks)
 	var added *protobuf.SC_20003
-	err = game.DB.InTx(ctx, func(queries *db.Queries) error {
+	err := game.DB.InTx(ctx, func(queries *db.Queries) error {
 		if err := queries.CreateHandbookPage(ctx, db.CreateHandbookPageParams{CommanderID: client.CommanderID, PageID: page.ID}); err != nil {
 			return err
 		}
+		var err error
 		added, err = acceptTasks(ctx, queries, client.CommanderID, tasks, uint32(time.Now().Unix()))
 		return err
 	})

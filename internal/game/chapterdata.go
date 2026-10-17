@@ -1,10 +1,13 @@
 package game
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // The campaign's game data, built from the config tables chapter_template,
-// expedition_data_template, item_virtual_data_statistics and ship_level (the
-// few gameset values are constants below).
+// expedition_data_template, item_virtual_data_statistics, ship_level,
+// energy_template and gameset.
 
 // chapter_template.grids cell kinds (the 4th value of a grid)
 const (
@@ -82,23 +85,17 @@ const (
 	expeditionTypeBoss    = 99
 )
 
+// expeditionTemplate is an expedition_data_template row.
 type expeditionTemplate struct {
-	exp   uint32 // base ship exp
-	kind  uint32
-	level uint32
-}
-
-var expeditionTemplates map[uint32]expeditionTemplate
-
-// expedition_data_template row
-type expeditionConfig struct {
-	Exp   uint32 `json:"exp"`
+	Exp   uint32 `json:"exp"` // base ship exp
 	Type  uint32 `json:"type"`
 	Level uint32 `json:"level"`
 }
 
+var expeditionTemplates map[uint32]expeditionTemplate
+
 func (expedition expeditionTemplate) isBoss() bool {
-	return expedition.kind == expeditionTypeBoss || expedition.kind == expeditionTypeMulBoss
+	return expedition.Type == expeditionTypeBoss || expedition.Type == expeditionTypeMulBoss
 }
 
 type dropRef struct {
@@ -113,21 +110,41 @@ var dropPools map[uint32][]dropRef
 // [type, id, count], or "" when there is none
 type virtualItemConfig struct {
 	DisplayIcon json.RawMessage `json:"display_icon"`
+	LinkID      uint32          `json:"link_id"`
 }
 
-// Specialized Core: virtual item 59011 (virtual_type 20) is stored as item
-// 59010 (its link_id), capped by gameset urpt_chapter_max.
-const (
-	vitemSpecializedCore = 59011
-	itemSpecializedCore  = 59010
-)
+// Specialized Core: virtual item 59011 (virtual_type 20) is stored as the
+// item that is its link_id, capped by gameset urpt_chapter_max.
+const vitemSpecializedCore = 59011
+
+var itemSpecializedCore uint32
 
 // gameset values
-const (
-	flagshipExpPercent  = 150 // flagship_exp_percent
-	mvpExpPercent       = 200 // mvp_exp_percent
-	battleConsumeEnergy = 2   // battle_consume_energy
+var (
+	flagshipExpPercent  uint32 // flagship_exp_percent
+	mvpExpPercent       uint32 // mvp_exp_percent
+	battleConsumeEnergy uint32 // battle_consume_energy
 )
+
+// gamesetValues are the gameset settings loadChapterData reads.
+var gamesetValues = map[string]*uint32{
+	"flagship_exp_percent":  &flagshipExpPercent,
+	"mvp_exp_percent":       &mvpExpPercent,
+	"battle_consume_energy": &battleConsumeEnergy,
+}
+
+// energyHappy is the energy_template row of the highest morale, which
+// gives an exp bonus.
+const energyHappy = 4
+
+// happyEnergyFrom is the morale from which a ship is happy
+// (energy_template[energyHappy].lower_bound).
+var happyEnergyFrom uint32
+
+// energy_template row
+type energyConfig struct {
+	LowerBound uint32 `json:"lower_bound"`
+}
 
 // shipLevelExp is ship_level exp by level: shipLevelExp[n-1] takes a ship
 // from level n to n+1.
@@ -142,9 +159,39 @@ type shipLevelConfig struct {
 // loadChapterData builds every chapter of chapter_template, the expeditions
 // fought in them, the award pools and the ship level curve.
 func loadChapterData() error {
-	chapters, err := readConfigTable[chapterConfig]("chapter_template")
+	var chapters map[uint32]chapterConfig
+	var items map[uint32]virtualItemConfig
+	var levels map[uint32]shipLevelConfig
+	var energies map[uint32]energyConfig
+	var gameset map[string]gamesetConfig
+	err := loadAll(
+		loadTable("chapter_template", &chapters),
+		loadTable("expedition_data_template", &expeditionTemplates),
+		loadTable("item_virtual_data_statistics", &items),
+		loadTable("ship_level", &levels),
+		loadTable("energy_template", &energies),
+		func() (err error) {
+			gameset, err = readGameset()
+			return err
+		},
+	)
 	if err != nil {
 		return err
+	}
+	for key, value := range gamesetValues {
+		setting, ok := gameset[key]
+		if !ok {
+			return fmt.Errorf("config table gameset in %s: no %s", regionDataDir(), key)
+		}
+		*value = setting.KeyValue
+	}
+	energy, ok := energies[energyHappy]
+	if !ok {
+		return fmt.Errorf("config table energy_template in %s: no row %d", regionDataDir(), energyHappy)
+	}
+	happyEnergyFrom = energy.LowerBound
+	if itemSpecializedCore = items[vitemSpecializedCore].LinkID; itemSpecializedCore == 0 {
+		return fmt.Errorf("config table item_virtual_data_statistics in %s: no link_id for %d", regionDataDir(), vitemSpecializedCore)
 	}
 	chapterTemplates = make(map[uint32]*chapterTemplate, len(chapters))
 	for id, row := range chapters {
@@ -197,19 +244,6 @@ func loadChapterData() error {
 		chapterTemplates[id] = template
 	}
 
-	expeditions, err := readConfigTable[expeditionConfig]("expedition_data_template")
-	if err != nil {
-		return err
-	}
-	expeditionTemplates = make(map[uint32]expeditionTemplate, len(expeditions))
-	for id, row := range expeditions {
-		expeditionTemplates[id] = expeditionTemplate{exp: row.Exp, kind: row.Type, level: row.Level}
-	}
-
-	items, err := readConfigTable[virtualItemConfig]("item_virtual_data_statistics")
-	if err != nil {
-		return err
-	}
 	dropPools = map[uint32][]dropRef{}
 	for id, row := range items {
 		var icons [][]uint32
@@ -223,10 +257,6 @@ func loadChapterData() error {
 		}
 	}
 
-	levels, err := readConfigTable[shipLevelConfig]("ship_level")
-	if err != nil {
-		return err
-	}
 	maxLevel := uint32(0)
 	for _, row := range levels {
 		maxLevel = max(maxLevel, row.Level)

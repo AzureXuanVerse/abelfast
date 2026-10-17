@@ -3,65 +3,30 @@ package game
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strconv"
 )
 
-// shipTemplate is a ship_data_template row as obtained (+ its
-// ship_data_statistics rarity and nationality).
+// shipTemplate is a ship_data_template row, with its ship_data_statistics
+// rarity and nationality.
 type shipTemplate struct {
-	Star        uint32
-	Energy      uint32
-	MaxLevel    uint32
-	Rarity      uint32
-	Nationality uint32
-	Equips      [3]uint32 // equip_id_1..3, what the ship comes with
-	Skills      []uint32  // buff_list
-}
-
-// buildPool is a ship_data_create_material row with its candidates.
-type buildPool struct {
-	Gold          uint32
-	Item          uint32
-	ItemCount     uint32
-	ExchangeCount uint32
-	Rates         map[string]float64 // rate_tip, by rarity name
-	Groups        []uint32
-}
-
-// equipUpgrade is what upgrading an equip_data_template row costs and gives.
-type equipUpgrade struct {
-	Next  uint32
-	Gold  uint32
-	Items [][2]uint32 // [item, count]
-}
-
-// composeRecipe is a compose_data_template row.
-type composeRecipe struct {
-	Equip         uint32
-	Gold          uint32
-	Material      uint32
-	MaterialCount uint32
-}
-
-var (
-	shipTemplates map[uint32]shipTemplate
-	buildPools    map[uint32]buildPool
-	equipUpgrades map[uint32]equipUpgrade
-	composes      map[uint32]composeRecipe
-	itemPrices    map[uint32][2]uint32 // item_data_statistics.price: [resource, amount]
-)
-
-// ship_data_template row
-type shipTemplateConfig struct {
 	Star     uint32   `json:"star"`
 	Energy   uint32   `json:"energy"`
 	MaxLevel uint32   `json:"max_level"`
 	Equip1   uint32   `json:"equip_id_1"`
 	Equip2   uint32   `json:"equip_id_2"`
 	Equip3   uint32   `json:"equip_id_3"`
-	BuffList []uint32 `json:"buff_list"`
+	Skills   []uint32 `json:"buff_list"`
+
+	Rarity      uint32 `json:"-"`
+	Nationality uint32 `json:"-"`
+}
+
+// equips are what the ship comes with, equip_id_1..3.
+func (template shipTemplate) equips() [3]uint32 {
+	return [3]uint32{template.Equip1, template.Equip2, template.Equip3}
 }
 
 // ship_data_statistics row
@@ -77,34 +42,141 @@ type shipGroupConfig struct {
 	Description json.RawMessage `json:"description"`
 }
 
-// ship_data_create_material row
-type buildPoolConfig struct {
-	UseGold       uint32   `json:"use_gold"`
-	UseItem       uint32   `json:"use_item"`
-	Number1       uint32   `json:"number_1"`
+// buildPool is a ship_data_create_material row with its candidates.
+type buildPool struct {
+	Gold          uint32   `json:"use_gold"`
+	Item          uint32   `json:"use_item"`
+	ItemCount     uint32   `json:"number_1"`
 	ExchangeCount uint32   `json:"exchange_count"`
 	RateTip       []string `json:"rate_tip"`
+
+	// the ships it yields (ship_data_group descriptions linking to it) by
+	// rarity, the rarities that have ships in order, their rate_tip rate
+	// and the sum of those rates
+	candidates map[uint32][]uint32
+	rarities   []uint32
+	rates      map[uint32]float64
+	total      float64
 }
 
-// equip_data_template row
-type equipTemplateConfig struct {
-	Next         uint32      `json:"next"`
-	TransUseGold uint32      `json:"trans_use_gold"`
-	TransUseItem [][2]uint32 `json:"trans_use_item"`
+// equipUpgrade is an equip_data_template row: what upgrading it costs and
+// gives.
+type equipUpgrade struct {
+	Next  uint32      `json:"next"`
+	Gold  uint32      `json:"trans_use_gold"`
+	Items [][2]uint32 `json:"trans_use_item"` // [item, count]
 }
 
-// compose_data_template row
-type composeConfig struct {
-	EquipID     uint32 `json:"equip_id"`
-	GoldNum     uint32 `json:"gold_num"`
-	MaterialID  uint32 `json:"material_id"`
-	MaterialNum uint32 `json:"material_num"`
+// composeRecipe is a compose_data_template row.
+type composeRecipe struct {
+	Equip         uint32 `json:"equip_id"`
+	Gold          uint32 `json:"gold_num"`
+	Material      uint32 `json:"material_id"`
+	MaterialCount uint32 `json:"material_num"`
 }
 
-// item_data_statistics row
+// item_data_statistics row: price is [resource, amount], or "" when the
+// item doesn't sell
 type itemConfig struct {
-	Price []uint32 `json:"price"`
+	Price json.RawMessage `json:"price"`
 }
+
+// medal_template row
+type medalConfig struct {
+	Start      uint32          `json:"start"` // 0 for a medal's first tier
+	TargetType uint32          `json:"target_type"`
+	TargetID   json.RawMessage `json:"target_id"`
+}
+
+// medal_template.target_type
+const (
+	medalTargetSubMedals   = 160  // the sub-medals in target_id are all won
+	medalTargetNationExp   = 1041 // exp of the ships of a nationality
+	medalTargetNationLevel = 1042 // ships of a nationality at a level
+	medalTargetNationLove  = 1043 // affinity of the ships of a nationality
+	medalTargetArchive     = 1044 // ships unlocked in the archives
+)
+
+// nationTrophy is a faction medal's sub-medals (medalTargetNation*), by
+// ship_data_statistics nationality: ships at level or above, affinity, exp.
+type nationTrophy struct {
+	nationality, level      uint32
+	level120, intimacy, exp uint32
+}
+
+var (
+	// archiveTrophies are the medal_template ids CollectionProxy gets
+	// progress for: the first tier of every medal, each followed by its
+	// sub-medals (the captured order).
+	archiveTrophies []uint32
+	// archiveCountTrophy is the Naval F.L.E.X. Medal: ships unlocked in the
+	// archives.
+	archiveCountTrophy uint32
+	// nationTrophies are the faction medals' sub-medals, nationalities in
+	// descending order (as the official server sends them).
+	nationTrophies []nationTrophy
+)
+
+// loadMedals builds archiveTrophies, archiveCountTrophy and nationTrophies.
+func loadMedals(medals map[uint32]medalConfig) error {
+	archiveTrophies = nil
+	nations := map[uint32]*nationTrophy{}
+	for _, id := range slices.Sorted(maps.Keys(medals)) {
+		medal := medals[id]
+		if medal.Start != 0 {
+			continue
+		}
+		archiveTrophies = append(archiveTrophies, id)
+		if medal.TargetType == medalTargetArchive {
+			archiveCountTrophy = id
+		}
+		if medal.TargetType != medalTargetSubMedals {
+			continue
+		}
+		for _, subID := range parseIDList(medal.TargetID) {
+			archiveTrophies = append(archiveTrophies, subID)
+			sub := medals[subID]
+			// target_id: [[nationality, level]], "nationality" or
+			// [[nationality, 0]]
+			target := parseIDList(sub.TargetID)
+			if len(target) == 0 {
+				continue
+			}
+			nation := nations[target[0]]
+			if nation == nil {
+				nation = &nationTrophy{nationality: target[0]}
+				nations[target[0]] = nation
+			}
+			switch sub.TargetType {
+			case medalTargetNationLevel:
+				nation.level120 = subID
+				if len(target) > 1 {
+					nation.level = target[1]
+				}
+			case medalTargetNationLove:
+				nation.intimacy = subID
+			case medalTargetNationExp:
+				nation.exp = subID
+			}
+		}
+	}
+	if archiveCountTrophy == 0 {
+		return fmt.Errorf("config table medal_template in %s: no archive medal", regionDataDir())
+	}
+	nationTrophies = nil
+	for _, nationality := range slices.Backward(slices.Sorted(maps.Keys(nations))) {
+		nationTrophies = append(nationTrophies, *nations[nationality])
+	}
+	return nil
+}
+
+var (
+	shipTemplates map[uint32]shipTemplate
+	buildPools    map[uint32]buildPool
+	equipUpgrades map[uint32]equipUpgrade
+	composes      map[uint32]composeRecipe
+	itemPrices    map[uint32][2]uint32 // item_data_statistics.price: [resource, amount]
+)
 
 // buildPoolNames are the GETBOAT projectName of the ship_data_create_material
 // pools, how ship_data_group descriptions link a ship to them.
@@ -121,92 +193,87 @@ var (
 // obtained (base templates, id ending in 1, that have statistics), the
 // construction pools, equipment upgrades, crafting recipes and item prices.
 func loadShipData() error {
-	templates, err := readConfigTable[shipTemplateConfig]("ship_data_template")
+	var templates map[uint32]shipTemplate
+	var stats map[uint32]shipStatisticsConfig
+	var pools map[uint32]buildPool
+	var groups map[uint32]shipGroupConfig
+	var items map[uint32]itemConfig
+	var medals map[uint32]medalConfig
+	err := loadAll(
+		loadTable("ship_data_template", &templates),
+		loadTable("ship_data_statistics", &stats),
+		loadTable("ship_data_create_material", &pools),
+		loadTable("ship_data_group", &groups),
+		loadTable("equip_data_template", &equipUpgrades),
+		loadTable("compose_data_template", &composes),
+		loadTable("item_data_statistics", &items),
+		loadTable("medal_template", &medals),
+	)
 	if err != nil {
 		return err
 	}
-	stats, err := readConfigTable[shipStatisticsConfig]("ship_data_statistics")
-	if err != nil {
+	if err := loadMedals(medals); err != nil {
 		return err
 	}
+
 	shipTemplates = map[uint32]shipTemplate{}
 	for id, row := range templates {
 		stat, ok := stats[id]
 		if id%10 != 1 || !ok {
 			continue
 		}
-		shipTemplates[id] = shipTemplate{
-			Star: row.Star, Energy: row.Energy, MaxLevel: row.MaxLevel,
-			Rarity: stat.Rarity, Nationality: stat.Nationality,
-			Equips: [3]uint32{row.Equip1, row.Equip2, row.Equip3},
-			Skills: row.BuffList,
-		}
+		row.Rarity, row.Nationality = stat.Rarity, stat.Nationality
+		shipTemplates[id] = row
 	}
 
-	pools, err := readConfigTable[buildPoolConfig]("ship_data_create_material")
-	if err != nil {
-		return err
-	}
-	groups, err := readConfigTable[shipGroupConfig]("ship_data_group")
-	if err != nil {
-		return err
-	}
 	buildPools = map[uint32]buildPool{}
 	for id, name := range buildPoolNames {
-		row, ok := pools[id]
+		pool, ok := pools[id]
 		if !ok {
 			return fmt.Errorf("config table ship_data_create_material in %s: no pool %d", regionDataDir(), id)
 		}
-		pool := buildPool{
-			Gold: row.UseGold, Item: row.UseItem, ItemCount: row.Number1, ExchangeCount: row.ExchangeCount,
-			Rates: map[string]float64{},
+		var poolGroups []uint32
+		for _, group := range groups {
+			if obtainedFromPool(group.Description, name) {
+				poolGroups = append(poolGroups, group.GroupType)
+			}
 		}
-		for _, tip := range row.RateTip {
+		slices.Sort(poolGroups)
+		pool.candidates = map[uint32][]uint32{}
+		for _, group := range poolGroups {
+			if ship, ok := shipTemplates[group*10+1]; ok {
+				pool.candidates[ship.Rarity] = append(pool.candidates[ship.Rarity], group*10+1)
+			}
+		}
+		pool.rates = map[uint32]float64{}
+		for _, tip := range pool.RateTip {
 			match := rateTipPattern.FindStringSubmatch(rateTipTags.ReplaceAllString(tip, ""))
 			if match == nil {
 				continue
 			}
-			if rate, err := strconv.ParseFloat(match[2], 64); err == nil {
-				pool.Rates[match[1]] = rate
+			rate, err := strconv.ParseFloat(match[2], 64)
+			if err != nil {
+				continue
+			}
+			rarity := rarityByRateName[match[1]]
+			pool.rates[rarity] = rate
+			if len(pool.candidates[rarity]) > 0 && !slices.Contains(pool.rarities, rarity) {
+				pool.rarities = append(pool.rarities, rarity)
+				pool.total += rate
 			}
 		}
-		for _, group := range groups {
-			if obtainedFromPool(group.Description, name) {
-				pool.Groups = append(pool.Groups, group.GroupType)
-			}
-		}
-		slices.Sort(pool.Groups)
+		slices.Sort(pool.rarities)
 		buildPools[id] = pool
 	}
 
-	equips, err := readConfigTable[equipTemplateConfig]("equip_data_template")
-	if err != nil {
-		return err
-	}
-	equipUpgrades = map[uint32]equipUpgrade{}
-	for id, row := range equips {
-		if row.Next != 0 {
-			equipUpgrades[id] = equipUpgrade{Next: row.Next, Gold: row.TransUseGold, Items: row.TransUseItem}
-		}
-	}
+	// only the equipment that upgrades into another
+	maps.DeleteFunc(equipUpgrades, func(_ uint32, upgrade equipUpgrade) bool { return upgrade.Next == 0 })
 
-	recipes, err := readConfigTable[composeConfig]("compose_data_template")
-	if err != nil {
-		return err
-	}
-	composes = map[uint32]composeRecipe{}
-	for id, row := range recipes {
-		composes[id] = composeRecipe{Equip: row.EquipID, Gold: row.GoldNum, Material: row.MaterialID, MaterialCount: row.MaterialNum}
-	}
-
-	items, err := readConfigTable[itemConfig]("item_data_statistics")
-	if err != nil {
-		return err
-	}
 	itemPrices = map[uint32][2]uint32{}
 	for id, row := range items {
-		if len(row.Price) >= 2 {
-			itemPrices[id] = [2]uint32{row.Price[0], row.Price[1]}
+		var price []uint32
+		if json.Unmarshal(row.Price, &price) == nil && len(price) >= 2 {
+			itemPrices[id] = [2]uint32{price[0], price[1]}
 		}
 	}
 	return nil

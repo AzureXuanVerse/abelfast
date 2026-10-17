@@ -37,17 +37,13 @@ type limitChallengeMonthConfig struct {
 	Stage []uint32 `json:"stage"`
 }
 
-var limitChallengeMonths = &configTable[limitChallengeMonthConfig]{name: "constellation_challenge_month"}
+var limitChallengeMonths map[uint32]limitChallengeMonthConfig
 
 // handleLimitChallenge answers LimitChallengeReqCommand: this month's
 // challenges, none cleared or awarded.
 func (game *Game) handleLimitChallenge(client *connection.Client, req *protobuf.CS_24020) error {
-	months, err := limitChallengeMonths.get()
-	if err != nil {
-		return err
-	}
 	reply := &protobuf.SC_24021{Result: result(nil)}
-	for _, stage := range months[uint32(serverNow().Month())].Stage {
+	for _, stage := range limitChallengeMonths[uint32(serverNow().Month())].Stage {
 		reply.Awards = append(reply.Awards, &protobuf.KVDATA{Key: proto.Uint32(stage)})
 	}
 	return client.Send(reply)
