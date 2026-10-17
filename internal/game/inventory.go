@@ -177,10 +177,36 @@ func equipmentDepot(ctx context.Context, queries *db.Queries, commanderID uint32
 	return msg, nil
 }
 
+// upgradeEquipment pays for lv levels of enhancement from equipID and
+// returns the equipment it becomes. As EquipUpgradeLayer:updateMaterials sums
+// them, each level costs the current equip_data_template's trans_use_gold and
+// trans_use_item and moves to its next; past the last one it is refused.
+func (tx *Tx) upgradeEquipment(equipID, lv uint32) (uint32, error) {
+	if lv == 0 {
+		return 0, errRefused
+	}
+	for range lv {
+		upgrade, ok := equipUpgrades[equipID]
+		if !ok {
+			return 0, errRefused
+		}
+		if err := tx.SpendResource(ResourceGold, upgrade.Gold); err != nil {
+			return 0, err
+		}
+		for _, item := range upgrade.Items {
+			if err := tx.SpendItem(item[0], item[1]); err != nil {
+				return 0, err
+			}
+		}
+		equipID = upgrade.Next
+	}
+	tx.event(TaskEvent{SubType: TaskSubEnhanceGear, Count: 1})
+	return equipID, nil
+}
+
 // handleUpgradeShipEquipment upgrades the equipment in a ship slot by lv
-// levels (UpGradeEquipmentCommands, CS_14002). Each level costs the current
-// equip_data_template's trans_use_gold and trans_use_item and moves to its
-// next; the client takes the same costs off its own state on result 0.
+// levels (UpGradeEquipmentCommands, CS_14002); on result 0 the client takes
+// the same costs off its own state and puts the upgraded gear in the slot.
 func (game *Game) handleUpgradeShipEquipment(client *connection.Client, req *protobuf.CS_14002) error {
 	ctx := context.Background()
 	err := game.tx(ctx, client, func(tx *Tx) error {
@@ -189,32 +215,41 @@ func (game *Game) handleUpgradeShipEquipment(client *connection.Client, req *pro
 			return err
 		}
 		pos := req.GetPos()
-		if pos < 1 || int(pos) > len(equips) || equips[pos-1].EquipID == 0 || req.GetLv() == 0 {
+		if pos < 1 || int(pos) > len(equips) || equips[pos-1].EquipID == 0 {
 			return errRefused
 		}
 		equip := equips[pos-1]
-		for range req.GetLv() {
-			upgrade, ok := equipUpgrades[equip.EquipID]
-			if !ok {
-				return errRefused
-			}
-			if err := tx.SpendResource(ResourceGold, upgrade.Gold); err != nil {
-				return err
-			}
-			for _, item := range upgrade.Items {
-				if err := tx.SpendItem(item[0], item[1]); err != nil {
-					return err
-				}
-			}
-			equip.EquipID = upgrade.Next
+		if equip.EquipID, err = tx.upgradeEquipment(equip.EquipID, req.GetLv()); err != nil {
+			return err
 		}
-		tx.event(TaskEvent{SubType: TaskSubEnhanceGear, Count: 1})
 		return tx.SetShipEquipment(ctx, db.SetShipEquipmentParams{ShipID: equip.ShipID, Pos: pos, EquipID: equip.EquipID, SkinID: equip.SkinID})
 	})
 	if err != nil && !refused(err) {
 		return err
 	}
 	return client.Send(&protobuf.SC_14003{Result: result(err)})
+}
+
+// handleUpgradeEquipment upgrades one piece of depot equipment by lv levels
+// (UpGradeEquipmentCommands, CS_14004), paid as for a ship slot. On result 0
+// the client removes one equip_id from the depot and adds one of the
+// upgraded id, so the server moves the same piece.
+func (game *Game) handleUpgradeEquipment(client *connection.Client, req *protobuf.CS_14004) error {
+	ctx := context.Background()
+	err := game.tx(ctx, client, func(tx *Tx) error {
+		if err := tx.SpendEquipment(req.GetEquipId(), 1); err != nil {
+			return err
+		}
+		next, err := tx.upgradeEquipment(req.GetEquipId(), req.GetLv())
+		if err != nil {
+			return err
+		}
+		return tx.AddEquipment(next, 1)
+	})
+	if err != nil && !refused(err) {
+		return err
+	}
+	return client.Send(&protobuf.SC_14005{Result: result(err)})
 }
 
 // handleComposeEquipment crafts equipment from blueprints
