@@ -3,15 +3,22 @@ package game
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io/fs"
 	"math/rand/v2"
+	"os"
+	"path/filepath"
 	"slices"
+	"sync"
 	"time"
 
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
+	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -38,7 +45,29 @@ const (
 // rarityByRateName maps the rate_tip labels to ship_data_statistics rarity.
 var rarityByRateName = map[string]uint32{"Common": 2, "Rare": 3, "Elite": 4, "Super Rare": 5, "Ultra Rare": 6}
 
-// buildDurations is how long a build takes by the rarity of what it yields.
+// buildTimes are the construction times of the ships (base template id ->
+// seconds), server-side data the client never sees: server/build_times.json
+// of the data dir, scraped from the wiki by internal/tools/wiki_build_times.py
+// (Hatsuharu's 1500 s matches the official capture). Without it, or for a
+// ship it doesn't list, buildDurations by rarity is used.
+var buildTimes = sync.OnceValues(func() (map[uint32]uint32, error) {
+	raw, err := os.ReadFile(filepath.Join(regionDataDir(), "server", "build_times.json"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return map[uint32]uint32{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var times map[uint32]uint32
+	if err := json.Unmarshal(raw, &times); err != nil {
+		return nil, fmt.Errorf("build times: %w", err)
+	}
+	return times, nil
+})
+
+// buildDurations is how long a build takes by the rarity of what it yields,
+// for ships without a known construction time (guessed, Rare's from the
+// capture).
 // The real times are per ship and server side (none of the client tables has
 // them); rare matches the capture, the rest are approximations.
 var buildDurations = map[uint32]uint32{2: 1200, 3: 1500, 4: 1800, 5: 3600, 6: 5400}
@@ -127,7 +156,16 @@ func pickBuildShip(pool buildPool) (template uint32, duration uint32, ok bool) {
 		}
 	}
 	ships := candidates[rarity]
-	return ships[rand.IntN(len(ships))], buildDurations[rarity], true
+	template = ships[rand.IntN(len(ships))]
+	times, err := buildTimes()
+	if err != nil {
+		logger.WithFields("Build", logger.FieldValue("error", err)).Warn("build times not loaded")
+	}
+	if seconds, ok := times[template]; ok {
+		return template, seconds, true
+	}
+	logger.WithFields("Build", logger.FieldValue("template", template)).Warn("no construction time, using the rarity's")
+	return template, buildDurations[rarity], true
 }
 
 // buildStart is when a new build behind placed ones starts: when one of the
