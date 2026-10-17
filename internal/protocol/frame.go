@@ -1,6 +1,10 @@
 package protocol
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+	"fmt"
+	"io"
+)
 
 /*
 Frame layout (see packer.lua):
@@ -35,4 +39,22 @@ func AppendFrame(dst []byte, id int, index int, payload []byte) []byte {
 	dst = binary.BigEndian.AppendUint16(dst, uint16(id))
 	dst = binary.BigEndian.AppendUint16(dst, uint16(index))
 	return append(dst, payload...)
+}
+
+// ReadFrame reads one complete frame from r.
+func ReadFrame(r io.Reader) ([]byte, error) {
+	var size [2]byte
+	if _, err := io.ReadFull(r, size[:]); err != nil {
+		return nil, err
+	}
+	length := int(binary.BigEndian.Uint16(size[:]))
+	if length < MinFrameSize {
+		return nil, fmt.Errorf("invalid frame size %d", length)
+	}
+	frame := make([]byte, 2+length)
+	copy(frame, size[:])
+	if _, err := io.ReadFull(r, frame[2:]); err != nil {
+		return nil, err
+	}
+	return frame, nil
 }
