@@ -342,11 +342,6 @@ func scenarioDrops(template *chapterTemplate, expedition expeditionTemplate) []*
 	return appendDraws(drops, ships, bossShips)
 }
 
-// dropInfo is one DROPINFO of a reward.
-func dropInfo(kind, id, number uint32) *protobuf.DROPINFO {
-	return &protobuf.DROPINFO{Type: proto.Uint32(kind), Id: proto.Uint32(id), Number: proto.Uint32(number)}
-}
-
 // appendDraws draws count times from pool, merging repeats (the capture's
 // "17041 x2").
 func appendDraws(drops []*protobuf.DROPINFO, pool []dropRef, count int) []*protobuf.DROPINFO {

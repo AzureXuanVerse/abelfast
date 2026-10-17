@@ -63,12 +63,17 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 	return nil
 }
 
+// dropInfo is one DROPINFO of a reward: a DROP_TYPE_*, an id and a count.
+func dropInfo(kind, id, number uint32) *protobuf.DROPINFO {
+	return &protobuf.DROPINFO{Type: proto.Uint32(kind), Id: proto.Uint32(id), Number: proto.Uint32(number)}
+}
+
 // configDrops turns a config table's [[type, id, count], ...] into DROPINFOs.
 func configDrops(drops [][]uint32) []*protobuf.DROPINFO {
 	var list []*protobuf.DROPINFO
 	for _, entry := range drops {
 		if len(entry) >= 3 {
-			list = append(list, &protobuf.DROPINFO{Type: proto.Uint32(entry[0]), Id: proto.Uint32(entry[1]), Number: proto.Uint32(entry[2])})
+			list = append(list, dropInfo(entry[0], entry[1], entry[2]))
 		}
 	}
 	return list

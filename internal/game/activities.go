@@ -16,9 +16,6 @@ import (
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
-// drop is a reward: a DROP_TYPE_* (const.lua), an id and a count.
-type drop struct{ typ, id, count uint32 }
-
 // ActivityConst types belfast operates (CS_11202)
 const (
 	activityType7DaysLogin = 3
@@ -92,7 +89,7 @@ var openActivities = []openActivity{
 // activity_7_day_sign row: front_drops is the drop of each day of the 7-day
 // login
 type sevenDaySignConfig struct {
-	FrontDrops [][3]uint32 `json:"front_drops"`
+	FrontDrops [][]uint32 `json:"front_drops"`
 }
 
 var sevenDaySignConfigs = &configTable[sevenDaySignConfig]{name: "activity_7_day_sign"}
@@ -210,25 +207,6 @@ func (game *Game) activityList(ctx context.Context, commander db.Commander) (*pr
 	return reply, nil
 }
 
-// errUnsupportedDrop is a reward belfast can't store yet.
-var errUnsupportedDrop = errors.New("unsupported drop type")
-
-// grantDrop stores a reward. Only resources and items are stored here;
-// ships, furniture... belong to other areas.
-func grantDrop(ctx context.Context, queries *db.Queries, commanderID uint32, reward drop) error {
-	switch reward.typ {
-	case dropTypeResource:
-		return queries.AddResource(ctx, db.AddResourceParams{CommanderID: commanderID, ResourceID: reward.id, Amount: reward.count})
-	case dropTypeItem:
-		return queries.AddItem(ctx, db.AddItemParams{CommanderID: commanderID, ItemID: reward.id, Count: reward.count})
-	}
-	return errUnsupportedDrop
-}
-
-func (reward drop) info() *protobuf.DROPINFO {
-	return &protobuf.DROPINFO{Type: proto.Uint32(reward.typ), Id: proto.Uint32(reward.id), Number: proto.Uint32(reward.count)}
-}
-
 // errActivityRefused makes an operation reply with a non-zero result.
 var errActivityRefused = errors.New("activity operation refused")
 
@@ -285,14 +263,12 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 			if int(state.Data1) >= len(days) || (state.Data2 != 0 && last.YearDay() == today.YearDay() && last.Year() == today.Year()) {
 				return errActivityRefused
 			}
-			day := days[state.Data1]
-			reward := drop{day[0], day[1], day[2]}
-			if err := grantDrop(ctx, queries, client.CommanderID, reward); err != nil {
+			reply.AwardList = configDrops(days[state.Data1 : state.Data1+1])
+			if err := tx.grantDrops(reply.AwardList); err != nil {
 				return err
 			}
 			state.Data1++
 			state.Data2 = uint32(now.Unix())
-			reply.AwardList = []*protobuf.DROPINFO{reward.info()}
 			return queries.SaveActivity(ctx, db.SaveActivityParams(state))
 		})
 	case activityTypeMonthSign:
@@ -308,12 +284,11 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 			if slices.Contains(days, today) || len(days) >= len(monthSignDrops[0]) {
 				return errActivityRefused
 			}
-			reward := monthSignDrops[state.Data2-1][len(days)]
-			if err := grantDrop(ctx, queries, client.CommanderID, reward); err != nil {
+			reply.AwardList = configDrops([][]uint32{monthSignDrops[state.Data2-1][len(days)]})
+			if err := tx.grantDrops(reply.AwardList); err != nil {
 				return err
 			}
 			state.Data1List = joinList(append(days, today))
-			reply.AwardList = []*protobuf.DROPINFO{reward.info()}
 			return queries.SaveActivity(ctx, db.SaveActivityParams(state))
 		})
 	case activityTypeTaskList:
@@ -324,7 +299,7 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 	default:
 		err = errActivityRefused
 	}
-	if errors.Is(err, errActivityRefused) || errors.Is(err, errUnsupportedDrop) {
+	if errors.Is(err, errActivityRefused) {
 		return client.Send(&protobuf.SC_11203{Result: proto.Uint32(1)})
 	}
 	if err != nil {
