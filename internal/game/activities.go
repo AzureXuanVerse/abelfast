@@ -90,27 +90,13 @@ var openActivities = []openActivity{
 	{id: 3, stopTime: 0, data1: proto.Uint32(0), data2: proto.Uint32(0)},
 }
 
-// activityTypes are activity_template.type of the activities CS_11202 can
-// operate.
-var activityTypes = map[uint32]uint32{
-	3:     activityType7DaysLogin,
-	6:     activityTypeMonthSign,
-	30726: activityTypeTaskList,
-	51201: activityTypeTaskList,
+// activity_7_day_sign row: front_drops is the drop of each day of the 7-day
+// login
+type sevenDaySignConfig struct {
+	FrontDrops [][3]uint32 `json:"front_drops"`
 }
 
-// activityTasks are the task list activities' tasks (activity_template
-// config_data, a single group for both).
-var activityTasks = map[uint32][]uint32{
-	30726: {15953, 15954, 15955, 15956, 15957, 15958, 15959, 15960, 15961, 15962, 15963, 15964, 15965, 15966, 15967, 15968},
-	51201: {27801, 27802, 27803, 27804, 27805, 27806, 27807, 27808, 27809, 27810, 27811, 27812, 27813, 27814, 27816},
-}
-
-// sevenDaySignDrops is activity_7_day_sign[1].front_drops (activity 3's
-// config_id): the drop of each day of the 7-day login.
-var sevenDaySignDrops = []drop{
-	{2, 15003, 3}, {4, 103071, 1}, {2, 20001, 3}, {1, 4, 150}, {2, 54033, 3}, {2, 50005, 5}, {2, 54034, 2}, {4, 403031, 1},
-}
+var sevenDaySignConfigs = &configTable[sevenDaySignConfig]{name: "activity_7_day_sign"}
 
 // value is *field, 0 when unset.
 func value(field *uint32) uint32 {
@@ -273,13 +259,22 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 			activity = open
 		}
 	}
-	activityType := activityTypes[req.GetActivityId()]
+	configs, err := activityConfigs.get()
+	if err != nil {
+		return err
+	}
+	config := configs[req.GetActivityId()]
+	activityType := config.Type
 	if activity.id == 0 || req.GetCmd() != 1 || (activity.stopTime != 0 && int64(activity.stopTime) < now.Unix()) {
 		activityType = 0
 	}
-	var err error
 	switch activityType {
 	case activityType7DaysLogin:
+		var signs map[uint32]sevenDaySignConfig
+		if signs, err = sevenDaySignConfigs.get(); err != nil {
+			break
+		}
+		days := signs[config.ConfigID].FrontDrops
 		err = game.DB.InTx(ctx, func(queries *db.Queries) error {
 			state, err := activityState(ctx, queries, client.CommanderID, activity)
 			if err != nil {
@@ -287,10 +282,11 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 			}
 			last := time.Unix(int64(state.Data2), 0).In(serverZone)
 			today := now.In(serverZone)
-			if int(state.Data1) >= len(sevenDaySignDrops) || (state.Data2 != 0 && last.YearDay() == today.YearDay() && last.Year() == today.Year()) {
+			if int(state.Data1) >= len(days) || (state.Data2 != 0 && last.YearDay() == today.YearDay() && last.Year() == today.Year()) {
 				return errActivityRefused
 			}
-			reward := sevenDaySignDrops[state.Data1]
+			day := days[state.Data1]
+			reward := drop{day[0], day[1], day[2]}
 			if err := grantDrop(ctx, queries, client.CommanderID, reward); err != nil {
 				return err
 			}
@@ -320,7 +316,10 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 			return queries.SaveActivity(ctx, db.SaveActivityParams(state))
 		})
 	case activityTypeTaskList:
-		err = game.acceptActivityTasks(ctx, client, activityTasks[activity.id])
+		var taskIDs []uint32
+		if taskIDs, err = activityTaskIDs(config, now); err == nil {
+			err = game.acceptActivityTasks(ctx, client, taskIDs)
+		}
 	default:
 		err = errActivityRefused
 	}

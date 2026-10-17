@@ -33,6 +33,7 @@ type weeklyTaskConfig struct {
 type activityConfig struct {
 	ID         uint32          `json:"id"`
 	Type       uint32          `json:"type"`
+	ConfigID   uint32          `json:"config_id"`
 	ConfigData json.RawMessage `json:"config_data"`
 	Time       json.RawMessage `json:"time"`
 }
