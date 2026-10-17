@@ -197,7 +197,7 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 		session.info.ContinuousKillCount = proto.Uint32(0)
 	}
 
-	var newShips []db.Ship
+	var got granted
 	err = game.DB.InTx(ctx, func(queries *db.Queries) error {
 		for _, ship := range updated {
 			if err := saveShipBattleState(ctx, queries, ship); err != nil {
@@ -219,7 +219,7 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 			}
 		}
 		// TODO(player area): add reply.PlayerExp to the commander's exp/level
-		newShips, err = grantDrops(ctx, queries, client.CommanderID, reply.DropInfo)
+		got, err = grantDrops(ctx, queries, client.CommanderID, reply.DropInfo)
 		if err != nil {
 			return err
 		}
@@ -228,17 +228,18 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 	if err != nil {
 		return err
 	}
+	// capture: archive updates (SC_17002) before the result, the new ships
+	// (SC_12042) after it
+	if err := sendAll(client, got.Pushes); err != nil {
+		return err
+	}
 	if err := client.Send(reply); err != nil {
 		return err
 	}
-	if len(newShips) == 0 {
+	if len(got.Ships) == 0 {
 		return nil
 	}
-	push := &protobuf.SC_12042{}
-	for _, ship := range newShips {
-		push.ShipList = append(push.ShipList, shipInfo(ship))
-	}
-	return client.Send(push)
+	return client.Send(NewShipsPush(got.Ships...))
 }
 
 // shipBattleExp is the exp a ship gets for a battle: expedition exp x rank x
@@ -358,37 +359,4 @@ func appendDraws(drops []*protobuf.DROPINFO, pool []dropRef, count int) []*proto
 		}
 	}
 	return drops
-}
-
-// grantDrops stores drops: coins, bag items, the Specialized Core under its
-// link item, and ships. The ships/inventory areas may replace the ship and
-// item adds with their own helpers (ship defaults, bag limits).
-func grantDrops(ctx context.Context, queries *db.Queries, commanderID uint32, drops []*protobuf.DROPINFO) ([]db.Ship, error) {
-	var ships []db.Ship
-	for _, entry := range drops {
-		var err error
-		switch entry.GetType() {
-		case dropTypeResource:
-			err = queries.AddResource(ctx, db.AddResourceParams{CommanderID: commanderID, ResourceID: entry.GetId(), Amount: entry.GetNumber()})
-		case dropTypeItem:
-			err = queries.AddItem(ctx, db.AddItemParams{CommanderID: commanderID, ItemID: entry.GetId(), Count: entry.GetNumber()})
-		case dropTypeVItem:
-			if entry.GetId() == vitemSpecializedCore {
-				err = queries.AddItem(ctx, db.AddItemParams{CommanderID: commanderID, ItemID: itemSpecializedCore, Count: entry.GetNumber()})
-			}
-		case dropTypeShip:
-			for range entry.GetNumber() {
-				var ship db.Ship
-				ship, err = queries.CreateShip(ctx, NewShip(commanderID, entry.GetId()))
-				if err != nil {
-					break
-				}
-				ships = append(ships, ship)
-			}
-		}
-		if err != nil {
-			return nil, err
-		}
-	}
-	return ships, nil
 }

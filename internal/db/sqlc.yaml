@@ -212,3 +212,93 @@ sql:
             go_type: uint32
           - column: commander_commissions.over_time
             go_type: uint32
+          - column: commander_tasks.commander_id
+            go_type: uint32
+          - column: commander_tasks.task_id
+            go_type: uint32
+          - column: commander_tasks.progress
+            go_type: uint32
+          - column: commander_tasks.accept_time
+            go_type: uint32
+          - column: commander_tasks.submit_time
+            go_type: uint32
+          - column: commander_weekly_tasks.commander_id
+            go_type: uint32
+          - column: commander_weekly_tasks.task_id
+            go_type: uint32
+          - column: commander_weekly_tasks.progress
+            go_type: uint32
+          - column: commander_weekly.commander_id
+            go_type: uint32
+          - column: commander_weekly.reward_lv
+            go_type: uint32
+          - column: commander_activity_tasks.commander_id
+            go_type: uint32
+          - column: commander_activity_tasks.act_id
+            go_type: uint32
+          - column: commander_activity_tasks.task_id
+            go_type: uint32
+          - column: commander_activity_tasks.progress
+            go_type: uint32
+          - column: commander_activity_tasks.finished
+            go_type: bool
+          - column: commander_task_counters.commander_id
+            go_type: uint32
+          - column: commander_task_counters.sub_type
+            go_type: uint32
+          - column: commander_task_counters.target
+            go_type: uint32
+          - column: commander_task_counters.value
+            go_type: uint32
+          - column: commander_virtual_items.commander_id
+            go_type: uint32
+          - column: commander_virtual_items.item_id
+            go_type: uint32
+          - column: commander_virtual_items.amount
+            go_type: uint32
+          - column: commander_handbook_pages.commander_id
+            go_type: uint32
+          - column: commander_handbook_pages.page_id
+            go_type: uint32
+          - column: commander_handbook_pages.pt
+            go_type: uint32
+          - column: commander_handbook_pages.award
+            go_type: uint32
+          - column: commander_handbook_finished.commander_id
+            go_type: uint32
+          - column: commander_handbook_finished.page_id
+            go_type: uint32
+          - column: commander_handbook_finished.task_id
+            go_type: uint32
+          - column: commander_juus_posts.commander_id
+            go_type: uint32
+          - column: commander_juus_posts.post_id
+            go_type: uint32
+          - column: commander_juus_posts.comment_discuss
+            go_type: uint32
+          - column: commander_juus_posts.comment_index
+            go_type: uint32
+          - column: commander_juus_posts.comment_time
+            go_type: uint32
+          - column: commander_juus_posts.is_good
+            go_type: bool
+          - column: commander_juus_posts.is_read
+            go_type: bool
+          - column: commander_juus_topics.commander_id
+            go_type: uint32
+          - column: commander_juus_topics.topic_id
+            go_type: uint32
+          - column: commander_juus_topics.ship_group
+            go_type: uint32
+          - column: commander_juus_topics.op_time
+            go_type: uint32
+          - column: commander_juus_topics.read_flag
+            go_type: bool
+          - column: commander_juus_replies.commander_id
+            go_type: uint32
+          - column: commander_juus_replies.topic_id
+            go_type: uint32
+          - column: commander_juus_replies.chat_id
+            go_type: uint32
+          - column: commander_juus_replies.value
+            go_type: uint32
