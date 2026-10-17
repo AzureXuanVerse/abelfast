@@ -3,8 +3,11 @@ package game
 import (
 	"context"
 	"database/sql"
-	_ "embed"
 	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -18,16 +21,21 @@ import (
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
-// The Juus posts the client can't build from its tables (activity_ins_template
-// is_active 1: InitByServer), as first pushed by the official server.
-//
-//go:embed juus_posts.txtpb
-var juusPostsText []byte
-
+// juusPosts are the Juus posts the client can't build from its tables
+// (activity_ins_template is_active 1: InitByServer), as first pushed by the
+// official server: an SC_11706 in text format, server/juus_posts.txtpb of the
+// data dir. Without it there are no posts.
 var juusPosts = sync.OnceValues(func() (map[uint32]*protobuf.INS_MESSAGE, error) {
-	var list protobuf.SC_11706
-	if err := prototext.Unmarshal(juusPostsText, &list); err != nil {
+	text, err := os.ReadFile(filepath.Join(regionDataDir(), "server", "juus_posts.txtpb"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return map[uint32]*protobuf.INS_MESSAGE{}, nil
+	}
+	if err != nil {
 		return nil, err
+	}
+	var list protobuf.SC_11706
+	if err := prototext.Unmarshal(text, &list); err != nil {
+		return nil, fmt.Errorf("juus posts: %w", err)
 	}
 	posts := make(map[uint32]*protobuf.INS_MESSAGE, len(list.InsMessageList))
 	for _, post := range list.InsMessageList {
