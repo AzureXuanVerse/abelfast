@@ -3,25 +3,27 @@ package game
 import (
 	"google.golang.org/protobuf/proto"
 
+	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
 // DROP_TYPE_* (const.lua): what a reward's id refers to.
 const (
-	dropTypeResource = 1 // player_resource
-	dropTypeItem     = 2 // item_data_statistics
-	dropTypeEquip    = 3 // equip_data_statistics
-	dropTypeShip     = 4 // ship_data_template
-	dropTypeVItem    = 8 // item_virtual_data_statistics
+	dropTypeResource  = 1 // player_resource
+	dropTypeItem      = 2 // item_data_statistics
+	dropTypeEquip     = 3 // equip_data_statistics
+	dropTypeShip      = 4 // ship_data_template
+	dropTypeFurniture = 5 // furniture_data_template
+	dropTypeVItem     = 8 // item_virtual_data_statistics
 )
 
 // grantDrops stores rewards: resources, bag items, equipment, ships (with
 // their default equipment, skills and archive entry, pushed in SC_12042), and
-// virtual items (the Specialized Core is stored as its link item, the cruise
-// pass points as their task counter, the rest as virtual item counters),
-// recording the task progress they cause. Furniture, skins, gear skins... have
-// no storage yet and are only logged.
+// backyard furniture, virtual items (the Specialized Core is stored as its
+// link item, the cruise pass points as their task counter, the rest as
+// virtual item counters), recording the task progress they cause. Skins, gear
+// skins... have no storage yet and are only logged.
 func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 	for _, entry := range drops {
 		kind, id, count := entry.GetType(), entry.GetId(), entry.GetNumber()
@@ -45,6 +47,10 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 					return err
 				}
 				tx.newShips = append(tx.newShips, ship)
+			}
+		case kind == dropTypeFurniture:
+			if err := tx.AddFurniture(tx.ctx, db.AddFurnitureParams{CommanderID: tx.commanderID, FurnitureID: id, Count: count}); err != nil {
+				return err
 			}
 		case kind == dropTypeVItem && id == vitemSpecializedCore:
 			// stored as its link item, which tasks count as obtained

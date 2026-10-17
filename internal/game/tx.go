@@ -28,6 +28,8 @@ type Tx struct {
 	// newShipsAfterReply sends the SC_12042 after the reply instead of
 	// before it (the battle result, as captured).
 	newShipsAfterReply bool
+
+	mailSent bool // SendMail queued the SC_30001 push
 }
 
 // tx runs fn in a transaction. Once fn succeeds the task events it recorded

@@ -73,6 +73,17 @@ func (q *Queries) AddVirtualItem(ctx context.Context, arg AddVirtualItemParams) 
 	return err
 }
 
+const countEquipments = `-- name: CountEquipments :one
+SELECT CAST(COALESCE(SUM(count), 0) AS INTEGER) FROM commander_equipments WHERE commander_id = ?
+`
+
+func (q *Queries) CountEquipments(ctx context.Context, commanderID uint32) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countEquipments, commanderID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const getVirtualItem = `-- name: GetVirtualItem :one
 SELECT amount FROM commander_virtual_items WHERE commander_id = ? AND item_id = ?
 `

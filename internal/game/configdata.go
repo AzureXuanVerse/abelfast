@@ -21,5 +21,6 @@ func loadGameData() error {
 		loadEducateData,
 		loadNewCommander,
 		loadStarterFurniture,
+		loadMailData,
 	)
 }

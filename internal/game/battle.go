@@ -108,7 +108,7 @@ func (session *chapterSession) battleCell(id uint32) *protobuf.CHAPTERCELLINFO_P
 // The reply's ship_exp_list is exp gained (the client levels ships itself),
 // intimacy is 10000 + affinity gained, energy extra morale spent; drop_info is
 // added by the client through PlayerConst.addTranDrop, new ships come in
-// SC_12042 right after.
+// SC_12042 right after, then the mailbox counts (SC_30001).
 func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_40003) error {
 	ctx := context.Background()
 	if req.GetSystem() != systemScenario {
@@ -248,6 +248,14 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 		return session.save(ctx, queries, client.CommanderID)
 	})
 	if err != nil {
+		return err
+	}
+	// capture: the mailbox counts follow the result (mail arrived meanwhile)
+	counts, err := mailCounts(ctx, game.DB.Queries, client.CommanderID)
+	if err != nil {
+		return err
+	}
+	if err := client.PushAfterReply(counts); err != nil {
 		return err
 	}
 	return client.Send(reply)

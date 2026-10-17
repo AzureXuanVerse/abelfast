@@ -37,3 +37,6 @@ SELECT amount FROM commander_virtual_items WHERE commander_id = ? AND item_id = 
 -- name: AddVirtualItem :exec
 INSERT INTO commander_virtual_items (commander_id, item_id, amount) VALUES (?, ?, ?)
 ON CONFLICT (commander_id, item_id) DO UPDATE SET amount = amount + excluded.amount;
+
+-- name: CountEquipments :one
+SELECT CAST(COALESCE(SUM(count), 0) AS INTEGER) FROM commander_equipments WHERE commander_id = ?;

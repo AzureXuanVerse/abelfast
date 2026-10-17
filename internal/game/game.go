@@ -39,6 +39,12 @@ func StartCommander(ctx context.Context, queries *db.Queries, commander db.Comma
 	return nil
 }
 
+// LoadGameData reads the config tables the game server uses, for what runs
+// without Register (the mail command).
+func LoadGameData() error {
+	return loadGameData()
+}
+
 // Register loads the game data and installs the game server packet handlers.
 // It panics when the game data can't be loaded.
 func (game *Game) Register() {
@@ -122,6 +128,14 @@ func (game *Game) Register() {
 	packets.Handle(game.handleEducate)
 	packets.Handle(game.handleNewEducate)
 	packets.Handle(game.handleEducateEndings)
+	// mail
+	packets.Handle(game.handleMailList)
+	packets.Handle(game.handleArchiveList)
+	packets.Handle(game.handleMailOperation)
+	packets.Handle(game.handleDeleteArchivedMail)
+	packets.Handle(game.handleExtendMailStorage)
+	packets.Handle(game.handleMailStorageWithdraw)
+	packets.Handle(game.handleMailTitles)
 }
 
 // login is what the login burst is built from, loaded once per CS_11001.
@@ -222,8 +236,9 @@ var loginBurst = []loginPush{
 	func(game *Game, l *login) (proto.Message, error) { return energyTick(l.commander, l.now.Unix()), nil },
 	// ApartmentProxy / Dorm3dInsProxy: no dorm 3D
 	empty[protobuf.SC_28000](),
-	// MailProxy: empty mailbox
-	empty[protobuf.SC_30001](),
+	func(game *Game, l *login) (proto.Message, error) {
+		return mailCounts(l.ctx, l.queries, l.commander.ID)
+	},
 	// CompensateProxy: no compensation mail
 	empty[protobuf.SC_30101](),
 	// FriendProxy: no friends or requests

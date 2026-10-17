@@ -367,6 +367,20 @@ func (q *Queries) SetGuideIndex(ctx context.Context, arg SetGuideIndexParams) er
 	return err
 }
 
+const setMailStoreroomLv = `-- name: SetMailStoreroomLv :exec
+UPDATE commanders SET mail_storeroom_lv = ? WHERE id = ?
+`
+
+type SetMailStoreroomLvParams struct {
+	MailStoreroomLv uint32
+	ID              uint32
+}
+
+func (q *Queries) SetMailStoreroomLv(ctx context.Context, arg SetMailStoreroomLvParams) error {
+	_, err := q.db.ExecContext(ctx, setMailStoreroomLv, arg.MailStoreroomLv, arg.ID)
+	return err
+}
+
 const setNewGuideIndex = `-- name: SetNewGuideIndex :exec
 UPDATE commanders SET new_guide_index = ? WHERE id = ?
 `

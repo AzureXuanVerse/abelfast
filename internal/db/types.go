@@ -14,10 +14,15 @@ type IDList []uint32
 // Cells are chapter cells, {row, column}.
 type Cells [][2]uint32
 
+// Drops are rewards, {DROP_TYPE_*, id, number}.
+type Drops [][3]uint32
+
 func (list IDList) Value() (driver.Value, error) { return jsonValue([]uint32(list)) }
 func (list *IDList) Scan(src any) error          { return jsonScan(src, (*[]uint32)(list)) }
 func (cells Cells) Value() (driver.Value, error) { return jsonValue([][2]uint32(cells)) }
 func (cells *Cells) Scan(src any) error          { return jsonScan(src, (*[][2]uint32)(cells)) }
+func (drops Drops) Value() (driver.Value, error) { return jsonValue([][3]uint32(drops)) }
+func (drops *Drops) Scan(src any) error          { return jsonScan(src, (*[][3]uint32)(drops)) }
 
 func jsonValue[T any](list []T) (driver.Value, error) {
 	if list == nil {

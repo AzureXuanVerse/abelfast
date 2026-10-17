@@ -58,3 +58,6 @@ SELECT furniture_id, count FROM commander_furniture WHERE commander_id = ? ORDER
 -- name: AddFurniture :exec
 INSERT INTO commander_furniture (commander_id, furniture_id, count) VALUES (?, ?, ?)
 ON CONFLICT (commander_id, furniture_id) DO UPDATE SET count = count + excluded.count;
+
+-- name: SetMailStoreroomLv :exec
+UPDATE commanders SET mail_storeroom_lv = ? WHERE id = ?;

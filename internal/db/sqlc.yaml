@@ -19,3 +19,6 @@ sql:
           - column: chapter_states.ambushed
             go_type:
               type: Cells
+          - column: mails.attachments
+            go_type:
+              type: Drops

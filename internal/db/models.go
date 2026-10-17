@@ -233,6 +233,20 @@ type FleetShip struct {
 	ShipID      uint32
 }
 
+type Mail struct {
+	ID          uint32
+	CommanderID uint32
+	Date        int64
+	Title       string
+	Sender      string
+	Content     string
+	Attachments Drops
+	IsRead      bool
+	IsClaimed   bool
+	IsImportant bool
+	Archived    bool
+}
+
 type Setting struct {
 	Key   string
 	Value []byte
