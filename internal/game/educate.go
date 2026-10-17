@@ -60,3 +60,8 @@ func (game *Game) handleNewEducate(client *connection.Client, req *protobuf.CS_2
 		},
 	}))
 }
+
+// handleEducateEndings answers EducateGetEndingsCommand: no TB ending reached.
+func (game *Game) handleEducateEndings(client *connection.Client, req *protobuf.CS_27010) error {
+	return client.Send(&protobuf.SC_27011{})
+}
