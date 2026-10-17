@@ -17,7 +17,6 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
-	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -128,15 +127,6 @@ func loadJuusData() error {
 		}
 	}
 	return nil
-}
-
-func (game *Game) registerJuus() {
-	packets.Handle(game.handleJuusPostOp)
-	packets.Handle(game.handleJuusComment)
-	packets.Handle(game.handleJuusPosts)
-	packets.Handle(game.handleJuusChatReply)
-	packets.Handle(game.handleJuusTopicsRead)
-	packets.Handle(game.handleJuusActivateTopics)
 }
 
 // juusMessage is a post as the commander sees it: liked, read, and their
@@ -304,6 +294,16 @@ func (game *Game) juusGroups(ctx context.Context, commanderID uint32) (*protobuf
 		group.ChatGroupList = append(group.ChatGroupList, chat)
 	}
 	return msg, nil
+}
+
+// handleJuusGroups answers InstagramChatCommand with the commander's Juus
+// chats (SC_11711).
+func (game *Game) handleJuusGroups(client *connection.Client, req *protobuf.CS_11710) error {
+	groups, err := game.juusGroups(context.Background(), client.CommanderID)
+	if err != nil {
+		return err
+	}
+	return client.Send(groups)
 }
 
 // handleJuusActivateTopics unlocks chat topics (InstagramChatCommand

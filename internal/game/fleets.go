@@ -8,7 +8,6 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
-	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -16,17 +15,6 @@ import (
 // capture): the first two surface fleets and both submarine fleets. The
 // client fills in the other ids (FormationUI.MAX_FLEET_NUM, PvP...) itself.
 var starterFleets = []uint32{1, 2, 11, 12}
-
-// registerFleets installs the formation, campaign and battle handlers.
-func (game *Game) registerFleets() {
-	packets.Handle(game.handleUpdateFleet)
-	packets.Handle(game.handleTracking13101)
-	packets.Handle(game.handleChapterOp)
-	packets.Handle(game.handleChapterBattleResult)
-	packets.Handle(game.handleRemasterInfo)
-	packets.Handle(game.handleBeginStage)
-	packets.Handle(game.handleFinishStage)
-}
 
 // grantFleetsStarter creates the starter fleets, puts the commander's ships
 // in fleet 1, the chosen starter first (capture: [Javelin, Long Island]), and

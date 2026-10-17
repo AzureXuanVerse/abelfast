@@ -12,7 +12,6 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
-	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -86,14 +85,6 @@ type TaskEvent struct {
 	SubType uint32 // task_data_template.sub_type, see TaskSub*
 	Target  uint32 // chapter id, item id...; 0 when the event has none
 	Count   uint32 // amount to add, or the new value for absolute sub types
-}
-
-func (game *Game) registerTasks() {
-	packets.Handle(game.handleSubmitTask)
-	packets.Handle(game.handleClientTaskEvent)
-	packets.Handle(game.handleSubmitActivityTasks)
-	packets.Handle(game.handleHandbookGetTasks)
-	game.registerJuus()
 }
 
 // taskList is SC_20001, TaskProxy's tasks.

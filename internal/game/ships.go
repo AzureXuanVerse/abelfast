@@ -12,7 +12,6 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
-	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -29,20 +28,6 @@ const (
 	// create_time, ship id 2). She is no client data, the server picks her.
 	starterGiftShip = 106011
 )
-
-func (game *Game) registerShips() {
-	packets.Handle(game.handleBuildShip)
-	packets.Handle(game.handleBuildQuickFinish)
-	packets.Handle(game.handleBuildResults)
-	packets.Handle(game.handleCollectBuilds)
-	packets.Handle(game.handleConfirmBuilds)
-	packets.Handle(game.handleShipLock)
-	packets.Handle(game.handleShipEquip)
-	packets.Handle(game.handleLoveLetters)
-	packets.Handle(game.handleUpgradeShipEquipment)
-	packets.Handle(game.handleComposeEquipment)
-	packets.HandleLenient(game.handleSellItems)
-}
 
 // NewShip returns the row for a freshly obtained ship: level 1, morale and
 // level cap from its ship_data_template (energy, max_level).
