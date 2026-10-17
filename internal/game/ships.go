@@ -167,12 +167,9 @@ func fullShipInfo(ship db.Ship, equips []db.ShipEquipment, skills []db.ShipSkill
 	return info
 }
 
-// ShipInfos is the SHIPINFO of every ship of a commander, by id.
-func ShipInfos(ctx context.Context, queries *db.Queries, commanderID uint32) ([]*protobuf.SHIPINFO, error) {
-	ships, err := queries.ListShipsByCommander(ctx, commanderID)
-	if err != nil {
-		return nil, err
-	}
+// shipList is SC_12001, BayProxy's ships: the SHIPINFO of each of ships
+// (the commander's, by id) with their slots and skills.
+func shipList(ctx context.Context, queries *db.Queries, commanderID uint32, ships []db.Ship) (*protobuf.SC_12001, error) {
 	equips, err := queries.ListShipEquipmentsByCommander(ctx, commanderID)
 	if err != nil {
 		return nil, err
@@ -189,11 +186,11 @@ func ShipInfos(ctx context.Context, queries *db.Queries, commanderID uint32) ([]
 	for _, skill := range skills {
 		skillsByShip[skill.ShipID] = append(skillsByShip[skill.ShipID], skill)
 	}
-	infos := make([]*protobuf.SHIPINFO, len(ships))
+	msg := &protobuf.SC_12001{Shiplist: make([]*protobuf.SHIPINFO, len(ships))}
 	for i, ship := range ships {
-		infos[i] = fullShipInfo(ship, equipsByShip[ship.ID], skillsByShip[ship.ID])
+		msg.Shiplist[i] = fullShipInfo(ship, equipsByShip[ship.ID], skillsByShip[ship.ID])
 	}
-	return infos, nil
+	return msg, nil
 }
 
 // shipEquipments is the 5 slots of one of the commander's ships,
@@ -246,42 +243,6 @@ func grantStarterRest(tx *Tx) error {
 	}
 	_, err := ShipTrophyPushes(ctx, queries, commanderID)
 	return err
-}
-
-// shipsLoginPushes are the login burst messages of the ship, construction,
-// equipment and bag proxies, in the official order: SC_17001, SC_12024,
-// SC_12001, SC_14001, SC_14101, SC_15001, SC_12031.
-func (game *Game) shipsLoginPushes(ctx context.Context, commander db.Commander) ([]proto.Message, error) {
-	queries := game.DB.Queries
-	collection, err := collectionState(ctx, queries, commander.ID)
-	if err != nil {
-		return nil, err
-	}
-	docks, err := buildDocksState(ctx, queries, commander.ID)
-	if err != nil {
-		return nil, err
-	}
-	ships, err := ShipInfos(ctx, queries, commander.ID)
-	if err != nil {
-		return nil, err
-	}
-	equipments, err := queries.ListEquipments(ctx, commander.ID)
-	if err != nil {
-		return nil, err
-	}
-	items, err := queries.ListItems(ctx, commander.ID)
-	if err != nil {
-		return nil, err
-	}
-	return []proto.Message{
-		collection,
-		docks,
-		&protobuf.SC_12001{Shiplist: ships},
-		equipmentDepot(equipments),
-		&protobuf.SC_14101{}, // no equipment skins
-		bag(items),
-		energyTick(commander, time.Now().Unix()),
-	}, nil
 }
 
 // energyTick is SC_12031, the last morale tick: they run every

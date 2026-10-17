@@ -125,17 +125,25 @@ func resourceList(rows []db.ListResourcesRow) []*protobuf.RESOURCE {
 }
 
 // bag is SC_15001, BagProxy's items.
-func bag(rows []db.ListItemsRow) *protobuf.SC_15001 {
+func bag(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobuf.SC_15001, error) {
+	rows, err := queries.ListItems(ctx, commanderID)
+	if err != nil {
+		return nil, err
+	}
 	msg := &protobuf.SC_15001{ItemList: make([]*protobuf.ITEMINFO, len(rows)), LimitList: bagLimits}
 	for i, row := range rows {
 		msg.ItemList[i] = &protobuf.ITEMINFO{Id: proto.Uint32(row.ItemID), Count: proto.Uint32(row.Count)}
 	}
-	return msg
+	return msg, nil
 }
 
 // equipmentDepot is SC_14001, EquipmentProxy's equipment not on a ship
 // (Equipment.New keyed by template id), no augments.
-func equipmentDepot(rows []db.ListEquipmentsRow) *protobuf.SC_14001 {
+func equipmentDepot(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobuf.SC_14001, error) {
+	rows, err := queries.ListEquipments(ctx, commanderID)
+	if err != nil {
+		return nil, err
+	}
 	msg := &protobuf.SC_14001{
 		EquipList:       make([]*protobuf.EQUIPINFO, len(rows)),
 		SpweaponBagSize: proto.Uint32(spweaponBagSize),
@@ -143,7 +151,7 @@ func equipmentDepot(rows []db.ListEquipmentsRow) *protobuf.SC_14001 {
 	for i, row := range rows {
 		msg.EquipList[i] = &protobuf.EQUIPINFO{Id: proto.Uint32(row.EquipID), Count: proto.Uint32(row.Count)}
 	}
-	return msg
+	return msg, nil
 }
 
 // result is the common { result } reply value: 0 ok, 1 refused.

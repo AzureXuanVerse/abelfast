@@ -5,6 +5,7 @@ package game
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/protobuf"
-	"github.com/ggmolly/belfast/internal/protocol"
 )
 
 // mondayReference is the "monday_0oclock_timestamp" the official EN servers
@@ -55,55 +55,129 @@ func (game *Game) Register() {
 	packets.Handle(game.handleTracking)
 }
 
-// loginBurstOrder is the order the official server pushes the login burst
-// in (CS_11001 up to SC_11002), with the area each push belongs to.
-var loginBurstOrder = []int{
-	11000, // player
-	11003, // player
-	11015, // player
-	11752, // player
-	21536, // player
-	22001, // player
-	26120, // player
-	25001, // player
-	17001, // collection
-	22300, // player
-	12024, // ships (build)
-	12001, // ships
-	12101, // ships (fleets)
-	12201, // player
-	63000, // player
-	63100, // player
-	64000, // player
-	13001, // chapters
-	13000, // chapters
-	13002, // chapters
-	13201, // player
-	16200, // player
-	33114, // player
-	14001, // equipment
-	14101, // equipment
-	15001, // ships (bag)
-	20001, // tasks
-	20101, // tasks
-	20201, // tasks
-	19001, // player
-	12031, // ships
-	28000, // player
-	30001, // player
-	30101, // player
-	50000, // player
-	11200, // player
-	11210, // player
-	11213, // player
-	11300, // player
-	11002, // player, starts the proxies: always last
+// login is what the login burst is built from, loaded once per CS_11001.
+type login struct {
+	ctx       context.Context
+	queries   *db.Queries
+	commander db.Commander
+	ships     []db.Ship
+	now       time.Time
 }
 
-// handleLoadPlayerData answers CS_11001 (LoadPlayerDataCommand): everything
-// pushed before SC_11002 lands in the proxies the client just registered,
-// SC_11002 then starts them. Every area hands its pushes over, they go out
-// in loginBurstOrder.
+// loginPush builds one push of the login burst.
+type loginPush func(game *Game, l *login) (proto.Message, error)
+
+// empty is a login push with nothing to report.
+func empty[M any, PM interface {
+	*M
+	proto.Message
+}]() loginPush {
+	return func(*Game, *login) (proto.Message, error) {
+		return PM(new(M)), nil
+	}
+}
+
+// loginBurst is what the official server pushes for CS_11001, in its order
+// (capture #010 to #049): everything before SC_11002 lands in the proxies the
+// client just registered, SC_11002 then starts them.
+var loginBurst = []loginPush{
+	// PlayerProxy: server clock
+	func(game *Game, l *login) (proto.Message, error) {
+		return &protobuf.SC_11000{Timestamp: proto.Uint32(uint32(l.now.Unix())), Monday_0OclockTimestamp: proto.Uint32(mondayReference)}, nil
+	},
+	func(game *Game, l *login) (proto.Message, error) { return game.playerInfo(l.ctx, l.commander, l.ships) },
+	// PlayerProxy: no benefit buffs
+	empty[protobuf.SC_11015](),
+	// RefluxProxy: not a returning player
+	empty[protobuf.SC_11752](),
+	// SystemTipProxy (island delegation tips): nothing to collect
+	empty[protobuf.SC_21536](),
+	func(*Game, *login) (proto.Message, error) { return navalAcademy(), nil },
+	// GameRoomProxy: no game room coins or scores
+	empty[protobuf.SC_26120](),
+	// CommanderProxy: no cat commanders, boxes or presets
+	empty[protobuf.SC_25001](),
+	func(game *Game, l *login) (proto.Message, error) {
+		return collectionState(l.ctx, l.queries, l.commander.ID)
+	},
+	func(game *Game, l *login) (proto.Message, error) { return game.handbookLoginPush(l.ctx, l.commander) },
+	func(game *Game, l *login) (proto.Message, error) {
+		return buildDocksState(l.ctx, l.queries, l.commander.ID)
+	},
+	func(game *Game, l *login) (proto.Message, error) {
+		return shipList(l.ctx, l.queries, l.commander.ID, l.ships)
+	},
+	func(game *Game, l *login) (proto.Message, error) { return fleetList(l.ctx, l.queries, l.commander.ID) },
+	// ShipSkinProxy: no skins owned
+	empty[protobuf.SC_12201](),
+	// TechnologyProxy: nothing started, no catch-up research
+	empty[protobuf.SC_63000](),
+	// TechnologyProxy blueprints (PR ships): none
+	empty[protobuf.SC_63100](),
+	// TechnologyNationProxy: no fleet tech
+	empty[protobuf.SC_64000](),
+	func(game *Game, l *login) (proto.Message, error) {
+		return chapterList(l.ctx, l.queries, l.commander.ID)
+	},
+	func(game *Game, l *login) (proto.Message, error) {
+		return currentChapter(l.ctx, l.queries, l.commander.ID)
+	},
+	func(game *Game, l *login) (proto.Message, error) {
+		return commissionList(l.ctx, l.queries, l.commander.ID)
+	},
+	// DailyLevelProxy: no daily challenge played
+	empty[protobuf.SC_13201](),
+	// ShopsProxy: nothing bought this month
+	func(game *Game, l *login) (proto.Message, error) {
+		return &protobuf.SC_16200{Month: proto.Uint32(uint32(l.now.In(serverZone).Month()))}, nil
+	},
+	// WorldProxy: Operation Siren open, not started (captured)
+	func(*Game, *login) (proto.Message, error) {
+		return &protobuf.SC_33114{IsWorldOpen: proto.Uint32(1)}, nil
+	},
+	func(game *Game, l *login) (proto.Message, error) {
+		return equipmentDepot(l.ctx, l.queries, l.commander.ID)
+	},
+	// EquipmentProxy: no equipment skins
+	empty[protobuf.SC_14101](),
+	func(game *Game, l *login) (proto.Message, error) { return bag(l.ctx, l.queries, l.commander.ID) },
+	func(game *Game, l *login) (proto.Message, error) { return taskList(l.ctx, l.queries, l.commander.ID) },
+	func(game *Game, l *login) (proto.Message, error) {
+		weekly, err := game.weeklyInfo(l.ctx, l.queries, l.commander.ID)
+		return &protobuf.SC_20101{Info: weekly}, err
+	},
+	func(game *Game, l *login) (proto.Message, error) {
+		return game.activityTasksList(l.ctx, l.queries, l.commander.ID, l.now), nil
+	},
+	func(game *Game, l *login) (proto.Message, error) { return game.dorm(l.ctx, l.commander) },
+	func(game *Game, l *login) (proto.Message, error) { return energyTick(l.commander, l.now.Unix()), nil },
+	// ApartmentProxy / Dorm3dInsProxy: no dorm 3D
+	empty[protobuf.SC_28000](),
+	// MailProxy: empty mailbox
+	empty[protobuf.SC_30001](),
+	// CompensateProxy: no compensation mail
+	empty[protobuf.SC_30101](),
+	// FriendProxy: no friends or requests
+	empty[protobuf.SC_50000](),
+	func(game *Game, l *login) (proto.Message, error) { return game.activityList(l.ctx, l.commander) },
+	// ActivityPermanentProxy: no permanent (archived) event running
+	empty[protobuf.SC_11210](),
+	// ActivityRemasterProxy: no remaster ticket timer
+	empty[protobuf.SC_11213](),
+	// ServerNoticeProxy: belfast has no announcements
+	empty[protobuf.SC_11300](),
+	// PlayerProxy: everything is loaded, starts the proxies
+	func(game *Game, l *login) (proto.Message, error) {
+		return &protobuf.SC_11002{
+			Timestamp:               proto.Uint32(uint32(l.now.Unix())),
+			Monday_0OclockTimestamp: proto.Uint32(mondayReference),
+			ShipCount:               proto.Uint32(uint32(len(l.ships))),
+		}, nil
+	},
+}
+
+// handleLoadPlayerData answers CS_11001 (LoadPlayerDataCommand) with the
+// login burst.
 func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.CS_11001) error {
 	if client.CommanderID == 0 {
 		return fmt.Errorf("CS_11001 without a commander")
@@ -113,46 +187,19 @@ func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.
 	if err != nil {
 		return err
 	}
-	burst := make(map[int][]proto.Message)
-	add := func(pushes []proto.Message, err error) error {
+	ships, err := game.DB.ListShipsByCommander(ctx, commander.ID)
+	if err != nil {
+		return err
+	}
+	l := &login{ctx: ctx, queries: game.DB.Queries, commander: commander, ships: ships, now: time.Now()}
+	for _, build := range loginBurst {
+		push, err := build(game, l)
 		if err != nil {
 			return err
 		}
-		for _, push := range pushes {
-			id, err := protocol.ServerPacketID(push)
-			if err != nil {
-				return err
-			}
-			burst[id] = append(burst[id], push)
+		if err := client.Send(push); err != nil {
+			return err
 		}
-		return nil
-	}
-	if err := add(game.playerLoginPushes(ctx, commander)); err != nil {
-		return err
-	}
-	if err := add(game.shipsLoginPushes(ctx, commander)); err != nil {
-		return err
-	}
-	if err := add(game.fleetsLoginPushes(ctx, commander)); err != nil {
-		return err
-	}
-	if err := add(game.tasksLoginPushes(ctx, commander)); err != nil {
-		return err
-	}
-	handbook, err := game.handbookLoginPush(ctx, commander)
-	if err := add([]proto.Message{handbook}, err); err != nil {
-		return err
-	}
-	for _, id := range loginBurstOrder {
-		for _, push := range burst[id] {
-			if err := client.Send(push); err != nil {
-				return err
-			}
-		}
-		delete(burst, id)
-	}
-	for id := range burst {
-		return fmt.Errorf("login push SC_%d has no place in loginBurstOrder", id)
 	}
 	return nil
 }

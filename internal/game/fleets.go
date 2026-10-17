@@ -28,31 +28,6 @@ func (game *Game) registerFleets() {
 	packets.Handle(game.handleFinishStage)
 }
 
-// fleetsLoginPushes are this area's part of the CS_11001 burst, in the
-// official order: SC_12101 (FleetProxy), then later SC_13001 (ChapterProxy,
-// StageProxy, ChapterAutoProxy), SC_13000 (ChapterProxy's active chapter) and
-// SC_13002 (EventProxy's commissions). Other areas' pushes sit between
-// SC_12101 and SC_13001.
-func (game *Game) fleetsLoginPushes(ctx context.Context, commander db.Commander) ([]proto.Message, error) {
-	fleets, err := fleetList(ctx, game.DB.Queries, commander.ID)
-	if err != nil {
-		return nil, err
-	}
-	chapters, err := chapterList(ctx, game.DB.Queries, commander.ID)
-	if err != nil {
-		return nil, err
-	}
-	current, err := currentChapter(ctx, game.DB.Queries, commander.ID)
-	if err != nil {
-		return nil, err
-	}
-	commissions, err := commissionList(ctx, game.DB.Queries, commander.ID)
-	if err != nil {
-		return nil, err
-	}
-	return []proto.Message{fleets, chapters, current, commissions}, nil
-}
-
 // grantFleetsStarter creates the starter fleets, puts the commander's ships
 // in fleet 1, the chosen starter first (capture: [Javelin, Long Island]), and
 // offers the starter commissions. It has to run after the starter ships are

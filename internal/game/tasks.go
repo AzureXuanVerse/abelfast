@@ -106,31 +106,32 @@ func (game *Game) registerTasks() {
 	game.registerJuus()
 }
 
-// tasksLoginPushes are TaskProxy's tasks (SC_20001), the weekly missions
-// (SC_20101) and the tasks of task activities (SC_20201), in that order.
-func (game *Game) tasksLoginPushes(ctx context.Context, commander db.Commander) ([]proto.Message, error) {
-	tasks, err := game.DB.ListTasks(ctx, commander.ID)
+// taskList is SC_20001, TaskProxy's tasks.
+func taskList(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobuf.SC_20001, error) {
+	tasks, err := queries.ListTasks(ctx, commanderID)
 	if err != nil {
 		return nil, err
 	}
-	taskList := &protobuf.SC_20001{Info: make([]*protobuf.TASKINFO, len(tasks))}
+	msg := &protobuf.SC_20001{Info: make([]*protobuf.TASKINFO, len(tasks))}
 	for i, task := range tasks {
-		taskList.Info[i] = &protobuf.TASKINFO{
+		msg.Info[i] = &protobuf.TASKINFO{
 			Id:         proto.Uint32(task.TaskID),
 			Progress:   proto.Uint32(task.Progress),
 			AcceptTime: proto.Uint32(task.AcceptTime),
 		}
 	}
-	weekly, err := game.weeklyInfo(ctx, game.DB.Queries, commander.ID)
-	if err != nil {
-		return nil, err
-	}
-	activities, err := game.activityTaskLists(ctx, game.DB.Queries, commander.ID, time.Now())
+	return msg, nil
+}
+
+// activityTasksList is SC_20201, the tasks of the open task activities
+// (TotalTaskProxy).
+func (game *Game) activityTasksList(ctx context.Context, queries *db.Queries, commanderID uint32, now time.Time) *protobuf.SC_20201 {
+	activities, err := game.activityTaskLists(ctx, queries, commanderID, now)
 	if err != nil {
 		// without config data there are no activity tasks, the rest still works
 		logger.WithFields("Tasks", logger.FieldValue("error", err)).Warn("activity tasks unavailable")
 	}
-	totalTasks := &protobuf.SC_20201{}
+	msg := &protobuf.SC_20201{}
 	for _, activity := range activities {
 		info := &protobuf.ACT_TASK_INIT_LIST{ActId: proto.Uint32(activity.id)}
 		for _, task := range activity.tasks {
@@ -140,11 +141,13 @@ func (game *Game) tasksLoginPushes(ctx context.Context, commander db.Commander) 
 			}
 			info.Tasks = append(info.Tasks, &protobuf.ACT_TASK{Id: proto.Uint32(task.taskID), Progress: proto.Uint32(task.progress)})
 		}
-		totalTasks.Info = append(totalTasks.Info, info)
+		msg.Info = append(msg.Info, info)
 	}
-	return []proto.Message{taskList, &protobuf.SC_20101{Info: weekly}, totalTasks}, nil
+	return msg
 }
 
+// weeklyInfo is SC_20101.info, the weekly missions: their progress, the
+// points earned and the reward level claimed.
 func (game *Game) weeklyInfo(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobuf.WEEKLY_INFO, error) {
 	tasks, err := queries.ListWeeklyTasks(ctx, commanderID)
 	if err != nil {
