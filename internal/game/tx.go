@@ -65,10 +65,12 @@ func (game *Game) tx(ctx context.Context, client *connection.Client, fn func(tx 
 	if len(tx.newShips) == 0 {
 		return nil
 	}
+	// BayProxy adds them
+	newShips := &protobuf.SC_12042{ShipList: tx.newShips}
 	if tx.newShipsAfterReply {
-		return client.PushAfterReply(NewShipsPush(tx.newShips...))
+		return client.PushAfterReply(newShips)
 	}
-	return client.Push(NewShipsPush(tx.newShips...))
+	return client.Push(newShips)
 }
 
 // newTx is a unit of work on queries for commanderID; what it records is only

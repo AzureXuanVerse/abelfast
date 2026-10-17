@@ -21,14 +21,17 @@ type Game struct {
 
 // StartCommander creates what a new commander starts with (CS_10024), in
 // dependency order: ships first, the secretary and fleets point at them.
+// What a new commander starts with is no progress: the task events and
+// pushes its Tx records are dropped.
 func StartCommander(ctx context.Context, queries *db.Queries, commander db.Commander) error {
-	for _, grant := range []func(context.Context, *db.Queries, db.Commander) error{
+	tx := newTx(ctx, queries, commander.ID)
+	for _, grant := range []func(*Tx, db.Commander) error{
 		grantShipsStarter,
 		grantPlayerStarter,
 		grantFleetsStarter,
 		grantTasksStarter,
 	} {
-		if err := grant(ctx, queries, commander); err != nil {
+		if err := grant(tx, commander); err != nil {
 			return err
 		}
 	}

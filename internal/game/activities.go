@@ -207,12 +207,6 @@ func (game *Game) activityList(ctx context.Context, commander db.Commander) (*pr
 	return reply, nil
 }
 
-// acceptActivityTasks hands a task list activity's tasks to the tasks area,
-// which must push them (SC_20003) before SC_11203.
-func (game *Game) acceptActivityTasks(ctx context.Context, client *connection.Client, taskIDs []uint32) error {
-	return game.acceptTasksPush(ctx, client, taskIDs...)
-}
-
 // handleActivityOperation answers ActivityOperationCommand (CS_11202). The
 // client updates the activity's data itself on success (updateActivityData),
 // the server only stores it and hands out the awards: there is no SC_11201.
@@ -280,7 +274,8 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 			return queries.SaveActivity(ctx, db.SaveActivityParams(state))
 		})
 	case activityTypeTaskList:
-		err = game.acceptActivityTasks(ctx, client, activityTaskIDs(config, now))
+		// the tasks are pushed (SC_20003) before SC_11203
+		err = game.acceptTasksPush(ctx, client, activityTaskIDs(config, now)...)
 	default:
 		err = errRefused
 	}

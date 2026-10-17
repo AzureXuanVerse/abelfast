@@ -230,7 +230,7 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 			} else {
 				progress.KillEnemyCount++
 			}
-			if err := saveChapterProgress(ctx, queries, progress); err != nil {
+			if err := queries.SaveChapterProgress(ctx, db.SaveChapterProgressParams(progress)); err != nil {
 				return err
 			}
 		}

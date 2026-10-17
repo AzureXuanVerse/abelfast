@@ -156,10 +156,6 @@ func setCell(cell *protobuf.CHAPTERCELLINFO_P13, kind, id, flag uint32) {
 	cell.ItemData = proto.Uint32(0)
 }
 
-func cloneCell(cell *protobuf.CHAPTERCELLINFO_P13) *protobuf.CHAPTERCELLINFO_P13 {
-	return proto.Clone(cell).(*protobuf.CHAPTERCELLINFO_P13)
-}
-
 // bossesDown counts the defeated bosses, ChapterConst win condition 1.
 func (session *chapterSession) bossesDown() uint32 {
 	count := uint32(0)
@@ -367,7 +363,7 @@ func (game *Game) retreat(ctx context.Context, client *connection.Client, sessio
 			progress.Progress = min(progress.Progress+session.template.progressBoss, 100)
 			progress.DefeatCount++
 			progress.TodayDefeatCount++
-			if err := saveChapterProgress(ctx, queries, progress); err != nil {
+			if err := queries.SaveChapterProgress(ctx, db.SaveChapterProgressParams(progress)); err != nil {
 				return err
 			}
 		}
@@ -395,7 +391,7 @@ func (session *chapterSession) move(groupID, row, column uint32) *protobuf.SC_13
 	for _, step := range path {
 		reply.MovePath = append(reply.MovePath, cellPos(step[0], step[1]))
 		if cell := session.springAmbush(step[0], step[1]); cell != nil {
-			reply.MapUpdate = append(reply.MapUpdate, cloneCell(cell))
+			reply.MapUpdate = append(reply.MapUpdate, proto.CloneOf(cell))
 			break
 		}
 	}
@@ -508,7 +504,7 @@ func (session *chapterSession) answerAmbush(groupID, evade uint32) *protobuf.SC_
 		cell.ItemFlag = proto.Uint32(cellFlagActive)
 	}
 	reply := opReply(nil)
-	reply.MapUpdate = []*protobuf.CHAPTERCELLINFO_P13{cloneCell(cell)}
+	reply.MapUpdate = []*protobuf.CHAPTERCELLINFO_P13{proto.CloneOf(cell)}
 	return reply
 }
 
@@ -537,7 +533,7 @@ func (game *Game) handleChapterBattleResult(client *connection.Client, req *prot
 	reply := &protobuf.SC_13105{}
 	if session != nil {
 		if cell := session.spawnBoss(); cell != nil {
-			reply.MapUpdate = append(reply.MapUpdate, cloneCell(cell))
+			reply.MapUpdate = append(reply.MapUpdate, proto.CloneOf(cell))
 			if err := session.save(ctx, game.DB.Queries, client.CommanderID); err != nil {
 				return err
 			}
@@ -583,10 +579,6 @@ func chapterProgress(ctx context.Context, queries *db.Queries, commanderID, chap
 		return db.ChapterProgress{CommanderID: commanderID, ChapterID: chapterID}, nil
 	}
 	return progress, err
-}
-
-func saveChapterProgress(ctx context.Context, queries *db.Queries, progress db.ChapterProgress) error {
-	return queries.SaveChapterProgress(ctx, db.SaveChapterProgressParams(progress))
 }
 
 // chapterList is SC_13001: the chapters played so far (Chapter.New reads

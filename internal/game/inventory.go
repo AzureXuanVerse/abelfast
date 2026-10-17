@@ -83,6 +83,18 @@ func (tx *Tx) SpendItem(itemID, count uint32) error {
 	return err
 }
 
+// AddVirtualItem adds amount to an item_virtual_data_statistics counter.
+// Weekly mission points count for TaskSubWeeklyPt.
+func (tx *Tx) AddVirtualItem(itemID, amount uint32) error {
+	if err := tx.Queries.AddVirtualItem(tx.ctx, db.AddVirtualItemParams{CommanderID: tx.commanderID, ItemID: itemID, Amount: amount}); err != nil {
+		return err
+	}
+	if itemID == VirtualItemWeeklyPt {
+		tx.event(TaskEvent{SubType: TaskSubWeeklyPt, Count: amount})
+	}
+	return nil
+}
+
 // AddEquipment puts count of an equip_data_template id in the depot.
 func (tx *Tx) AddEquipment(equipID, count uint32) error {
 	return tx.Queries.AddEquipment(tx.ctx, db.AddEquipmentParams{CommanderID: tx.commanderID, EquipID: equipID, Count: count})

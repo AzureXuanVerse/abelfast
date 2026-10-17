@@ -73,14 +73,6 @@ func loadBuildTimes() error {
 // them); rare matches the capture, the rest are approximations.
 var buildDurations = map[uint32]uint32{2: 1200, 3: 1500, 4: 1800, 5: 3600, 6: 5400}
 
-// buildDocks is SC_12024, BuildShipProxy's state, with nothing building and
-// no draws or build points.
-func buildDocks() *protobuf.SC_12024 {
-	return &protobuf.SC_12024{
-		WorklistCount: proto.Uint32(buildWorkCount),
-	}
-}
-
 // buildDocksState is SC_12024 from storage: the builds in dock order (their
 // index is the pos the client sends back) and the build points. draw_count_*
 // count gem draws (draw_data_template), never done here.
@@ -93,8 +85,7 @@ func buildDocksState(ctx context.Context, queries *db.Queries, commanderID uint3
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
-	msg := buildDocks()
-	msg.ExchangeCount = proto.Uint32(points)
+	msg := &protobuf.SC_12024{WorklistCount: proto.Uint32(buildWorkCount), ExchangeCount: proto.Uint32(points)}
 	for _, build := range builds {
 		msg.WorklistList = append(msg.WorklistList, buildInfo(build))
 	}

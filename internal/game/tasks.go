@@ -167,7 +167,8 @@ var starterTasks = []uint32{1, 7310, 7307}
 // tasks that unlock commander manual pages (tutorial_handbook_task.unlock,
 // 23501-23517) and starterTasks, plus the first step of every weekly mission
 // chain open at level 1 (weekly_task_template, 10001, 10011, ... 10141).
-func grantTasksStarter(ctx context.Context, queries *db.Queries, commander db.Commander) error {
+func grantTasksStarter(tx *Tx, commander db.Commander) error {
+	ctx, queries := tx.ctx, tx.Queries
 	// what a new commander already is, for tasks that start from it
 	for _, counter := range []TaskEvent{{SubType: TaskSubLevel, Count: 1}, {SubType: TaskSubAcademyLevel, Count: 1}} {
 		if err := queries.SetTaskCounter(ctx, db.SetTaskCounterParams{CommanderID: commander.ID, SubType: counter.SubType, Value: counter.Count}); err != nil {

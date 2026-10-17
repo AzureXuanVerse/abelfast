@@ -32,7 +32,8 @@ func (game *Game) registerFleets() {
 // in fleet 1, the chosen starter first (capture: [Javelin, Long Island]), and
 // offers the starter commissions. It has to run after the starter ships are
 // created.
-func grantFleetsStarter(ctx context.Context, queries *db.Queries, commander db.Commander) error {
+func grantFleetsStarter(tx *Tx, commander db.Commander) error {
+	ctx, queries := tx.ctx, tx.Queries
 	for _, id := range starterFleets {
 		if err := queries.CreateFleet(ctx, db.CreateFleetParams{CommanderID: commander.ID, FleetID: id, Name: ""}); err != nil {
 			return err

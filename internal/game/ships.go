@@ -106,12 +106,6 @@ func (tx *Tx) AddShip(templateID uint32) (*protobuf.SHIPINFO, error) {
 	return fullShipInfo(row, equips, skills), nil
 }
 
-// NewShipsPush is SC_12042, ships obtained outside of a reply (drops...),
-// added by BayProxy.
-func NewShipsPush(ships ...*protobuf.SHIPINFO) *protobuf.SC_12042 {
-	return &protobuf.SC_12042{ShipList: ships}
-}
-
 // shipInfo is the SHIPINFO of a ship row alone, read by BayProxy into a Ship
 // (model/vo/ship.lua).
 func shipInfo(ship db.Ship) *protobuf.SHIPINFO {
@@ -235,20 +229,14 @@ func shipsByID(ctx context.Context, queries *db.Queries, commanderID uint32, ids
 
 // grantShipsStarter gives a new commander the starter ship they chose and
 // Long Island, equipped, and the starting bag (SC_12001 / SC_15001 of the
-// capture). What a new commander starts with is no progress: the task events
-// and pushes it records are dropped.
-func grantShipsStarter(ctx context.Context, queries *db.Queries, commander db.Commander) error {
-	tx := newTx(ctx, queries, commander.ID)
+// capture), and sets the medals that start with progress.
+func grantShipsStarter(tx *Tx, commander db.Commander) error {
+	ctx, queries, commanderID := tx.ctx, tx.Queries, tx.commanderID
 	for _, template := range []uint32{commander.StarterShip, starterGiftShip} {
 		if _, err := tx.AddShip(template); err != nil {
 			return err
 		}
 	}
-	return grantStarterRest(tx)
-}
-
-func grantStarterRest(tx *Tx) error {
-	ctx, queries, commanderID := tx.ctx, tx.Queries, tx.commanderID
 	if err := grantStarterItems(tx); err != nil {
 		return err
 	}

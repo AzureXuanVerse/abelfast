@@ -43,6 +43,7 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 				tx.newShips = append(tx.newShips, ship)
 			}
 		case kind == dropTypeVItem && id == vitemSpecializedCore:
+			// stored without counting as an obtained item (TaskSubObtainItem)
 			if err := tx.Queries.AddItem(tx.ctx, db.AddItemParams{CommanderID: tx.commanderID, ItemID: itemSpecializedCore, Count: count}); err != nil {
 				return err
 			}
@@ -53,11 +54,8 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 			}
 			tx.event(TaskEvent{SubType: TaskSubCruisePt, Count: total + count})
 		case kind == dropTypeVItem:
-			if err := tx.AddVirtualItem(tx.ctx, db.AddVirtualItemParams{CommanderID: tx.commanderID, ItemID: id, Amount: count}); err != nil {
+			if err := tx.AddVirtualItem(id, count); err != nil {
 				return err
-			}
-			if id == VirtualItemWeeklyPt {
-				tx.event(TaskEvent{SubType: TaskSubWeeklyPt, Count: count})
 			}
 		default:
 			logger.WithFields("Drops", logger.FieldValue("type", kind), logger.FieldValue("id", id)).Warn("drop not stored")

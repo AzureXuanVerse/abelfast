@@ -74,9 +74,10 @@ var starterFurniture = []uint32{1001, 1002, 1102, 1103, 1104, 1105, 1106, 1107, 
 // grantPlayerStarter sets up what a new commander starts with besides ships:
 // resources, backyard furniture, the starter ship as secretary (the avatar is the starter ship).
 // The capacities, rank, chat room... are column defaults (0001_commanders.sql).
-func grantPlayerStarter(ctx context.Context, queries *db.Queries, commander db.Commander) error {
+func grantPlayerStarter(tx *Tx, commander db.Commander) error {
+	ctx, queries := tx.ctx, tx.Queries
 	for _, resource := range starterResources {
-		if err := queries.AddResource(ctx, db.AddResourceParams{CommanderID: commander.ID, ResourceID: resource.id, Amount: resource.amount}); err != nil {
+		if err := tx.AddResource(resource.id, resource.amount); err != nil {
 			return err
 		}
 	}
