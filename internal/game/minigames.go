@@ -50,3 +50,9 @@ func (game *Game) handleEmojiInfo(client *connection.Client, req *protobuf.CS_11
 func (game *Game) handleLimitChallenge(client *connection.Client, req *protobuf.CS_24020) error {
 	return client.Send(&protobuf.SC_24021{Result: proto.Uint32(0)})
 }
+
+// handleJuusGroups answers InstagramChatCommand: no chat groups in the
+// in-game social feed yet.
+func (game *Game) handleJuusGroups(client *connection.Client, req *protobuf.CS_11710) error {
+	return client.Send(&protobuf.SC_11711{})
+}

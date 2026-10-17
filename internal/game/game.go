@@ -38,6 +38,9 @@ func (game *Game) Register() {
 	packets.Handle(game.handleMiniGameHubs)
 	packets.Handle(game.handleEmojiInfo)
 	packets.Handle(game.handleLimitChallenge)
+	packets.Handle(game.handleEducate)
+	packets.Handle(game.handleNewEducate)
+	packets.Handle(game.handleJuusGroups)
 }
 
 // handleLoadPlayerData answers CS_11001 (LoadPlayerDataCommand): everything
@@ -90,6 +93,10 @@ func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.
 		return err
 	}
 	if err := client.Send(navalAcademy()); err != nil {
+		return err
+	}
+	// CommanderManualProxy: no handbook progress (every page starts at 0)
+	if err := client.Send(&protobuf.SC_22300{}); err != nil {
 		return err
 	}
 	// MailProxy: empty mailbox
