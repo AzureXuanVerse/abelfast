@@ -1,10 +1,8 @@
 package connection
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -14,9 +12,8 @@ import (
 	queue "gopkg.in/eapache/queue.v1"
 
 	"github.com/ggmolly/belfast/internal/logger"
-	"github.com/ggmolly/belfast/internal/orm"
 	"github.com/ggmolly/belfast/internal/protobuf"
-	rngutil "github.com/ggmolly/belfast/internal/rng"
+	"github.com/ggmolly/belfast/internal/protocol"
 )
 
 const (
@@ -25,67 +22,149 @@ const (
 )
 
 var (
-	ErrClientClosed = errors.New("client is closed")
+	errClientClosed = errors.New("client is closed")
 
-	accountIdRandom = rngutil.NewLockedRand()
+	nextClientID atomic.Uint64
 )
 
-type ClientMetrics struct {
-	queueMax      int
+type clientMetrics struct {
+	queueMax      int // guarded by queueMu
 	queueBlocks   uint64
-	handlerErrors uint64
-	writeErrors   uint64
-	packets       uint64
+	handlerErrors atomic.Uint64
+	writeErrors   atomic.Uint64
+	packets       atomic.Uint64
 }
 
 type Client struct {
-	IP              net.IP
-	Port            int
-	State           int
-	PacketIndex     int
-	Hash            uint32
-	Connection      *net.Conn
-	Commander       *orm.Commander
-	AuthArg2        uint32
-	Buffer          bytes.Buffer
-	Server          *Server
-	ConnectedAt     time.Time
-	PreviousLoginAt time.Time
+	ID          uint64
+	IP          net.IP
+	Port        int
+	ConnectedAt time.Time
+
+	conn   net.Conn
+	server *Server
+
+	// Replies are buffered until the current packet has been handled, then flushed.
+	writeMu     sync.Mutex
+	writeBuffer []byte
+	packetIndex int // index of the packet being handled, echoed in replies
 
 	packetQueue  *queue.Queue
 	queueMu      sync.Mutex
 	queueCond    *sync.Cond
-	queueLimit   int
 	packetPool   chan []byte
 	closed       bool
 	closeOnce    sync.Once
 	dispatchOnce sync.Once
-	metrics      ClientMetrics
+	metrics      clientMetrics
 }
 
-func (client *Client) initQueues() {
-	client.queueLimit = packetQueueSize
-	client.packetQueue = queue.New()
+func newClient(conn net.Conn, server *Server) *Client {
+	addr := conn.RemoteAddr().(*net.TCPAddr)
+	client := &Client{
+		ID:          nextClientID.Add(1),
+		IP:          addr.IP,
+		Port:        addr.Port,
+		ConnectedAt: time.Now().UTC(),
+		conn:        conn,
+		server:      server,
+		packetQueue: queue.New(),
+		packetPool:  make(chan []byte, packetPoolSize),
+	}
 	client.queueCond = sync.NewCond(&client.queueMu)
-	client.packetPool = make(chan []byte, packetPoolSize)
+	return client
 }
 
-func (client *Client) StartDispatcher() {
+// Send buffers a server message, its packet id is taken from the message name (SC_<id>).
+func (client *Client) Send(msg proto.Message) error {
+	id, err := protocol.ServerPacketID(msg)
+	if err != nil {
+		return err
+	}
+	payload, err := proto.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("SC_%d: %w", id, err)
+	}
+	client.writeMu.Lock()
+	client.writeBuffer = protocol.AppendFrame(client.writeBuffer, id, client.packetIndex, payload)
+	client.writeMu.Unlock()
+	logger.LogEvent("Connection", "Send", fmt.Sprintf("SC_%d - %d bytes buffered", id, len(payload)), logger.LOG_LEVEL_DEBUG)
+	return nil
+}
+
+// Disconnect buffers SC_10999 (disconnected from server), reasons are defined in consts/disconnect_reasons.go
+func (client *Client) Disconnect(reason uint8) error {
+	return client.Send(&protobuf.SC_10999{
+		Reason: proto.Uint32(uint32(reason)),
+	})
+}
+
+// flush writes the buffered replies to the socket.
+func (client *Client) flush() error {
+	client.writeMu.Lock()
+	defer client.writeMu.Unlock()
+	if len(client.writeBuffer) == 0 {
+		return nil
+	}
+	_, err := client.conn.Write(client.writeBuffer)
+	client.writeBuffer = client.writeBuffer[:0]
+	if err != nil {
+		client.metrics.writeErrors.Add(1)
+		return err
+	}
+	return nil
+}
+
+func (client *Client) Close() {
+	client.closeWithError(nil)
+}
+
+func (client *Client) closeWithError(err error) {
+	client.closeOnce.Do(func() {
+		client.queueMu.Lock()
+		client.closed = true
+		client.queueCond.Broadcast()
+		client.queueMu.Unlock()
+		if err != nil && !isClosedConnError(err) {
+			logger.LogEvent("Client", "Close", fmt.Sprintf("%s:%d -> %v", client.IP, client.Port, err), logger.LOG_LEVEL_ERROR)
+		}
+		_ = client.conn.Close()
+		client.logMetrics()
+	})
+}
+
+func (client *Client) isClosed() bool {
+	client.queueMu.Lock()
+	defer client.queueMu.Unlock()
+	return client.closed
+}
+
+func (client *Client) logMetrics() {
+	client.queueMu.Lock()
+	queueMax := client.metrics.queueMax
+	queueBlocks := client.metrics.queueBlocks
+	client.queueMu.Unlock()
+	logger.LogEvent("Metrics", "ClientStats", fmt.Sprintf("%s:%d queueMax=%d queueBlocks=%d handlerErrors=%d writeErrors=%d packets=%d",
+		client.IP, client.Port, queueMax, queueBlocks,
+		client.metrics.handlerErrors.Load(), client.metrics.writeErrors.Load(), client.metrics.packets.Load()), logger.LOG_LEVEL_INFO)
+}
+
+func (client *Client) startDispatcher() {
 	client.dispatchOnce.Do(func() {
 		go client.dispatchLoop()
 	})
 }
 
-func (client *Client) EnqueuePacket(packet []byte) error {
+func (client *Client) enqueuePacket(packet []byte) error {
 	client.queueMu.Lock()
 	defer client.queueMu.Unlock()
-	for client.packetQueue.Length() >= client.queueLimit && !client.closed {
+	for client.packetQueue.Length() >= packetQueueSize && !client.closed {
 		client.metrics.queueBlocks++
 		logger.LogEvent("Metrics", "QueueBlock", fmt.Sprintf("%s:%d depth=%d", client.IP, client.Port, client.packetQueue.Length()), logger.LOG_LEVEL_DEBUG)
 		client.queueCond.Wait()
 	}
 	if client.closed {
-		return ErrClientClosed
+		return errClientClosed
 	}
 	client.packetQueue.Add(packet)
 	depth := client.packetQueue.Length()
@@ -95,82 +174,6 @@ func (client *Client) EnqueuePacket(packet []byte) error {
 	}
 	client.queueCond.Signal()
 	return nil
-}
-
-func (client *Client) Close() {
-	client.CloseWithError(nil)
-}
-
-func (client *Client) CloseWithError(err error) {
-	client.closeOnce.Do(func() {
-		client.queueMu.Lock()
-		client.closed = true
-		if client.queueCond != nil {
-			client.queueCond.Broadcast()
-		}
-		client.queueMu.Unlock()
-		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, ErrClientClosed) {
-			logger.LogEvent("Client", "Close", fmt.Sprintf("%s:%d -> %v", client.IP, client.Port, err), logger.LOG_LEVEL_ERROR)
-		}
-		if client.Connection != nil {
-			_ = (*client.Connection).Close()
-		}
-		client.logMetrics()
-	})
-}
-
-func (client *Client) IsClosed() bool {
-	client.queueMu.Lock()
-	closed := client.closed
-	client.queueMu.Unlock()
-	return closed
-}
-
-func (client *Client) RecordHandlerError() {
-	atomic.AddUint64(&client.metrics.handlerErrors, 1)
-}
-
-func (client *Client) recordWriteError() {
-	atomic.AddUint64(&client.metrics.writeErrors, 1)
-}
-
-func (client *Client) logMetrics() {
-	client.queueMu.Lock()
-	queueMax := client.metrics.queueMax
-	queueBlocks := client.metrics.queueBlocks
-	client.queueMu.Unlock()
-	handlerErrors := atomic.LoadUint64(&client.metrics.handlerErrors)
-	writeErrors := atomic.LoadUint64(&client.metrics.writeErrors)
-	packets := atomic.LoadUint64(&client.metrics.packets)
-	logger.LogEvent("Metrics", "ClientStats", fmt.Sprintf("%s:%d queueMax=%d queueBlocks=%d handlerErrors=%d writeErrors=%d packets=%d", client.IP, client.Port, queueMax, queueBlocks, handlerErrors, writeErrors, packets), logger.LOG_LEVEL_INFO)
-}
-
-func (client *Client) acquirePacketBuffer(size int) []byte {
-	select {
-	case buf := <-client.packetPool:
-		if cap(buf) >= size {
-			return buf[:size]
-		}
-	default:
-	}
-	return make([]byte, size)
-}
-
-func (client *Client) releasePacketBuffer(buffer []byte) {
-	if buffer == nil {
-		return
-	}
-	select {
-	case client.packetPool <- buffer[:0]:
-	default:
-	}
-}
-
-func (client *Client) drainQueueLocked() {
-	for client.packetQueue.Length() > 0 {
-		packet := client.packetQueue.Remove().([]byte)
-		client.releasePacketBuffer(packet)
-	}
 }
 
 func (client *Client) dispatchLoop() {
@@ -188,194 +191,50 @@ func (client *Client) dispatchLoop() {
 		client.queueCond.Signal()
 		client.queueMu.Unlock()
 
-		if client.IsClosed() {
-			client.releasePacketBuffer(packet)
+		client.metrics.packets.Add(1)
+		err := client.handlePacket(packet)
+		client.releasePacketBuffer(packet)
+		if err != nil {
+			client.closeWithError(err)
 			return
 		}
-		atomic.AddUint64(&client.metrics.packets, 1)
-		client.Server.Dispatcher(&packet, client, len(packet))
+	}
+}
+
+// handlePacket runs the dispatcher on a complete frame and flushes its replies.
+func (client *Client) handlePacket(packet []byte) error {
+	header := protocol.ParseHeader(packet)
+	client.writeMu.Lock()
+	client.packetIndex = header.Index
+	client.writeMu.Unlock()
+	if err := client.server.dispatcher(client, header.ID, packet[protocol.HeaderSize:]); err != nil {
+		client.metrics.handlerErrors.Add(1)
+		return err
+	}
+	return client.flush()
+}
+
+func (client *Client) acquirePacketBuffer(size int) []byte {
+	select {
+	case buf := <-client.packetPool:
+		if cap(buf) >= size {
+			return buf[:size]
+		}
+	default:
+	}
+	return make([]byte, size)
+}
+
+func (client *Client) releasePacketBuffer(buffer []byte) {
+	select {
+	case client.packetPool <- buffer[:0]:
+	default:
+	}
+}
+
+func (client *Client) drainQueueLocked() {
+	for client.packetQueue.Length() > 0 {
+		packet := client.packetQueue.Remove().([]byte)
 		client.releasePacketBuffer(packet)
-	}
-}
-
-func (client *Client) CreateCommander(arg2 uint32) (uint32, error) {
-	accountId := accountIdRandom.Uint32()
-	if accountId == 0 {
-		accountId = 1
-	}
-	if err := orm.CreateYostarusMap(arg2, accountId); err != nil {
-		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to create account for arg2 %d: %v", arg2, err), logger.LOG_LEVEL_ERROR)
-		return 0, err
-	}
-	if err := orm.CreateCommanderAccountRoot(accountId, fmt.Sprintf("Unnamed commander #%d", accountId), 1, 1); err != nil {
-		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to create commander for account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
-		return 0, err
-	}
-
-	// Since we have no tutorial / first login, mark the first granted ship as secretary.
-	belfast := orm.OwnedShip{
-		OwnerID: accountId,
-		ShipID:  202124, // Belfast (6 stars)
-	}
-	if err := belfast.Create(); err != nil {
-		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to give Belfast to account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
-		return 0, err
-	}
-
-	longIsland := orm.OwnedShip{
-		OwnerID: accountId,
-		ShipID:  106011, // Long Island
-	}
-	if err := longIsland.Create(); err != nil {
-		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to give Long Island to account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
-		return 0, err
-	}
-	if err := orm.CreateDefaultStarterInventory(accountId); err != nil {
-		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to create starter inventory for account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
-		return 0, err
-	}
-	owner := &orm.Commander{CommanderID: accountId, OwnedShipsMap: map[uint32]*orm.OwnedShip{}, Fleets: []orm.Fleet{}, FleetsMap: map[uint32]*orm.Fleet{}}
-	owner.OwnedShipsMap[belfast.ID] = &belfast
-	owner.OwnedShipsMap[longIsland.ID] = &longIsland
-	if err := owner.UpdateSecretaries([]orm.SecretaryUpdate{{ShipID: belfast.ID}}); err != nil {
-		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to set default secretary for account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
-		return 0, err
-	}
-	if err := orm.CreateFleet(owner, 1, "", []uint32{belfast.ID, longIsland.ID}); err != nil {
-		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to create default fleet for account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
-		return 0, err
-	}
-	if err := client.GetCommander(accountId); err != nil {
-		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to fetch created commander for account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
-		return 0, err
-	}
-	if err := client.Commander.Load(); err != nil {
-		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to load created commander for account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
-		return 0, err
-	}
-
-	logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("created new commander for account %d", accountId), logger.LOG_LEVEL_INFO)
-	return accountId, nil
-}
-
-func (client *Client) CreateCommanderWithStarter(arg2 uint32, nickname string, shipID uint32) (uint32, error) {
-	accountId := accountIdRandom.Uint32()
-	if accountId == 0 {
-		accountId = 1
-	}
-	if err := orm.CreateYostarusMap(arg2, accountId); err != nil {
-		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to create account for arg2 %d: %v", arg2, err), logger.LOG_LEVEL_ERROR)
-		return 0, err
-	}
-	if err := orm.CreateCommanderAccountRoot(accountId, nickname, 1, 1); err != nil {
-		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to create commander for account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
-		return 0, err
-	}
-	starterShip := orm.OwnedShip{
-		OwnerID: accountId,
-		ShipID:  shipID,
-	}
-	if err := starterShip.Create(); err != nil {
-		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to give starter ship to account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
-		return 0, err
-	}
-	belfast := orm.OwnedShip{
-		OwnerID: accountId,
-		ShipID:  202124, // Belfast (6 stars)
-	}
-	if err := belfast.Create(); err != nil {
-		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to give Belfast to account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
-		return 0, err
-	}
-	longIsland := orm.OwnedShip{
-		OwnerID: accountId,
-		ShipID:  106011, // Long Island
-	}
-	if err := longIsland.Create(); err != nil {
-		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to give Long Island to account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
-		return 0, err
-	}
-	if err := orm.CreateDefaultStarterInventory(accountId); err != nil {
-		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to create starter inventory for account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
-		return 0, err
-	}
-	owner := &orm.Commander{CommanderID: accountId, OwnedShipsMap: map[uint32]*orm.OwnedShip{}, Fleets: []orm.Fleet{}, FleetsMap: map[uint32]*orm.Fleet{}}
-	owner.OwnedShipsMap[starterShip.ID] = &starterShip
-	owner.OwnedShipsMap[belfast.ID] = &belfast
-	owner.OwnedShipsMap[longIsland.ID] = &longIsland
-	if err := owner.UpdateSecretaries([]orm.SecretaryUpdate{{ShipID: belfast.ID}}); err != nil {
-		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to set default secretary for account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
-		return 0, err
-	}
-	if err := orm.CreateFleet(owner, 1, "", []uint32{starterShip.ID, belfast.ID, longIsland.ID}); err != nil {
-		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to create default fleet for account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
-		return 0, err
-	}
-	if err := client.GetCommander(accountId); err != nil {
-		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to fetch created commander for account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
-		return 0, err
-	}
-	if err := client.Commander.Load(); err != nil {
-		logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("failed to load created commander for account %d: %v", accountId, err), logger.LOG_LEVEL_ERROR)
-		return 0, err
-	}
-	logger.LogEvent("Client", "CreateCommander", fmt.Sprintf("created new commander for account %d", accountId), logger.LOG_LEVEL_INFO)
-	return accountId, nil
-}
-
-func (client *Client) GetCommander(accountId uint32) error {
-	commander, err := orm.GetCommanderByAccountID(accountId)
-	if err != nil {
-		return err
-	}
-	client.Commander = commander
-	return nil
-}
-
-// Sends SC_10999 (disconnected from server) message to the Client, reasons are defined in consts/disconnect_reasons.go
-func (client *Client) Disconnect(reason uint8) error {
-	_, _, err := SendProtoMessage(10999, client, &protobuf.SC_10999{
-		Reason: proto.Uint32(uint32(reason)),
-	})
-	return err
-}
-
-// Sends the content of the buffer to the client via TCP
-func (client *Client) Flush() error {
-	_, err := (*client.Connection).Write(client.Buffer.Bytes())
-	if err != nil {
-		client.recordWriteError()
-		logger.LogEvent("Client", "Flush", fmt.Sprintf("%s:%d -> %v", client.IP, client.Port, err), logger.LOG_LEVEL_ERROR)
-		client.Buffer.Reset()
-		client.CloseWithError(err)
-		return err
-	}
-	client.Buffer.Reset()
-	return nil
-}
-
-func (client *Client) SendMessage(packetId int, message any) (int, int, error) {
-	return SendProtoMessage(packetId, client, message)
-}
-
-type MetricsSnapshot struct {
-	QueueMax      int
-	QueueBlocks   uint64
-	HandlerErrors uint64
-	WriteErrors   uint64
-	Packets       uint64
-}
-
-func (client *Client) MetricsSnapshot() MetricsSnapshot {
-	client.queueMu.Lock()
-	queueMax := client.metrics.queueMax
-	queueBlocks := client.metrics.queueBlocks
-	client.queueMu.Unlock()
-	return MetricsSnapshot{
-		QueueMax:      queueMax,
-		QueueBlocks:   queueBlocks,
-		HandlerErrors: atomic.LoadUint64(&client.metrics.handlerErrors),
-		WriteErrors:   atomic.LoadUint64(&client.metrics.writeErrors),
-		Packets:       atomic.LoadUint64(&client.metrics.packets),
 	}
 }
