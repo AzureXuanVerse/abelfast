@@ -11,11 +11,10 @@ import (
 )
 
 const (
-	LOG_LEVEL_AUTO  = iota
-	LOG_LEVEL_DEBUG = iota
-	LOG_LEVEL_INFO  = iota
-	LOG_LEVEL_WARN  = iota
-	LOG_LEVEL_ERROR = iota
+	LOG_LEVEL_DEBUG = iota + 1
+	LOG_LEVEL_INFO
+	LOG_LEVEL_WARN
+	LOG_LEVEL_ERROR
 )
 
 type Field struct {
@@ -33,48 +32,12 @@ var (
 	logLevel     = LOG_LEVEL_INFO
 )
 
-func Scope(scope string) Entry {
-	return Entry{Scope: scope}
-}
-
 func WithFields(scope string, fields ...Field) Entry {
 	return Entry{Scope: scope, Fields: fields}
 }
 
 func FieldValue(key string, value any) Field {
 	return Field{Key: key, Value: fmt.Sprint(value)}
-}
-
-func PacketFields(packetID uint32, direction string) []Field {
-	return []Field{
-		{Key: "packet", Value: fmt.Sprint(packetID)},
-		{Key: "dir", Value: direction},
-	}
-}
-
-func CommanderFields(commanderID uint32, accountID uint32) []Field {
-	return []Field{
-		{Key: "commander", Value: fmt.Sprint(commanderID)},
-		{Key: "account", Value: fmt.Sprint(accountID)},
-	}
-}
-
-func Span(scope string, fields ...Field) func(err error) {
-	start := time.Now()
-	return func(err error) {
-		allFields := append([]Field{}, fields...)
-		allFields = append(allFields, Field{Key: "duration", Value: time.Since(start).String()})
-		if err != nil {
-			WithFields(scope, allFields...).Error(err.Error())
-			return
-		}
-		WithFields(scope, allFields...).Info("completed")
-	}
-}
-
-func (e Entry) With(fields ...Field) Entry {
-	e.Fields = append(append([]Field{}, e.Fields...), fields...)
-	return e
 }
 
 func (e Entry) Debug(message string) {
@@ -87,10 +50,6 @@ func (e Entry) Info(message string) {
 
 func (e Entry) Warn(message string) {
 	Log(e.Scope, message, LOG_LEVEL_WARN, e.Fields...)
-}
-
-func (e Entry) Error(message string) {
-	Log(e.Scope, message, LOG_LEVEL_ERROR, e.Fields...)
 }
 
 func Log(scope, message string, level int, fields ...Field) {

@@ -13,7 +13,6 @@ import (
 	"io"
 	"net"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -43,31 +42,11 @@ func (s *Sink) line(fields map[string]any) {
 	fmt.Fprintf(s.w, "%s\n", data)
 }
 
-// Lines returns the sink contents so far (for buffered sinks).
-func (s *Sink) Lines() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if b, ok := s.w.(interface{ String() string }); ok {
-		return b.String()
-	}
-	return ""
-}
-
 // Tap relays connections from Listen to Upstream, capturing every frame.
 type Tap struct {
 	Listen   string
 	Upstream string
 	Sink     *Sink
-
-	// Ready is closed once the listener is bound.
-	Ready chan struct{}
-	addr  atomic.Value // string
-}
-
-// Address returns the bound listener address, or "" before Ready.
-func (t *Tap) Address() string {
-	v, _ := t.addr.Load().(string)
-	return v
 }
 
 func (t *Tap) Run() error {
@@ -76,11 +55,6 @@ func (t *Tap) Run() error {
 		return err
 	}
 	defer listener.Close()
-	if t.Ready == nil {
-		t.Ready = make(chan struct{})
-	}
-	t.addr.Store(listener.Addr().String())
-	close(t.Ready)
 	logger.LogEvent("Tap", "Run", fmt.Sprintf("listening on %s -> %s", t.Listen, t.Upstream), logger.LOG_LEVEL_INFO)
 	for {
 		conn, err := listener.Accept()

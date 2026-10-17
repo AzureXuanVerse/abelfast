@@ -62,36 +62,6 @@ func boolOrder(b bool) int {
 	return 0
 }
 
-// FleetShips returns the ships of a commander's fleet in formation order, for
-// areas that need the current fleet (e.g. exercises, secretary checks).
-func FleetShips(ctx context.Context, queries *db.Queries, commanderID uint32, fleetID uint32) ([]uint32, error) {
-	return queries.ListShipsOfFleet(ctx, db.ListShipsOfFleetParams{CommanderID: commanderID, FleetID: fleetID})
-}
-
-// RemoveShipsFromFleets takes ships out of every fleet, for when they leave
-// the dock (retire, enhance fodder...).
-func RemoveShipsFromFleets(ctx context.Context, queries *db.Queries, commanderID uint32, shipIDs []uint32) error {
-	rows, err := queries.ListFleetShips(ctx, commanderID)
-	if err != nil {
-		return err
-	}
-	fleets := map[uint32][]uint32{}
-	changed := map[uint32]bool{}
-	for _, row := range rows {
-		if slices.Contains(shipIDs, row.ShipID) {
-			changed[row.FleetID] = true
-			continue
-		}
-		fleets[row.FleetID] = append(fleets[row.FleetID], row.ShipID)
-	}
-	for id := range changed {
-		if err := setFleetShips(ctx, queries, commanderID, id, fleets[id]); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func setFleetShips(ctx context.Context, queries *db.Queries, commanderID uint32, fleetID uint32, shipIDs []uint32) error {
 	if err := queries.ClearFleetShips(ctx, db.ClearFleetShipsParams{CommanderID: commanderID, FleetID: fleetID}); err != nil {
 		return err

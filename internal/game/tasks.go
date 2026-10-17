@@ -19,30 +19,25 @@ import (
 // task_data_template / weekly_task_template sub_type: what a task counts.
 // Requests record them on their Tx when they happen.
 const (
-	TaskSubDefeatEnemy    = 11   // enemy ships sunk in a battle
-	TaskSubWin            = 20   // battles won
-	TaskSubDefeatBoss     = 21   // boss fleets defeated
-	TaskSubWinA           = 23   // battles won with A rank or better
-	TaskSubWinS           = 24   // battles won with S rank
-	TaskSubDailyChallenge = 26   // daily challenge cleared, target: its stage id
-	TaskSubExercise       = 27   // exercises fought
-	TaskSubBuild          = 30   // ships built
-	TaskSubRetire         = 31   // ships retired
-	TaskSubEnhanceShip    = 34   // ship enhancements
-	TaskSubEnhanceGear    = 40   // gear upgrades
-	TaskSubCraftGear      = 42   // gear crafted
-	TaskSubAcademyLevel   = 85   // canteen / merchant level (absolute)
-	TaskSubMonthSign      = 106  // monthly login rewards collected
-	TaskSubHandbookPhase  = 114  // commander manual tasks claimed, target: page id
-	TaskSubUseItem        = 120  // items used, target: item id
-	TaskSubSpendOil       = 121  // oil spent
-	TaskSubObtainItem     = 130  // items obtained, target: item id
-	TaskSubWeeklyPt       = 161  // weekly mission points obtained
-	TaskSubLevel          = 1011 // commander level (absolute)
-	TaskSubClearStage     = 1020 // stage cleared, target: chapter id
-	TaskSubCruisePt       = 1023 // cruise pass points (absolute)
-	TaskSubStars          = 1026 // main campaign stars (absolute)
-	TaskSubSortieExp      = 1041 // ship EXP earned from sorties
+	TaskSubDefeatEnemy   = 11   // enemy ships sunk in a battle
+	TaskSubWin           = 20   // battles won
+	TaskSubDefeatBoss    = 21   // boss fleets defeated
+	TaskSubWinA          = 23   // battles won with A rank or better
+	TaskSubWinS          = 24   // battles won with S rank
+	TaskSubBuild         = 30   // ships built
+	TaskSubEnhanceGear   = 40   // gear upgrades
+	TaskSubCraftGear     = 42   // gear crafted
+	TaskSubAcademyLevel  = 85   // canteen / merchant level (absolute)
+	TaskSubHandbookPhase = 114  // commander manual tasks claimed, target: page id
+	TaskSubUseItem       = 120  // items used, target: item id
+	TaskSubSpendOil      = 121  // oil spent
+	TaskSubObtainItem    = 130  // items obtained, target: item id
+	TaskSubWeeklyPt      = 161  // weekly mission points obtained
+	TaskSubLevel         = 1011 // commander level (absolute)
+	TaskSubClearStage    = 1020 // stage cleared, target: chapter id
+	TaskSubCruisePt      = 1023 // cruise pass points (absolute)
+	TaskSubStars         = 1026 // main campaign stars (absolute)
+	TaskSubSortieExp     = 1041 // ship EXP earned from sorties
 )
 
 // Sub types whose event carries the current value (a level, a total) rather

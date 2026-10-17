@@ -7,14 +7,13 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
-	"time"
 
 	"github.com/ggmolly/belfast/internal/db"
 )
 
 const (
 	ticketKeySetting = "ticket_key"
-	ticketPayloadLen = 8  // account id + issue time, both big endian uint32
+	ticketPayloadLen = 4  // account id, big endian uint32
 	ticketMACLen     = 16 // truncated HMAC-SHA256
 )
 
@@ -32,11 +31,9 @@ func LoadTicketKey(ctx context.Context, queries *db.Queries) ([]byte, error) {
 	return queries.GetSetting(ctx, ticketKeySetting)
 }
 
-// issueTicket returns a server ticket for account: hex(account, issued at, MAC).
+// issueTicket returns a server ticket for account: hex(account, MAC).
 func (gateway *Gateway) issueTicket(account uint32) string {
-	ticket := make([]byte, ticketPayloadLen, ticketPayloadLen+ticketMACLen)
-	binary.BigEndian.PutUint32(ticket[0:4], account)
-	binary.BigEndian.PutUint32(ticket[4:8], uint32(time.Now().Unix()))
+	ticket := binary.BigEndian.AppendUint32(make([]byte, 0, ticketPayloadLen+ticketMACLen), account)
 	return hex.EncodeToString(append(ticket, gateway.ticketMAC(ticket)...))
 }
 
@@ -50,7 +47,7 @@ func (gateway *Gateway) account(ticket string) (uint32, bool) {
 	if !hmac.Equal(mac, gateway.ticketMAC(payload)) {
 		return 0, false
 	}
-	return binary.BigEndian.Uint32(payload[0:4]), true
+	return binary.BigEndian.Uint32(payload), true
 }
 
 func (gateway *Gateway) ticketMAC(payload []byte) []byte {

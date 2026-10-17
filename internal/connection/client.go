@@ -6,7 +6,6 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"google.golang.org/protobuf/proto"
 	queue "gopkg.in/eapache/queue.v1"
@@ -36,10 +35,9 @@ type clientMetrics struct {
 }
 
 type Client struct {
-	ID          uint64
-	IP          net.IP
-	Port        int
-	ConnectedAt time.Time
+	ID   uint64
+	IP   net.IP
+	Port int
 
 	// Session, set by the game server login (CS_10022). Only touched by
 	// handlers, which run one at a time per client.
@@ -74,7 +72,6 @@ func newClient(conn net.Conn, server *Server) *Client {
 		ID:          nextClientID.Add(1),
 		IP:          addr.IP,
 		Port:        addr.Port,
-		ConnectedAt: time.Now().UTC(),
 		conn:        conn,
 		server:      server,
 		packetQueue: queue.New(),

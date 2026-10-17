@@ -256,8 +256,7 @@ func grantStarterRest(tx *Tx) error {
 	if err := queries.SetTrophy(ctx, db.SetTrophyParams{CommanderID: commanderID, TrophyID: 10041, Progress: 14}); err != nil {
 		return err
 	}
-	_, err := ShipTrophyPushes(ctx, queries, commanderID)
-	return err
+	return setShipTrophies(ctx, queries, commanderID)
 }
 
 // energyTick is SC_12031, the last morale tick: they run every
@@ -383,31 +382,24 @@ func recordShipGroup(ctx context.Context, queries *db.Queries, ship db.Ship) (*p
 	if err != nil {
 		return nil, err
 	}
-	return SetTrophy(ctx, queries, ship.CommanderID, archiveCountTrophy, uint32(groups))
-}
-
-// SetTrophy stores a medal_template progress and returns its SC_17002 push.
-func SetTrophy(ctx context.Context, queries *db.Queries, commanderID, trophyID, progress uint32) (*protobuf.SC_17002, error) {
-	if err := queries.SetTrophy(ctx, db.SetTrophyParams{CommanderID: commanderID, TrophyID: trophyID, Progress: progress}); err != nil {
+	if err := queries.SetTrophy(ctx, db.SetTrophyParams{CommanderID: ship.CommanderID, TrophyID: archiveCountTrophy, Progress: uint32(groups)}); err != nil {
 		return nil, err
 	}
 	return &protobuf.SC_17002{ProgressList: []*protobuf.ACHIEVEMENT_INFO{{
-		Id: proto.Uint32(trophyID), Progress: proto.Uint32(progress),
+		Id: proto.Uint32(archiveCountTrophy), Progress: proto.Uint32(uint32(groups)),
 	}}}, nil
 }
 
-// ShipTrophyPushes recomputes the faction medals from the commander's ships
-// and returns the SC_17002 of those that changed. The official server does
-// this after a battle (not when a ship is obtained), sending the affinity
-// ones one by one then the exp ones together, factions in descending order.
-func ShipTrophyPushes(ctx context.Context, queries *db.Queries, commanderID uint32) ([]proto.Message, error) {
+// setShipTrophies recomputes the faction medals from the commander's ships
+// and stores those that changed.
+func setShipTrophies(ctx context.Context, queries *db.Queries, commanderID uint32) error {
 	ships, err := queries.ListShipsByCommander(ctx, commanderID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	trophies, err := queries.ListTrophies(ctx, commanderID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	stored := map[uint32]uint32{}
 	for _, trophy := range trophies {
@@ -429,31 +421,15 @@ func ShipTrophyPushes(ctx context.Context, queries *db.Queries, commanderID uint
 			values[nation.exp] += ship.Exp
 		}
 	}
-	var pushes []proto.Message
-	grouped := map[string]*protobuf.SC_17002{"level120": {}, "exp": {}}
 	for _, nation := range nationTrophies {
-		for _, kind := range []struct {
-			name string
-			id   uint32
-		}{{"intimacy", nation.intimacy}, {"exp", nation.exp}, {"level120", nation.level120}} {
-			if values[kind.id] == stored[kind.id] {
+		for _, id := range []uint32{nation.intimacy, nation.exp, nation.level120} {
+			if values[id] == stored[id] {
 				continue
 			}
-			push, err := SetTrophy(ctx, queries, commanderID, kind.id, values[kind.id])
-			if err != nil {
-				return nil, err
-			}
-			if kind.name == "intimacy" {
-				pushes = append(pushes, push)
-			} else {
-				grouped[kind.name].ProgressList = append(grouped[kind.name].ProgressList, push.ProgressList...)
+			if err := queries.SetTrophy(ctx, db.SetTrophyParams{CommanderID: commanderID, TrophyID: id, Progress: values[id]}); err != nil {
+				return err
 			}
 		}
 	}
-	for _, name := range []string{"exp", "level120"} {
-		if len(grouped[name].ProgressList) > 0 {
-			pushes = append(pushes, grouped[name])
-		}
-	}
-	return pushes, nil
+	return nil
 }

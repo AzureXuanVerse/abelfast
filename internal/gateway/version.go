@@ -24,13 +24,9 @@ const maxCachedVersions = 16
 // fetch. A stale copy is served when the upstream is unreachable.
 func (gateway *Gateway) version(req *protobuf.CS_10800) (*protobuf.SC_10801, error) {
 	key := fmt.Sprintf("%d/%s", req.GetState(), req.GetPlatform())
-	ttl := gateway.VersionTTL
-	if ttl == 0 {
-		ttl = DefaultVersionTTL
-	}
 	gateway.mu.Lock()
 	cached, ok := gateway.versions[key]
-	if ok && time.Since(cached.at) < ttl {
+	if ok && time.Since(cached.at) < versionTTL {
 		gateway.mu.Unlock()
 		return cached.msg, nil
 	}

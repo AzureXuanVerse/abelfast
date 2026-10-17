@@ -12,8 +12,6 @@ import (
 
 // task_data_template row (TaskProxy, ActivityTaskProxy tasks)
 type taskConfig struct {
-	ID           uint32          `json:"id"`
-	Type         uint32          `json:"type"`
 	SubType      uint32          `json:"sub_type"`
 	TargetID     json.RawMessage `json:"target_id"`
 	TargetNum    uint32          `json:"target_num"`
@@ -29,12 +27,10 @@ type taskConfig struct {
 
 // weekly_task_template row (WeekPtTask)
 type weeklyTaskConfig struct {
-	ID           uint32          `json:"id"`
-	Level        uint32          `json:"level"`
-	SubType      uint32          `json:"sub_type"`
-	TargetID     json.RawMessage `json:"target_id"`
-	TargetNum    uint32          `json:"target_num"`
-	AwardDisplay []uint32        `json:"award_display"`
+	ID       uint32          `json:"id"`
+	Level    uint32          `json:"level"`
+	SubType  uint32          `json:"sub_type"`
+	TargetID json.RawMessage `json:"target_id"`
 
 	target taskTarget // target_id
 }
@@ -95,7 +91,6 @@ func (window activityWindow) open(now time.Time) bool {
 // battlepass_task_group row: the cruise pass tasks of one week (group_mask),
 // or always open when is_ontime is 0
 type battlepassTaskGroup struct {
-	ID        uint32     `json:"id"`
 	GroupMask uint32     `json:"group_mask"`
 	IsOntime  uint32     `json:"is_ontime"`
 	TaskGroup [][]uint32 `json:"task_group"`
