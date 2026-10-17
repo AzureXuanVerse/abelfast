@@ -84,19 +84,22 @@ func (game *Game) handleSeasonInfo(client *connection.Client, req *protobuf.CS_1
 	return client.Send(reply)
 }
 
-// arenaShopCommon and arenaShopLists are arena_data_shop[1]'s commodities
-// (arena_data_shop ids and their weight): five picks from the common list,
-// then one from each other list, in that order (as the captured shop is).
-var (
-	arenaShopCommon = [][2]uint32{{23001, 50}, {33011, 400}, {33012, 200}, {33013, 100}, {33014, 50}, {33021, 400}, {33022, 200}, {33023, 100}, {33024, 50}, {33031, 400}, {33032, 200}, {33033, 100}, {33034, 50}, {33041, 400}, {33042, 200}, {33043, 100}, {33044, 50}, {33060, 100}, {33070, 100}, {33080, 100}}
-	arenaShopLists  = [][][2]uint32{
-		{{43004, 300}},
-		{{43003, 300}},
-		{{43001, 1000}, {43002, 1000}, {43005, 300}, {43011, 300}, {43016, 300}, {43020, 300}, {43028, 300}, {43040, 300}, {43041, 300}, {43045, 300}, {43051, 300}},
-		{{43008, 300}, {43009, 300}, {43010, 300}, {43013, 300}, {43014, 300}, {43015, 300}, {43017, 300}, {43021, 300}, {43022, 300}, {43023, 300}, {43025, 300}, {43026, 300}, {43029, 300}, {43030, 300}, {43033, 300}, {43034, 300}, {43035, 300}, {43036, 300}, {43037, 300}, {43038, 300}, {43039, 300}, {43042, 300}, {43043, 300}, {43044, 300}, {43046, 300}, {43047, 300}, {43048, 300}, {43049, 300}, {43050, 300}, {43052, 300}, {43053, 300}, {43054, 300}, {43055, 300}, {43056, 300}, {43057, 300}, {43058, 300}, {43059, 300}, {43060, 300}, {43061, 300}, {43062, 300}, {43063, 300}},
-		{{43006, 300}, {43007, 300}, {43012, 300}, {43018, 300}, {43019, 300}, {43024, 300}, {43027, 300}, {43031, 300}, {43032, 300}},
-	}
-)
+// arena_data_shop row: the merit shop's commodities (arena_data_shop ids and
+// their weight), five picks from the common list, then one from each other
+// list, in that order (as the captured shop is).
+type arenaShopConfig struct {
+	Common [][2]uint32 `json:"commodity_list_common"`
+	List1  [][2]uint32 `json:"commodity_list_1"`
+	List2  [][2]uint32 `json:"commodity_list_2"`
+	List3  [][2]uint32 `json:"commodity_list_3"`
+	List4  [][2]uint32 `json:"commodity_list_4"`
+	List5  [][2]uint32 `json:"commodity_list_5"`
+}
+
+// arenaShopID is the arena_data_shop row the merit shop draws from.
+const arenaShopID = 1
+
+var arenaShopConfigs = &configTable[arenaShopConfig]{name: "arena_data_shop"}
 
 const arenaShopCommonPicks = 5
 
@@ -120,18 +123,23 @@ func weightedPick(random *rand.Rand, pool [][2]uint32) (uint32, [][2]uint32) {
 // arenaShopGoods draws the merit shop's goods for a commander and day. The
 // draw is seeded by both, so the shop stays the same until it refreshes
 // without being stored.
-func arenaShopGoods(commanderID uint32, day time.Time) []uint32 {
+func arenaShopGoods(shop arenaShopConfig, commanderID uint32, day time.Time) []uint32 {
 	random := rand.New(rand.NewPCG(uint64(commanderID), uint64(day.Unix())))
 	var goods []uint32
-	pool := arenaShopCommon
+	pool := shop.Common
 	for range arenaShopCommonPicks {
+		if len(pool) == 0 {
+			break
+		}
 		var id uint32
 		id, pool = weightedPick(random, pool)
 		goods = append(goods, id)
 	}
-	for _, list := range arenaShopLists {
-		id, _ := weightedPick(random, list)
-		goods = append(goods, id)
+	for _, list := range [][][2]uint32{shop.List1, shop.List2, shop.List3, shop.List4, shop.List5} {
+		if len(list) > 0 {
+			id, _ := weightedPick(random, list)
+			goods = append(goods, id)
+		}
 	}
 	return goods
 }
@@ -139,13 +147,17 @@ func arenaShopGoods(commanderID uint32, day time.Time) []uint32 {
 // handleMilitaryShop answers GetMilitaryShopCommand, the merit shop: today's
 // goods, nothing bought, no manual refresh; it refreshes at midnight.
 func (game *Game) handleMilitaryShop(client *connection.Client, req *protobuf.CS_18100) error {
+	shops, err := arenaShopConfigs.get()
+	if err != nil {
+		return err
+	}
 	now := time.Now()
 	next := nextDay(now)
 	reply := &protobuf.SC_18101{
 		FlashCount:    proto.Uint32(0),
 		NextFlashTime: proto.Uint32(uint32(next.Unix())),
 	}
-	for _, id := range arenaShopGoods(client.CommanderID, next) {
+	for _, id := range arenaShopGoods(shops[arenaShopID], client.CommanderID, next) {
 		reply.ArenaShopList = append(reply.ArenaShopList, &protobuf.ARENASHOP{ShopId: proto.Uint32(id), Count: proto.Uint32(0)})
 	}
 	return client.Send(reply)

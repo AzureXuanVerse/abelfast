@@ -32,19 +32,23 @@ func (game *Game) handleEmojiInfo(client *connection.Client, req *protobuf.CS_11
 	return client.Send(&protobuf.SC_11602{})
 }
 
-// limitChallengeStages are constellation_challenge_month[month].stage, the
-// limit challenges of each month (index 0 is January).
-var limitChallengeStages = [12][3]uint32{
-	{10022, 10023, 10024}, {10025, 10026, 10027}, {10028, 10029, 10030}, {10031, 10032, 10033},
-	{10034, 10035, 10036}, {10001, 10002, 10003}, {10004, 10005, 10006}, {10007, 10008, 10009},
-	{10010, 10011, 10012}, {10013, 10014, 10015}, {10016, 10017, 10018}, {10019, 10020, 10021},
+// constellation_challenge_month row: stage lists the limit challenges of a
+// month
+type limitChallengeMonthConfig struct {
+	Stage []uint32 `json:"stage"`
 }
+
+var limitChallengeMonths = &configTable[limitChallengeMonthConfig]{name: "constellation_challenge_month"}
 
 // handleLimitChallenge answers LimitChallengeReqCommand: this month's
 // challenges, none cleared or awarded.
 func (game *Game) handleLimitChallenge(client *connection.Client, req *protobuf.CS_24020) error {
+	months, err := limitChallengeMonths.get()
+	if err != nil {
+		return err
+	}
 	reply := &protobuf.SC_24021{Result: proto.Uint32(0)}
-	for _, stage := range limitChallengeStages[serverNow().Month()-1] {
+	for _, stage := range months[uint32(serverNow().Month())].Stage {
 		reply.Awards = append(reply.Awards, &protobuf.KVDATA{Key: proto.Uint32(stage), Value: proto.Uint32(0)})
 	}
 	return client.Send(reply)

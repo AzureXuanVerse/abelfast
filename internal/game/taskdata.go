@@ -1,94 +1,10 @@
 package game
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
-
-	"github.com/ggmolly/belfast/internal/region"
 )
-
-// Tasks need far more config rows than can be spelled out in code, so they
-// are read from belfast-data: <data dir>/<region>/{sharecfgdata,ShareCfg}/<table>.json
-// as written by bump.sh (a list of rows with their id), the AzurLaneData
-// layout (an object keyed by id) works too. The data dir is ./data unless
-// $BELFAST_DATA says otherwise.
-func configDataDir() string {
-	if dir := os.Getenv("BELFAST_DATA"); dir != "" {
-		return dir
-	}
-	return "data"
-}
-
-// readConfigTable decodes every row of a config table into T, keyed by id.
-// Rows that don't fit T are skipped.
-func readConfigTable[T any](name string) (map[uint32]T, error) {
-	var raw []byte
-	var err error
-	for _, sub := range []string{"sharecfgdata", "ShareCfg"} {
-		raw, err = os.ReadFile(filepath.Join(configDataDir(), region.Current(), sub, name+".json"))
-		if err == nil && len(bytes.TrimSpace(raw)) > 2 {
-			break
-		}
-	}
-	if err != nil {
-		return nil, fmt.Errorf("config table %s: %w", name, err)
-	}
-	rows := map[uint32]json.RawMessage{}
-	switch bytes.TrimSpace(raw)[0] {
-	case '[':
-		var list []json.RawMessage
-		if err := json.Unmarshal(raw, &list); err != nil {
-			return nil, fmt.Errorf("config table %s: %w", name, err)
-		}
-		for _, row := range list {
-			var key struct {
-				ID uint32 `json:"id"`
-			}
-			if json.Unmarshal(row, &key) == nil {
-				rows[key.ID] = row
-			}
-		}
-	default:
-		var object map[string]json.RawMessage
-		if err := json.Unmarshal(raw, &object); err != nil {
-			return nil, fmt.Errorf("config table %s: %w", name, err)
-		}
-		for key, row := range object {
-			if id, err := strconv.ParseUint(key, 10, 32); err == nil {
-				rows[uint32(id)] = row
-			}
-		}
-	}
-	table := make(map[uint32]T, len(rows))
-	for id, row := range rows {
-		var value T
-		if json.Unmarshal(row, &value) == nil {
-			table[id] = value
-		}
-	}
-	return table, nil
-}
-
-// configTable loads a config table once and keeps it for the process.
-type configTable[T any] struct {
-	name string
-	once sync.Once
-	rows map[uint32]T
-	err  error
-}
-
-func (table *configTable[T]) get() (map[uint32]T, error) {
-	table.once.Do(func() {
-		table.rows, table.err = readConfigTable[T](table.name)
-	})
-	return table.rows, table.err
-}
 
 // task_data_template row (TaskProxy, ActivityTaskProxy tasks)
 type taskConfig struct {
@@ -117,6 +33,7 @@ type weeklyTaskConfig struct {
 type activityConfig struct {
 	ID         uint32          `json:"id"`
 	Type       uint32          `json:"type"`
+	ConfigID   uint32          `json:"config_id"`
 	ConfigData json.RawMessage `json:"config_data"`
 	Time       json.RawMessage `json:"time"`
 }
