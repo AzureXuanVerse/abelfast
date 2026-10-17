@@ -5,9 +5,8 @@ import (
 	"encoding/json"
 	"maps"
 	"slices"
-	"strconv"
-	"strings"
-	"time"
+
+	"github.com/ggmolly/belfast/internal/gamedata"
 )
 
 // task_data_template row (TaskProxy, ActivityTaskProxy tasks)
@@ -41,51 +40,10 @@ type activityConfig struct {
 	Type       uint32          `json:"type"`
 	ConfigID   uint32          `json:"config_id"`
 	ConfigData json.RawMessage `json:"config_data"`
-	Time       json.RawMessage `json:"time"`
+	Time       gamedata.Window `json:"time"`
 
-	window activityWindow // time
 	// for the activities with tasks (taskActivityTypes, task lists)
 	tasks []uint32 // config_data
-}
-
-// activityWindow is an activity_template.time: "always", or
-// ["timer", [[y,m,d],[h,m,s]], [[y,m,d],[h,m,s]]] in server time.
-type activityWindow struct {
-	always     bool
-	start, end time.Time // zero without a timer
-}
-
-func parseActivityWindow(raw json.RawMessage) activityWindow {
-	var always string
-	if json.Unmarshal(raw, &always) == nil {
-		return activityWindow{always: always == "always"}
-	}
-	var timer []json.RawMessage
-	if json.Unmarshal(raw, &timer) != nil || len(timer) < 3 {
-		return activityWindow{}
-	}
-	start, okStart := configTime(timer[1])
-	end, okEnd := configTime(timer[2])
-	if !okStart || !okEnd {
-		return activityWindow{}
-	}
-	return activityWindow{start: start, end: end}
-}
-
-func configTime(raw json.RawMessage) (time.Time, bool) {
-	var parts [2][3]int
-	if json.Unmarshal(raw, &parts) != nil {
-		return time.Time{}, false
-	}
-	return time.Date(parts[0][0], time.Month(parts[0][1]), parts[0][2], parts[1][0], parts[1][1], parts[1][2], 0, serverZone), true
-}
-
-// open is whether the activity runs at now.
-func (window activityWindow) open(now time.Time) bool {
-	if window.always {
-		return true
-	}
-	return !window.start.IsZero() && !now.Before(window.start) && now.Before(window.end)
 }
 
 // battlepass_task_group row: the cruise pass tasks of one week (group_mask),
@@ -137,12 +95,12 @@ type handbookTaskPage struct {
 // loadTaskData reads the tasks, weekly missions, activities, cruise pass
 // task groups and commander manual pages.
 func loadTaskData() error {
-	err := loadAll(
-		loadTable("task_data_template", &taskConfigs),
-		loadTable("weekly_task_template", &weeklyTaskConfigs),
-		loadTable("activity_template", &activityConfigs),
-		loadTable("battlepass_task_group", &battlepassTaskGroups),
-		loadTable("tutorial_handbook_task", &handbookPageConfigs),
+	err := gamedata.LoadAll(
+		gamedata.Load("task_data_template", &taskConfigs),
+		gamedata.Load("weekly_task_template", &weeklyTaskConfigs),
+		gamedata.Load("activity_template", &activityConfigs),
+		gamedata.Load("battlepass_task_group", &battlepassTaskGroups),
+		gamedata.Load("tutorial_handbook_task", &handbookPageConfigs),
 	)
 	if err != nil {
 		return err
@@ -156,7 +114,7 @@ func loadTaskData() error {
 			continue
 		}
 		config.target = parseTaskTarget(config.TargetID)
-		config.next = parseIDList(config.NextTask)
+		config.next = gamedata.IDs(config.NextTask)
 		taskConfigs[id] = config
 		taskIDsBySubType[config.SubType] = append(taskIDsBySubType[config.SubType], id)
 	}
@@ -168,12 +126,10 @@ func loadTaskData() error {
 	}
 	taskActivities = nil
 	for id, config := range activityConfigs {
-		config.window = parseActivityWindow(config.Time)
-		activityConfigs[id] = config
 		if !taskActivityTypes[config.Type] && config.Type != activityTypeTaskList {
 			continue
 		}
-		config.tasks = parseIDList(config.ConfigData)
+		config.tasks = gamedata.IDs(config.ConfigData)
 		activityConfigs[id] = config
 		if taskActivityTypes[config.Type] {
 			taskActivities = append(taskActivities, config)
@@ -241,7 +197,7 @@ type taskTarget struct {
 func parseTaskTarget(raw json.RawMessage) taskTarget {
 	var list []json.RawMessage
 	if json.Unmarshal(raw, &list) != nil {
-		ids := parseIDList(raw)
+		ids := gamedata.IDs(raw)
 		return taskTarget{any: len(ids) == 0, ids: ids}
 	}
 	var op string
@@ -268,37 +224,4 @@ func (target taskTarget) matches(id uint32) bool {
 		return id >= *target.min
 	}
 	return slices.Contains(target.ids, id)
-}
-
-// parseIDList reads next_task / config_data style fields: "0", "2",
-// "[5,3000]", 2, [5,3000] or nested lists, flattened.
-func parseIDList(raw json.RawMessage) []uint32 {
-	var text string
-	if json.Unmarshal(raw, &text) == nil {
-		text = strings.TrimSpace(text)
-		if strings.HasPrefix(text, "[") {
-			return parseIDList(json.RawMessage(text))
-		}
-		id, err := strconv.ParseUint(text, 10, 32)
-		if err != nil || id == 0 {
-			return nil
-		}
-		return []uint32{uint32(id)}
-	}
-	var number uint32
-	if json.Unmarshal(raw, &number) == nil {
-		if number == 0 {
-			return nil
-		}
-		return []uint32{number}
-	}
-	var list []json.RawMessage
-	if json.Unmarshal(raw, &list) != nil {
-		return nil
-	}
-	var ids []uint32
-	for _, item := range list {
-		ids = append(ids, parseIDList(item)...)
-	}
-	return ids
 }

@@ -3,11 +3,12 @@ package game
 import (
 	"cmp"
 	"encoding/json"
-	"fmt"
 	"maps"
 	"regexp"
 	"slices"
 	"strconv"
+
+	"github.com/ggmolly/belfast/internal/gamedata"
 )
 
 // shipTemplate is a ship_data_template row, with its ship_data_statistics
@@ -138,12 +139,12 @@ func loadMedals(medals map[uint32]medalConfig) error {
 		if medal.TargetType != medalTargetSubMedals {
 			continue
 		}
-		for _, subID := range parseIDList(medal.TargetID) {
+		for _, subID := range gamedata.IDs(medal.TargetID) {
 			archiveTrophies = append(archiveTrophies, subID)
 			sub := medals[subID]
 			// target_id: [[nationality, level]], "nationality" or
 			// [[nationality, 0]]
-			target := parseIDList(sub.TargetID)
+			target := gamedata.IDs(sub.TargetID)
 			if len(target) == 0 {
 				continue
 			}
@@ -166,7 +167,7 @@ func loadMedals(medals map[uint32]medalConfig) error {
 		}
 	}
 	if archiveCountTrophy == 0 {
-		return fmt.Errorf("config table medal_template in %s: no archive medal", regionDataDir())
+		return gamedata.Missing("medal_template", "archive medal")
 	}
 	nationTrophies = nil
 	for _, nationality := range slices.Backward(slices.Sorted(maps.Keys(nations))) {
@@ -204,15 +205,15 @@ func loadShipData() error {
 	var groups map[uint32]shipGroupConfig
 	var items map[uint32]itemConfig
 	var medals map[uint32]medalConfig
-	err := loadAll(
-		loadTable("ship_data_template", &templates),
-		loadTable("ship_data_statistics", &stats),
-		loadTable("ship_data_create_material", &pools),
-		loadTable("ship_data_group", &groups),
-		loadTable("equip_data_template", &equipUpgrades),
-		loadTable("compose_data_template", &composes),
-		loadTable("item_data_statistics", &items),
-		loadTable("medal_template", &medals),
+	err := gamedata.LoadAll(
+		gamedata.Load("ship_data_template", &templates),
+		gamedata.Load("ship_data_statistics", &stats),
+		gamedata.Load("ship_data_create_material", &pools),
+		gamedata.Load("ship_data_group", &groups),
+		gamedata.Load("equip_data_template", &equipUpgrades),
+		gamedata.Load("compose_data_template", &composes),
+		gamedata.Load("item_data_statistics", &items),
+		gamedata.Load("medal_template", &medals),
 	)
 	if err != nil {
 		return err
@@ -235,7 +236,7 @@ func loadShipData() error {
 	for id, name := range buildPoolNames {
 		pool, ok := pools[id]
 		if !ok {
-			return fmt.Errorf("config table ship_data_create_material in %s: no pool %d", regionDataDir(), id)
+			return gamedata.Missing("ship_data_create_material", "pool %d", id)
 		}
 		var poolGroups []uint32
 		for _, group := range groups {

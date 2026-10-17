@@ -2,7 +2,6 @@ package game
 
 import (
 	"context"
-	"fmt"
 	"math/rand/v2"
 	"slices"
 	"time"
@@ -10,6 +9,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ggmolly/belfast/internal/connection"
+	"github.com/ggmolly/belfast/internal/gamedata"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -73,13 +73,13 @@ const arenaShopID = 1
 var arenaShop arenaShopConfig
 
 func loadArenaShop() error {
-	shops, err := readConfigTable[arenaShopConfig]("arena_data_shop")
+	shops, err := gamedata.Table[arenaShopConfig]("arena_data_shop")
 	if err != nil {
 		return err
 	}
 	shop, ok := shops[arenaShopID]
 	if !ok {
-		return fmt.Errorf("config table arena_data_shop in %s: no shop %d", regionDataDir(), arenaShopID)
+		return gamedata.Missing("arena_data_shop", "shop %d", arenaShopID)
 	}
 	arenaShop = shop
 	return nil

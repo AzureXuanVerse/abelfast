@@ -12,6 +12,7 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
+	"github.com/ggmolly/belfast/internal/gamedata"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -42,7 +43,7 @@ const (
 func openActivities(now time.Time) []activityConfig {
 	var open []activityConfig
 	for id, config := range activityConfigs {
-		if config.window.open(now) || id == activityExerciseSeason {
+		if config.Time.Open(now) || id == activityExerciseSeason {
 			open = append(open, config)
 		}
 	}
@@ -53,7 +54,7 @@ func openActivities(now time.Time) []activityConfig {
 // openActivity is activity id's config, if it runs at now.
 func openActivity(id uint32, now time.Time) (activityConfig, bool) {
 	config, ok := activityConfigs[id]
-	return config, ok && (config.window.open(now) || id == activityExerciseSeason)
+	return config, ok && (config.Time.Open(now) || id == activityExerciseSeason)
 }
 
 // newActivityState is what a new commander's ACTIVITYINFO of an activity
@@ -62,8 +63,8 @@ func openActivity(id uint32, now time.Time) (activityConfig, bool) {
 func newActivityState(config activityConfig) db.CommanderActivity {
 	state := db.CommanderActivity{ActivityID: config.ID}
 	start := uint32(0)
-	if !config.window.start.IsZero() {
-		start = uint32(config.window.start.Unix())
+	if !config.Time.Start.IsZero() {
+		start = uint32(config.Time.Start.Unix())
 	}
 	switch config.Type {
 	case activityTypeTaskList:
@@ -97,7 +98,7 @@ func activityState(ctx context.Context, queries *db.Queries, commanderID uint32,
 // and data2 are the year and month signed in, data3 the re-signs, data1_list
 // the days signed.
 func monthSignState(state db.CommanderActivity, now time.Time) db.CommanderActivity {
-	local := now.In(serverZone)
+	local := now.In(gamedata.Zone)
 	if state.Data1 != uint32(local.Year()) || state.Data2 != uint32(local.Month()) {
 		state.Data1, state.Data2, state.Data3, state.Data1List = uint32(local.Year()), uint32(local.Month()), 0, nil
 	}
@@ -122,8 +123,8 @@ func (game *Game) activityList(ctx context.Context, commander db.Commander) (*pr
 			state = newActivityState(config)
 		}
 		stopTime := uint32(0)
-		if !config.window.end.IsZero() {
-			stopTime = uint32(config.window.end.Unix())
+		if !config.Time.End.IsZero() {
+			stopTime = uint32(config.Time.End.Unix())
 		}
 		switch config.ID {
 		case activityExerciseSeason:
@@ -198,7 +199,7 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 			}
 			state = monthSignState(state, now)
 			days := state.Data1List
-			today := uint32(now.In(serverZone).Day())
+			today := uint32(now.In(gamedata.Zone).Day())
 			if slices.Contains(days, today) || len(days) >= len(monthSignDrops[0]) {
 				return errRefused
 			}

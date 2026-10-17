@@ -11,6 +11,7 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
+	"github.com/ggmolly/belfast/internal/gamedata"
 	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
@@ -185,7 +186,7 @@ var loginBurst = []loginPush{
 	empty[protobuf.SC_13201](),
 	// ShopsProxy: nothing bought this month
 	func(game *Game, l *login) (proto.Message, error) {
-		return &protobuf.SC_16200{Month: proto.Uint32(uint32(l.now.In(serverZone).Month()))}, nil
+		return &protobuf.SC_16200{Month: proto.Uint32(uint32(l.now.In(gamedata.Zone).Month()))}, nil
 	},
 	// WorldProxy: Operation Siren open, not started (captured)
 	func(*Game, *login) (proto.Message, error) {

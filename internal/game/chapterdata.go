@@ -2,7 +2,8 @@ package game
 
 import (
 	"encoding/json"
-	"fmt"
+
+	"github.com/ggmolly/belfast/internal/gamedata"
 )
 
 // The campaign's game data, built from the config tables chapter_template,
@@ -161,15 +162,15 @@ func loadChapterData() error {
 	var items map[uint32]virtualItemConfig
 	var levels map[uint32]shipLevelConfig
 	var energies map[uint32]energyConfig
-	var gameset map[string]gamesetConfig
-	err := loadAll(
-		loadTable("chapter_template", &chapters),
-		loadTable("expedition_data_template", &expeditionTemplates),
-		loadTable("item_virtual_data_statistics", &items),
-		loadTable("ship_level", &levels),
-		loadTable("energy_template", &energies),
+	var gameset map[string]uint32
+	err := gamedata.LoadAll(
+		gamedata.Load("chapter_template", &chapters),
+		gamedata.Load("expedition_data_template", &expeditionTemplates),
+		gamedata.Load("item_virtual_data_statistics", &items),
+		gamedata.Load("ship_level", &levels),
+		gamedata.Load("energy_template", &energies),
 		func() (err error) {
-			gameset, err = readGameset()
+			gameset, err = gamedata.Gameset()
 			return err
 		},
 	)
@@ -179,17 +180,17 @@ func loadChapterData() error {
 	for key, value := range gamesetValues {
 		setting, ok := gameset[key]
 		if !ok {
-			return fmt.Errorf("config table gameset in %s: no %s", regionDataDir(), key)
+			return gamedata.Missing("gameset", "%s", key)
 		}
-		*value = setting.KeyValue
+		*value = setting
 	}
 	energy, ok := energies[energyHappy]
 	if !ok {
-		return fmt.Errorf("config table energy_template in %s: no row %d", regionDataDir(), energyHappy)
+		return gamedata.Missing("energy_template", "row %d", energyHappy)
 	}
 	happyEnergyFrom = energy.LowerBound
 	if itemSpecializedCore = items[vitemSpecializedCore].LinkID; itemSpecializedCore == 0 {
-		return fmt.Errorf("config table item_virtual_data_statistics in %s: no link_id for %d", regionDataDir(), vitemSpecializedCore)
+		return gamedata.Missing("item_virtual_data_statistics", "link_id for %d", vitemSpecializedCore)
 	}
 	chapterTemplates = make(map[uint32]*chapterTemplate, len(chapters))
 	for id, row := range chapters {

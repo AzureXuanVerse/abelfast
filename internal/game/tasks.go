@@ -521,7 +521,7 @@ func (game *Game) activityTaskLists(ctx context.Context, queries *db.Queries, co
 func openTaskActivities(now time.Time) []taskActivity {
 	var activities []taskActivity
 	for _, config := range taskActivities {
-		if !config.window.open(now) {
+		if !config.Time.Open(now) {
 			continue
 		}
 		activity := taskActivity{id: config.ID}
@@ -560,7 +560,7 @@ func activityTaskIDs(config activityConfig, now time.Time) []uint32 {
 	if config.Type != activityTypeCruise {
 		return config.tasks
 	}
-	elapsed := now.Sub(periodStart(config.window.start, week)).Truncate(time.Second)
+	elapsed := now.Sub(periodStart(config.Time.Start, week)).Truncate(time.Second)
 	weeks := uint32((elapsed + week - 1) / week)
 	var tasks []uint32
 	for _, groupID := range config.tasks {

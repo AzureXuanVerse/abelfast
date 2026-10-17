@@ -6,9 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
-	"os"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -17,6 +14,7 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
+	"github.com/ggmolly/belfast/internal/gamedata"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -28,11 +26,8 @@ var juusPosts map[uint32]*protobuf.INS_MESSAGE
 
 func loadJuusPosts() error {
 	juusPosts = map[uint32]*protobuf.INS_MESSAGE{}
-	text, err := os.ReadFile(filepath.Join(regionDataDir(), "server", "juus_posts.txtpb"))
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
+	text, err := gamedata.ServerFile("juus_posts.txtpb")
+	if text == nil || err != nil {
 		return err
 	}
 	var list protobuf.SC_11706
@@ -100,10 +95,10 @@ var (
 func loadJuusData() error {
 	var words map[uint32]juusWordConfig
 	var packets map[uint32]juusRedPacketConfig
-	err := loadAll(
-		loadTable("activity_ins_chat_group", &juusTopicConfigs),
-		loadTable("activity_ins_chat_language", &words),
-		loadTable("activity_ins_redpackage", &packets),
+	err := gamedata.LoadAll(
+		gamedata.Load("activity_ins_chat_group", &juusTopicConfigs),
+		gamedata.Load("activity_ins_chat_language", &words),
+		gamedata.Load("activity_ins_redpackage", &packets),
 		loadJuusPosts,
 	)
 	if err != nil {

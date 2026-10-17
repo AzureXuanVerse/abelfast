@@ -2,11 +2,11 @@ package game
 
 import (
 	"context"
-	"fmt"
 
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ggmolly/belfast/internal/db"
+	"github.com/ggmolly/belfast/internal/gamedata"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -25,13 +25,13 @@ type userLevelConfig struct {
 }
 
 func loadCommissionTeams() error {
-	levels, err := readConfigTable[userLevelConfig]("user_level")
+	levels, err := gamedata.Table[userLevelConfig]("user_level")
 	if err != nil {
 		return err
 	}
 	level, ok := levels[1]
 	if !ok {
-		return fmt.Errorf("config table user_level in %s: no level 1", regionDataDir())
+		return gamedata.Missing("user_level", "level 1")
 	}
 	commissionTeams = level.MaxCollection
 	return nil

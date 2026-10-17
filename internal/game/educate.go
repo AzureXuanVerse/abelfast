@@ -1,12 +1,12 @@
 package game
 
 import (
-	"fmt"
 	"slices"
 
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ggmolly/belfast/internal/connection"
+	"github.com/ggmolly/belfast/internal/gamedata"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -41,16 +41,16 @@ var (
 
 func loadEducateData() error {
 	var children map[uint32]educateChildConfig
-	err := loadAll(
-		loadTable("child_data", &children),
-		loadTable("child_resource", &educateResources),
+	err := gamedata.LoadAll(
+		gamedata.Load("child_data", &children),
+		gamedata.Load("child_resource", &educateResources),
 	)
 	if err != nil {
 		return err
 	}
 	child, ok := children[educateChild]
 	if !ok {
-		return fmt.Errorf("config table child_data in %s: no child %d", regionDataDir(), educateChild)
+		return gamedata.Missing("child_data", "child %d", educateChild)
 	}
 	educateAttrs = slices.Concat(child.Attrs1, child.Attrs2, child.Attrs3)
 	return nil

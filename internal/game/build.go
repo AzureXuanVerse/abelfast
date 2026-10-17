@@ -6,10 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"math/rand/v2"
-	"os"
-	"path/filepath"
 	"slices"
 	"time"
 
@@ -17,6 +14,7 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
+	"github.com/ggmolly/belfast/internal/gamedata"
 	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
@@ -53,11 +51,8 @@ var buildTimes map[uint32]uint32
 
 func loadBuildTimes() error {
 	buildTimes = map[uint32]uint32{}
-	raw, err := os.ReadFile(filepath.Join(regionDataDir(), "server", "build_times.json"))
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
+	raw, err := gamedata.ServerFile("build_times.json")
+	if raw == nil || err != nil {
 		return err
 	}
 	if err := json.Unmarshal(raw, &buildTimes); err != nil {
