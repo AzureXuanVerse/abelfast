@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"slices"
 	"time"
@@ -305,7 +306,13 @@ func (game *Game) handleChapterOp(client *connection.Client, req *protobuf.CS_13
 	case opMove:
 		reply = session.move(req.GetGroupId(), req.GetActArg_1(), req.GetActArg_2())
 	case opAmbush:
-		reply = session.answerAmbush(req.GetGroupId(), req.GetActArg_1())
+		var fleet fleetEvasion
+		if group := session.group(req.GetGroupId()); group != nil && req.GetActArg_1() == 1 {
+			if fleet, err = groupEvasion(ctx, game.DB.Queries, client.CommanderID, group); err != nil {
+				return err
+			}
+		}
+		reply = session.answerAmbush(req.GetGroupId(), req.GetActArg_1(), fleet)
 	case opEnemyRound:
 		session.info.Round = proto.Uint32(session.info.GetRound() + 1)
 	case opSubState:
@@ -473,13 +480,84 @@ func (session *chapterSession) scriptedAmbush(row, column uint32) bool {
 	return false
 }
 
+// fleetEvasion is what Chapter:getAmbushDodge reads of a fleet
+// (model/vo/chaptercell/chapterfleet.lua).
+type fleetEvasion struct {
+	dodgeSums   float64 // getDodgeSums
+	equipRateUp float64 // getEquipDodgeRateUp
+}
+
+// groupEvasion is a chapter fleet's fleetEvasion: getDodgeSums is the sum of
+// the evasion of its ships still standing (hp_rant > 0, getShips(false)) to
+// the power 2/3, getEquipDodgeRateUp the best equip_parameters.avoid_extra
+// among the active equipment of all its ships.
+func groupEvasion(ctx context.Context, queries *db.Queries, commanderID uint32, group *protobuf.GROUPINCHAPTER_P13) (fleetEvasion, error) {
+	var ids []uint32
+	for _, ship := range group.GetShipList() {
+		ids = append(ids, ship.GetId())
+	}
+	ships, err := shipsByID(ctx, queries, commanderID, ids)
+	if err != nil {
+		return fleetEvasion{}, err
+	}
+	sum, avoidExtra := 0.0, 0.0
+	for _, member := range group.GetShipList() {
+		ship, ok := ships[member.GetId()]
+		if !ok {
+			continue
+		}
+		rows, err := queries.ListShipEquipments(ctx, ship.ID)
+		if err != nil {
+			return fleetEvasion{}, err
+		}
+		slots := make([]uint32, shipEquipSlots)
+		for _, row := range rows {
+			if row.Pos >= 1 && row.Pos <= shipEquipSlots {
+				slots[row.Pos-1] = row.EquipID
+			}
+		}
+		for _, equip := range activeEquipments(slots) {
+			avoidExtra = max(avoidExtra, equipEvasions[equip].avoidExtra)
+		}
+		if member.GetHpRant() > 0 {
+			sum += shipDodge(ship, slots)
+		}
+	}
+	return fleetEvasion{dodgeSums: math.Pow(sum, 2.0/3), equipRateUp: avoidExtra / 10000}, nil
+}
+
+// ambushDodge is Chapter:getAmbushDodge (model/vo/chapterleveldata.lua), the
+// chance the ambush window shows: dodgeSums / (dodgeSums + avoid_ratio),
+// plus the equipment's evasion bonus unless the cell has its own non-zero
+// ambush_ratio_extra row, within [0, 1].
+func (session *chapterSession) ambushDodge(row, column uint32, fleet fleetEvasion) float64 {
+	rate := 0.0
+	if total := fleet.dodgeSums + float64(session.template.avoidRatio); total > 0 {
+		rate = fleet.dodgeSums / total
+	}
+	cellRatio := 0
+	for _, extra := range session.template.ambushRatios {
+		if !extra.anyCell && extra.row == row && extra.column == column {
+			cellRatio = extra.ratio
+			break
+		}
+	}
+	if cellRatio == 0 {
+		rate += fleet.equipRateUp
+	}
+	return min(max(rate, 0), 1)
+}
+
 // answerAmbush is OpAmbush: arg 1 tries to evade, 0 fights. An evaded ambush
 // is cleared (map_update with item_type 0, the client shows
 // chapter_tip_aovid_succeed), otherwise it turns into an active enemy the
-// client battles. Evasion needs the fleet's dodge stats
-// (Chapter:getAmbushDodge), which the server doesn't model: the scripted
-// tutorial ambush is always evaded as in the capture, others never are.
-func (session *chapterSession) answerAmbush(groupID, evade uint32) *protobuf.SC_13104 {
+// client battles. Evading succeeds with the chance ambushDodge gives, except
+// on the scripted tutorial ambush (1-1's cell with its own
+// ambush_ratio_extra row), always evaded as in the capture: the new guide
+// (SG002) taps dodge_button there (new.NS024), then says the ambush was shaken
+// off (new.NS024_1) and points at the next enemy's cell (new.NS025), so it
+// expects the evasion to succeed.
+func (session *chapterSession) answerAmbush(groupID, evade uint32, fleet fleetEvasion) *protobuf.SC_13104 {
 	group := session.group(groupID)
 	if group == nil {
 		return opReply(errRefused)
@@ -489,7 +567,7 @@ func (session *chapterSession) answerAmbush(groupID, evade uint32) *protobuf.SC_
 	if cell == nil || cell.GetItemType() != attachAmbush || cell.GetItemFlag() != cellFlagAmbush {
 		return opReply(errRefused)
 	}
-	if evade == 1 && session.scriptedAmbush(row, column) {
+	if evade == 1 && (session.scriptedAmbush(row, column) || rand.Float64() < session.ambushDodge(row, column, fleet)) {
 		setCell(cell, attachNone, 0, 0)
 	} else {
 		cell.ItemFlag = proto.Uint32(cellFlagActive)
