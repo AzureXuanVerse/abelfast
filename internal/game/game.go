@@ -285,6 +285,9 @@ func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.
 	if err := expireSkins(ctx, game.DB, commander.ID, now); err != nil {
 		return err
 	}
+	if err := game.syncTechPoints(ctx, commander.ID); err != nil {
+		return err
+	}
 	ships, err := game.DB.ListShipsByCommander(ctx, commander.ID)
 	if err != nil {
 		return err

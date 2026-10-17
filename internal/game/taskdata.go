@@ -122,6 +122,7 @@ func loadTaskData() error {
 		gamedata.Load("activity_template", &activityConfigs),
 		gamedata.Load("battlepass_task_group", &battlepassTaskGroups),
 		gamedata.Load("tutorial_handbook_task", &handbookPageConfigs),
+		gamedata.Load("fleet_tech_ship_template", &fleetTechShips),
 		func() (err error) {
 			gameset, err = gamedata.Gameset()
 			return err

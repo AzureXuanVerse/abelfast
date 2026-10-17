@@ -84,6 +84,7 @@ func (tx *Tx) AddShip(templateID uint32) (*protobuf.SHIPINFO, error) {
 	}
 	if push != nil {
 		tx.push(push)
+		tx.techPointsChanged()
 	}
 	return fullShipInfo(row, equips, skills), nil
 }

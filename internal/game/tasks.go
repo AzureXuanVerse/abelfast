@@ -41,6 +41,7 @@ const (
 	TaskSubCruisePt      = 1023 // cruise pass points (absolute)
 	TaskSubStars         = 1026 // main campaign stars (absolute)
 	TaskSubSortieExp     = 1041 // ship EXP earned from sorties
+	TaskSubTechPoints    = 1050 // Fleet Technology points (absolute), target: nation id, 0 for all
 )
 
 // Sub types whose event carries the current value (a level, a total) rather
@@ -54,6 +55,7 @@ var taskAbsoluteSubTypes = map[uint32]bool{
 	TaskSubLevel:        true,
 	TaskSubCruisePt:     true,
 	TaskSubStars:        true,
+	TaskSubTechPoints:   true,
 }
 
 // Sub types a newly accepted task starts from what the commander already did.
@@ -70,6 +72,7 @@ var taskInheritedSubTypes = map[uint32]bool{
 	TaskSubClearStage:   true,
 	TaskSubCruisePt:     true,
 	TaskSubStars:        true,
+	TaskSubTechPoints:   true,
 }
 
 // item_virtual_data_statistics ids earned from tasks (drop type 8)

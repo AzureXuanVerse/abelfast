@@ -30,6 +30,8 @@ type Tx struct {
 	newShipsAfterReply bool
 
 	mailSent bool // SendMail queued the SC_30001 push
+
+	techPoints bool // techPointsChanged: count the Fleet Technology points again
 }
 
 // tx runs fn in a transaction. Once fn succeeds the task events it recorded
@@ -43,6 +45,9 @@ func (game *Game) tx(ctx context.Context, client *connection.Client, fn func(tx 
 	err := game.DB.InTx(ctx, func(queries *db.Queries) error {
 		tx = newTx(ctx, queries, client.CommanderID)
 		if err := fn(tx); err != nil {
+			return err
+		}
+		if err := tx.recordTechPoints(); err != nil {
 			return err
 		}
 		var err error
