@@ -1,13 +1,16 @@
 package entrypoint
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/consts"
+	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/gateway"
 	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/packets"
@@ -18,10 +21,26 @@ func Run() {
 	serverHost := flag.String("server-host", "127.0.0.1", "game server host handed to clients in the server list")
 	serverPort := flag.Uint("server-port", 80, "game server port handed to clients in the server list")
 	upstream := flag.String("upstream-gateway", "blhxusgate.yo-star.com:80", "official gateway, CS_10800 is relayed there for the asset hashes")
+	dbPath := flag.String("db", ".cache/belfast.db", "SQLite database path")
 	flag.Parse()
 
+	if err := os.MkdirAll(filepath.Dir(*dbPath), 0o755); err != nil {
+		fatal(err)
+	}
+	conn, err := db.Open(*dbPath)
+	if err != nil {
+		fatal(fmt.Errorf("database %s: %w", *dbPath, err))
+	}
+	queries := db.New(conn)
+	ticketKey, err := gateway.LoadTicketKey(context.Background(), queries)
+	if err != nil {
+		fatal(err)
+	}
+
 	gw := &gateway.Gateway{
-		Upstream: *upstream,
+		Upstream:  *upstream,
+		DB:        queries,
+		TicketKey: ticketKey,
 		Servers: []gateway.Server{{
 			ID: 1, Name: "Belfast", Host: *serverHost, Port: uint32(*serverPort),
 			State: gateway.StateNormal, Tag: gateway.TagNone, Sort: 0,
@@ -42,7 +61,11 @@ func Run() {
 		os.Exit(0)
 	}()
 	if err := server.Run(); err != nil {
-		logger.LogEvent("Server", "Run", fmt.Sprintf("%v", err), logger.LOG_LEVEL_ERROR)
-		os.Exit(1)
+		fatal(err)
 	}
+}
+
+func fatal(err error) {
+	logger.LogEvent("Server", "Run", fmt.Sprintf("%v", err), logger.LOG_LEVEL_ERROR)
+	os.Exit(1)
 }

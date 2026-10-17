@@ -5,8 +5,6 @@
 package gateway
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"hash/fnv"
 	"net/http"
@@ -16,6 +14,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ggmolly/belfast/internal/connection"
+	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/protobuf"
@@ -87,10 +86,12 @@ type Gateway struct {
 	// downloads from; the reply is passed through unchanged.
 	Upstream   string
 	VersionTTL time.Duration
+	DB         *db.Queries
+	// TicketKey signs the server tickets, see LoadTicketKey.
+	TicketKey []byte
 
 	mu       sync.Mutex
 	versions map[string]cachedVersion
-	tickets  map[string]uint32 // server_ticket -> account id
 }
 
 type cachedVersion struct {
@@ -105,6 +106,7 @@ func (gateway *Gateway) Register() {
 	packets.Handle(gateway.handleLogin)
 	packets.Handle(gateway.handleServerLogin)
 	packets.Handle(gateway.handleHeartbeat)
+	packets.Handle(gateway.handleCreatePlayer)
 }
 
 // HTTP answers the SDK's reachability probe (GET /?cmd=test?) the way the
@@ -114,14 +116,6 @@ func (gateway *Gateway) HTTP() http.Handler {
 		w.Header().Set("Content-Type", "text/plain;charset=utf-8")
 		w.Write([]byte("bad args"))
 	})
-}
-
-// Account returns the account a server ticket was issued to (CS_10020 or CS_10022).
-func (gateway *Gateway) Account(ticket string) (uint32, bool) {
-	gateway.mu.Lock()
-	defer gateway.mu.Unlock()
-	account, ok := gateway.tickets[ticket]
-	return account, ok
 }
 
 func (gateway *Gateway) serverList() []*protobuf.SERVERINFO {
@@ -148,10 +142,7 @@ func (gateway *Gateway) handleServerState(client *connection.Client, req *protob
 // id is derived from it so it stays the same across logins and restarts.
 func (gateway *Gateway) handleLogin(client *connection.Client, req *protobuf.CS_10020) error {
 	account := accountID(req.GetArg2())
-	ticket, err := gateway.issueTicket(account)
-	if err != nil {
-		return err
-	}
+	ticket := gateway.issueTicket(account)
 	logger.LogEvent("Gateway", "Login", fmt.Sprintf("account %d (login type %d) from %s", account, req.GetLoginType(), client.IP), logger.LOG_LEVEL_INFO)
 	return client.Send(&protobuf.SC_10021{
 		Result:       proto.Uint32(0),
@@ -169,20 +160,4 @@ func accountID(uid string) uint32 {
 		return id
 	}
 	return 1
-}
-
-// issueTicket hands out a new server ticket for account.
-func (gateway *Gateway) issueTicket(account uint32) (string, error) {
-	var raw [21]byte
-	if _, err := rand.Read(raw[:]); err != nil {
-		return "", err
-	}
-	ticket := hex.EncodeToString(raw[:])
-	gateway.mu.Lock()
-	defer gateway.mu.Unlock()
-	if gateway.tickets == nil {
-		gateway.tickets = make(map[string]uint32)
-	}
-	gateway.tickets[ticket] = account
-	return ticket, nil
 }
