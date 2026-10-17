@@ -104,6 +104,7 @@ func (gateway *Gateway) Register() {
 	packets.Handle(gateway.handleServerState)
 	packets.Handle(gateway.handleLogin)
 	packets.Handle(gateway.handleServerLogin)
+	packets.Handle(gateway.handleHeartbeat)
 }
 
 // HTTP answers the SDK's reachability probe (GET /?cmd=test?) the way the

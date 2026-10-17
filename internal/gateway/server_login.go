@@ -41,3 +41,10 @@ func (gateway *Gateway) handleServerLogin(client *connection.Client, req *protob
 		ServerTicket: proto.String(ticket),
 	})
 }
+
+// handleHeartbeat answers the client's ping (ConnectionMgr:resetHBTimer),
+// sent on every connection; the client only times the reply, state is unused.
+// Unanswered, it resends forever and eventually reconnects.
+func (gateway *Gateway) handleHeartbeat(client *connection.Client, req *protobuf.CS_10100) error {
+	return client.Send(&protobuf.SC_10101{State: proto.Uint32(0)})
+}
