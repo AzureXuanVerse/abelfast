@@ -140,7 +140,7 @@ ON CONFLICT (commander_id) DO UPDATE SET state = excluded.state, ambushed = excl
 type SaveChapterStateParams struct {
 	CommanderID uint32
 	State       []byte
-	Ambushed    string
+	Ambushed    Cells
 }
 
 func (q *Queries) SaveChapterState(ctx context.Context, arg SaveChapterStateParams) error {

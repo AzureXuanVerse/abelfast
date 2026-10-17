@@ -6,20 +6,30 @@ import (
 	"fmt"
 )
 
-// IDList is a list of ids stored in one column, as a JSON array.
+// Column types sqlc maps lists to (sqlc.yaml overrides), stored as JSON.
+
+// IDList is a list of ids.
 type IDList []uint32
 
-// Value implements driver.Valuer.
-func (list IDList) Value() (driver.Value, error) {
+// Cells are chapter cells, {row, column}.
+type Cells [][2]uint32
+
+func (list IDList) Value() (driver.Value, error) { return jsonValue([]uint32(list)) }
+func (list *IDList) Scan(src any) error          { return jsonScan(src, (*[]uint32)(list)) }
+func (cells Cells) Value() (driver.Value, error) { return jsonValue([][2]uint32(cells)) }
+func (cells *Cells) Scan(src any) error          { return jsonScan(src, (*[][2]uint32)(cells)) }
+
+func jsonValue[T any](list []T) (driver.Value, error) {
 	if list == nil {
 		return "[]", nil
 	}
-	data, err := json.Marshal([]uint32(list))
+	data, err := json.Marshal(list)
 	return string(data), err
 }
 
-// Scan implements sql.Scanner.
-func (list *IDList) Scan(src any) error {
+// jsonScan decodes a JSON array column into *list; an empty column is an
+// empty list.
+func jsonScan[T any](src any, list *[]T) error {
 	var data []byte
 	switch src := src.(type) {
 	case string:
@@ -27,8 +37,11 @@ func (list *IDList) Scan(src any) error {
 	case []byte:
 		data = src
 	default:
-		return fmt.Errorf("IDList from %T", src)
+		return fmt.Errorf("list column from %T", src)
 	}
 	*list = nil
-	return json.Unmarshal(data, (*[]uint32)(list))
+	if len(data) == 0 {
+		return nil
+	}
+	return json.Unmarshal(data, list)
 }

@@ -122,14 +122,6 @@ var newEducateStarts = map[uint32]struct {
 	},
 }
 
-func kvList(pairs [][2]uint32) []*protobuf.KVDATA {
-	list := make([]*protobuf.KVDATA, len(pairs))
-	for i, pair := range pairs {
-		list[i] = &protobuf.KVDATA{Key: proto.Uint32(pair[0]), Value: proto.Uint32(pair[1])}
-	}
-	return list
-}
-
 // handleNewEducate answers NewEducateRequestCommand, sent for each
 // child2_data entry: a TB game that hasn't started (round 1, easy, nothing
 // unlocked), one new game+ counted.
@@ -141,7 +133,13 @@ func (game *Game) handleNewEducate(client *connection.Client, req *protobuf.CS_2
 		Fsm: &protobuf.TBFSM{Cache: []*protobuf.TBFSMCACHE{{}}},
 	}
 	if start, ok := newEducateStarts[req.GetId()]; ok {
-		tb.Res = &protobuf.TBRES{Attrs: kvList(start.attrs), Resource: kvList(start.resources)}
+		tb.Res = &protobuf.TBRES{}
+		for _, pair := range start.attrs {
+			tb.Res.Attrs = append(tb.Res.Attrs, &protobuf.KVDATA{Key: proto.Uint32(pair[0]), Value: proto.Uint32(pair[1])})
+		}
+		for _, pair := range start.resources {
+			tb.Res.Resource = append(tb.Res.Resource, &protobuf.KVDATA{Key: proto.Uint32(pair[0]), Value: proto.Uint32(pair[1])})
+		}
 		tb.Benefit = &protobuf.TBBENEFIT{Actives: []*protobuf.TBBF{{Id: proto.Uint32(start.benefit), Round: proto.Uint32(1)}}}
 	}
 	return client.Send(&protobuf.SC_29002{

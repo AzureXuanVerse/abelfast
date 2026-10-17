@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"slices"
-	"strings"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -59,7 +58,7 @@ const chapterDueExtra = 365 * 24 * 3600
 type chapterSession struct {
 	template *chapterTemplate
 	info     *protobuf.CURRENTCHAPTERINFO
-	ambushed []string
+	ambushed db.Cells
 }
 
 // loadChapter returns the commander's active chapter, nil if there is none.
@@ -79,11 +78,7 @@ func loadChapter(ctx context.Context, queries *db.Queries, commanderID uint32) (
 	if template == nil {
 		return nil, fmt.Errorf("active chapter %d has no template", info.GetId())
 	}
-	session := &chapterSession{template: template, info: info}
-	if row.Ambushed != "" {
-		session.ambushed = strings.Split(row.Ambushed, ";")
-	}
-	return session, nil
+	return &chapterSession{template: template, info: info, ambushed: row.Ambushed}, nil
 }
 
 func (session *chapterSession) save(ctx context.Context, queries *db.Queries, commanderID uint32) error {
@@ -94,12 +89,8 @@ func (session *chapterSession) save(ctx context.Context, queries *db.Queries, co
 	return queries.SaveChapterState(ctx, db.SaveChapterStateParams{
 		CommanderID: commanderID,
 		State:       state,
-		Ambushed:    strings.Join(session.ambushed, ";"),
+		Ambushed:    session.ambushed,
 	})
-}
-
-func cellKey(row, column uint32) string {
-	return fmt.Sprintf("%d,%d", row, column)
 }
 
 func cellPos(row, column uint32) *protobuf.CHAPTERCELLPOS_P13 {
@@ -454,7 +445,7 @@ func (session *chapterSession) springAmbush(row, column uint32) *protobuf.CHAPTE
 	if cell == nil || cell.GetItemType() != attachNone {
 		return nil
 	}
-	key := cellKey(row, column)
+	key := [2]uint32{row, column}
 	if slices.Contains(session.ambushed, key) {
 		return nil
 	}

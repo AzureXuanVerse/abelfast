@@ -31,9 +31,11 @@ func grantFleetsStarter(tx *Tx, commander db.Commander) error {
 	if err != nil {
 		return err
 	}
-	slices.SortStableFunc(ships, func(a, b db.Ship) int {
-		return boolOrder(b.TemplateID == commander.StarterShip) - boolOrder(a.TemplateID == commander.StarterShip)
-	})
+	// the starter ship leads
+	if i := slices.IndexFunc(ships, func(ship db.Ship) bool { return ship.TemplateID == commander.StarterShip }); i > 0 {
+		starter := ships[i]
+		ships = slices.Insert(slices.Delete(ships, i, i+1), 0, starter)
+	}
 	ids := make([]uint32, len(ships))
 	for i, ship := range ships {
 		ids[i] = ship.ID
@@ -42,13 +44,6 @@ func grantFleetsStarter(tx *Tx, commander db.Commander) error {
 		return err
 	}
 	return grantCommissionsStarter(ctx, queries, commander.ID)
-}
-
-func boolOrder(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
 }
 
 func setFleetShips(ctx context.Context, queries *db.Queries, commanderID uint32, fleetID uint32, shipIDs []uint32) error {

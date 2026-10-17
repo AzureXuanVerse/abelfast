@@ -28,7 +28,7 @@ type ChapterProgress struct {
 type ChapterState struct {
 	CommanderID uint32
 	State       []byte
-	Ambushed    string
+	Ambushed    Cells
 }
 
 type Commander struct {
