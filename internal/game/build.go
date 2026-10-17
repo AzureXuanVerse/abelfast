@@ -36,6 +36,10 @@ const (
 // sailing ships). The official server's draw gave Hatsuharu (301211).
 
 // rarityByRateName maps the rate_tip labels to ship_data_statistics rarity.
+// rate_tip is display text (view/ship/buildship/buildshiphelpwindow.lua) and
+// the only place the rates are; its labels are those of gametip
+// index_rare2..5, but "Ultra Rare" where index_rare6 says "Ultra", so they
+// are matched here rather than read from gametip.
 var rarityByRateName = map[string]uint32{"Common": 2, "Rare": 3, "Elite": 4, "Super Rare": 5, "Ultra Rare": 6}
 
 // buildTimes are the construction times of the ships (base template id ->

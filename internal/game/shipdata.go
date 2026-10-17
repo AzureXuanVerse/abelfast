@@ -186,7 +186,9 @@ var (
 )
 
 // buildPoolNames are the GETBOAT projectName of the ship_data_create_material
-// pools, how ship_data_group descriptions link a ship to them.
+// pools, how ship_data_group descriptions link a ship to them: the client's
+// pool marks (BuildShipProxy:GetPools in model/proxy/buildshipproxy.lua,
+// BuildShipPool.BUILD_POOL_MARK_* in model/vo/buildshippool.lua).
 var buildPoolNames = map[uint32]string{1: "special", 2: "light", 3: "heavy"}
 
 // rateTipPattern reads a rate_tip line once its color tags are stripped:
