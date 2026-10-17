@@ -9,6 +9,7 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
+	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -22,9 +23,11 @@ const (
 	scoreS = 4
 )
 
-// rankExpRate multiplies ship exp by battle score (D, C, B, A, S). S is the
-// only one the capture shows; the others are the commonly documented rates.
-var rankExpRate = [...]float64{0, 0.5, 0.8, 1.0, 1.2}
+// rankExpRate multiplies ship exp by battle score. The client never computes
+// battle exp (BattleGateScenario adds ship_exp_list) and no table has the
+// rates; S is the only score the capture shows. A battle with another score
+// gives no ship exp rather than an invented rate.
+var rankExpRate = map[uint32]float64{scoreS: 1.2}
 
 const (
 	// scenarioExpRate: the capture's ship exp is expedition exp x rank x morale
@@ -126,6 +129,9 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 	group := session.activeGroup()
 	score := min(req.GetScore(), scoreS)
 	win := score > scoreC
+	if _, known := rankExpRate[score]; !known {
+		logger.WithFields("Battle", logger.FieldValue("score", score)).Warn("no ship exp rate for this score, ships get no exp")
+	}
 
 	statShips := make([]uint32, len(req.GetStatistics()))
 	for i, stat := range req.GetStatistics() {
@@ -251,7 +257,11 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 // scenarioExpRate, x1.2 when happy, x mvp_exp_percent for the MVP and
 // x flagship_exp_percent for the flagship.
 func shipBattleExp(expedition expeditionTemplate, score uint32, ship db.Ship, flagship, mvp bool) uint32 {
-	exp := float64(expedition.Exp) * rankExpRate[score] * scenarioExpRate
+	rate, known := rankExpRate[score]
+	if !known {
+		return 0
+	}
+	exp := float64(expedition.Exp) * rate * scenarioExpRate
 	if ship.Energy >= happyEnergyFrom {
 		exp *= happyExpRate
 	}
