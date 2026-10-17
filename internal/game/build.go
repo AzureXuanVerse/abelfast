@@ -15,7 +15,6 @@ import (
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/gamedata"
-	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -27,26 +26,29 @@ const (
 	// (SC_12024.worklist_count as captured), the next one starts when one
 	// finishes (BuildShipProxy:activeNextBuild)
 	buildWorkCount = 2
-	// the light pool (ship_data_create_material 2)
-	lightPool = 2
 )
 
-// The new player guide's light build: the official server gave Hatsuharu
-// (301211) in 1500 s. The light pool's drop list is server side, so the
-// guide's build is pinned to what the capture got; later ones are random.
-const (
-	tutorialBuildShip     = 301211
-	tutorialBuildDuration = 1500
-)
+// The new player guide's builds (gamecfg/guide/newguide/sg001.lua: S001 light,
+// S020 heavy) are ordinary draws: the guide only needs a build in the pool it
+// picks client side, either still building (S002, quick finish) or done
+// (S002_1, getFinishCount), whose ship it then puts in the vanguard (S004),
+// which every light pool ship can join (destroyers, light cruisers, vanguard
+// sailing ships). The official server's draw gave Hatsuharu (301211).
 
 // rarityByRateName maps the rate_tip labels to ship_data_statistics rarity.
+// rate_tip is display text (view/ship/buildship/buildshiphelpwindow.lua) and
+// the only place the rates are; its labels are those of gametip
+// index_rare2..5, but "Ultra Rare" where index_rare6 says "Ultra", so they
+// are matched here rather than read from gametip.
 var rarityByRateName = map[string]uint32{"Common": 2, "Rare": 3, "Elite": 4, "Super Rare": 5, "Ultra Rare": 6}
 
 // buildTimes are the construction times of the ships (base template id ->
-// seconds), server-side data the client never sees: server/build_times.json
-// of the data dir, scraped from the wiki by internal/tools/wiki_build_times.py
-// (Hatsuharu's 1500 s matches the official capture). Without it, or for a
-// ship it doesn't list, buildDurations by rarity is used.
+// seconds), server-side data the client never sees and no table has:
+// server/build_times.json of the data dir ({"<template id>": seconds}),
+// scraped from the wiki by internal/tools/wiki_build_times.py (Hatsuharu's
+// 1500 s matches the official capture). A ship it doesn't list is never
+// drawn (loadShipData leaves it out of the pools); without the file no build
+// can be started.
 var buildTimes map[uint32]uint32
 
 func loadBuildTimes() error {
@@ -60,13 +62,6 @@ func loadBuildTimes() error {
 	}
 	return nil
 }
-
-// buildDurations is how long a build takes by the rarity of what it yields,
-// for ships without a known construction time (guessed, Rare's from the
-// capture).
-// The real times are per ship and server side (none of the client tables has
-// them); rare matches the capture, the rest are approximations.
-var buildDurations = map[uint32]uint32{2: 1200, 3: 1500, 4: 1800, 5: 3600, 6: 5400}
 
 // buildDocksState is SC_12024 from storage: the builds in dock order (their
 // index is the pos the client sends back) and the build points. draw_count_*
@@ -103,7 +98,7 @@ func buildInfo(build db.Build) *protobuf.BUILDINFO {
 
 // pickBuildShip decides what a build yields: a rarity drawn with the pool's
 // rate_tip, then one of the pool's ships of that rarity (ship_data_group
-// descriptions linking to the pool).
+// descriptions linking to the pool), built in its buildTimes time.
 func pickBuildShip(pool buildPool) (template uint32, duration uint32, ok bool) {
 	if len(pool.rates) == 0 {
 		return 0, 0, false
@@ -118,11 +113,7 @@ func pickBuildShip(pool buildPool) (template uint32, duration uint32, ok bool) {
 	}
 	ships := pool.candidates[rarity]
 	template = ships[rand.IntN(len(ships))]
-	if seconds, ok := buildTimes[template]; ok {
-		return template, seconds, true
-	}
-	logger.WithFields("Build", logger.FieldValue("template", template)).Warn("no construction time, using the rarity's")
-	return template, buildDurations[rarity], true
+	return template, buildTimes[template], true
 }
 
 // buildStart is when a new build behind placed ones starts: when one of the
@@ -162,22 +153,14 @@ func (game *Game) handleBuildShip(client *connection.Client, req *protobuf.CS_12
 			if len(builds)+int(count) > maxBuilds {
 				return errRefused
 			}
-			// the guide's build is the commander's first
-			built, err := taskCounter(ctx, tx.Queries, client.CommanderID, TaskSubBuild, 0)
-			if err != nil {
-				return err
-			}
 			if err := tx.SpendResource(ResourceGold, pool.Gold*count); err != nil {
 				return err
 			}
 			if err := tx.SpendItem(pool.Item, pool.ItemCount*count); err != nil {
 				return err
 			}
-			for i := range count {
-				template, duration, ok := uint32(tutorialBuildShip), uint32(tutorialBuildDuration), true
-				if built > 0 || i > 0 || req.GetId() != lightPool {
-					template, duration, ok = pickBuildShip(pool)
-				}
+			for range count {
+				template, duration, ok := pickBuildShip(pool)
 				if !ok {
 					return errRefused
 				}
