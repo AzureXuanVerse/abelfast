@@ -4,6 +4,16 @@
 
 package db
 
+type Build struct {
+	ID          uint32
+	CommanderID uint32
+	PoolID      uint32
+	TemplateID  uint32
+	Duration    uint32
+	StartTime   int64
+	FinishTime  int64
+}
+
 type Commander struct {
 	ID            uint32
 	AccountID     uint32
@@ -12,6 +22,18 @@ type Commander struct {
 	RegisteredAt  int64
 	GuideIndex    uint32
 	NewGuideIndex uint32
+}
+
+type CommanderBuildState struct {
+	CommanderID   uint32
+	BuildCount    uint32
+	ExchangeCount uint32
+}
+
+type CommanderEquipment struct {
+	CommanderID uint32
+	EquipID     uint32
+	Count       uint32
 }
 
 type CommanderItem struct {
@@ -26,9 +48,26 @@ type CommanderResource struct {
 	Amount      uint32
 }
 
+type CommanderShipGroup struct {
+	CommanderID uint32
+	GroupID     uint32
+	Star        uint32
+	IntimacyMax uint32
+	LvMax       uint32
+	MarryFlag   uint32
+	HeartFlag   uint32
+}
+
 type CommanderStory struct {
 	CommanderID uint32
 	StoryID     uint32
+}
+
+type CommanderTrophy struct {
+	CommanderID uint32
+	TrophyID    uint32
+	Progress    uint32
+	Timestamp   uint32
 }
 
 type Setting struct {
@@ -37,14 +76,35 @@ type Setting struct {
 }
 
 type Ship struct {
-	ID          uint32
-	CommanderID uint32
-	TemplateID  uint32
-	Level       uint32
-	Exp         uint32
-	Energy      uint32
-	Intimacy    uint32
-	MaxLevel    uint32
-	IsLocked    bool
-	CreatedAt   int64
+	ID                  uint32
+	CommanderID         uint32
+	TemplateID          uint32
+	Level               uint32
+	Exp                 uint32
+	Energy              uint32
+	Intimacy            uint32
+	MaxLevel            uint32
+	IsLocked            bool
+	CreatedAt           int64
+	State               uint32
+	Proficiency         uint32
+	SkinID              uint32
+	Propose             uint32
+	Name                string
+	ChangeNameTimestamp uint32
+	CommonFlag          uint32
+}
+
+type ShipEquipment struct {
+	ShipID  uint32
+	Pos     uint32
+	EquipID uint32
+	SkinID  uint32
+}
+
+type ShipSkill struct {
+	ShipID  uint32
+	SkillID uint32
+	Level   uint32
+	Exp     uint32
 }

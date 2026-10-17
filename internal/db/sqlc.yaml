@@ -52,3 +52,75 @@ sql:
             go_type: uint32
           - column: commander_items.count
             go_type: uint32
+          - column: ships.state
+            go_type: uint32
+          - column: ships.proficiency
+            go_type: uint32
+          - column: ships.skin_id
+            go_type: uint32
+          - column: ships.propose
+            go_type: uint32
+          - column: ships.change_name_timestamp
+            go_type: uint32
+          - column: ships.common_flag
+            go_type: uint32
+          - column: ship_equipments.ship_id
+            go_type: uint32
+          - column: ship_equipments.pos
+            go_type: uint32
+          - column: ship_equipments.equip_id
+            go_type: uint32
+          - column: ship_equipments.skin_id
+            go_type: uint32
+          - column: ship_skills.ship_id
+            go_type: uint32
+          - column: ship_skills.skill_id
+            go_type: uint32
+          - column: ship_skills.level
+            go_type: uint32
+          - column: ship_skills.exp
+            go_type: uint32
+          - column: commander_equipments.commander_id
+            go_type: uint32
+          - column: commander_equipments.equip_id
+            go_type: uint32
+          - column: commander_equipments.count
+            go_type: uint32
+          - column: builds.id
+            go_type: uint32
+          - column: builds.commander_id
+            go_type: uint32
+          - column: builds.pool_id
+            go_type: uint32
+          - column: builds.template_id
+            go_type: uint32
+          - column: builds.duration
+            go_type: uint32
+          - column: commander_build_states.commander_id
+            go_type: uint32
+          - column: commander_build_states.build_count
+            go_type: uint32
+          - column: commander_build_states.exchange_count
+            go_type: uint32
+          - column: commander_ship_groups.commander_id
+            go_type: uint32
+          - column: commander_ship_groups.group_id
+            go_type: uint32
+          - column: commander_ship_groups.star
+            go_type: uint32
+          - column: commander_ship_groups.intimacy_max
+            go_type: uint32
+          - column: commander_ship_groups.lv_max
+            go_type: uint32
+          - column: commander_ship_groups.marry_flag
+            go_type: uint32
+          - column: commander_ship_groups.heart_flag
+            go_type: uint32
+          - column: commander_trophies.commander_id
+            go_type: uint32
+          - column: commander_trophies.trophy_id
+            go_type: uint32
+          - column: commander_trophies.progress
+            go_type: uint32
+          - column: commander_trophies.timestamp
+            go_type: uint32
