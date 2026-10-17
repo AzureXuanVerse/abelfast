@@ -23,10 +23,6 @@ const (
 	shipEquipSlots = 5
 	// Ship.ENERGY_RECOVER_TIME, the morale tick
 	energyRecoverTime = 360
-	// Long Island, given to every new commander next to the chosen starter:
-	// the official server created her with the starter at CS_10024 (same
-	// create_time, ship id 2). She is no client data, the server picks her.
-	starterGiftShip = 106011
 )
 
 // NewShip returns the row for a freshly obtained ship: level 1, morale and
@@ -213,11 +209,12 @@ func shipsByID(ctx context.Context, queries *db.Queries, commanderID uint32, ids
 }
 
 // grantShipsStarter gives a new commander the starter ship they chose and
-// Long Island, equipped, and the starting bag (SC_12001 / SC_15001 of the
-// capture), and sets the medals that start with progress.
+// the ships of new_commander.json (Long Island), equipped, and the starting
+// bag (SC_12001 / SC_15001 of the capture), and sets the medals that start
+// with progress.
 func grantShipsStarter(tx *Tx, commander db.Commander) error {
 	ctx, queries, commanderID := tx.ctx, tx.Queries, tx.commanderID
-	for _, template := range []uint32{commander.StarterShip, starterGiftShip} {
+	for _, template := range append([]uint32{commander.StarterShip}, newCommander.Ships...) {
 		if _, err := tx.AddShip(template); err != nil {
 			return err
 		}

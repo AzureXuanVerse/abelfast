@@ -17,27 +17,18 @@ const (
 	ResourceGuildCoin = 8
 )
 
-// starterResources are a new commander's resources on the official servers
-// (captured SC_11003.resource_list).
-var starterResources = []struct{ id, amount uint32 }{
-	{ResourceGold, 3000},
-	{ResourceOil, 500},
-	{ResourceOilField, 5},
-	{ResourceGoldField, 5},
-	{ResourceGuildCoin, 4000},
-}
-
 // starterFurniture is the backyard a new commander gets, the "Run-down"
 // theme's free pieces (captured SC_19001.furniture_id_list).
 var starterFurniture = []uint32{1001, 1002, 1102, 1103, 1104, 1105, 1106, 1107, 1111, 1112, 1301, 1302, 1304, 1306}
 
 // grantPlayerStarter sets up what a new commander starts with besides ships:
-// resources, backyard furniture, the starter ship as secretary (the avatar is the starter ship).
+// resources (new_commander.json), backyard furniture, the starter ship as
+// secretary (the avatar is the starter ship).
 // The capacities, rank, chat room... are column defaults (0001_commanders.sql).
 func grantPlayerStarter(tx *Tx, commander db.Commander) error {
 	ctx, queries := tx.ctx, tx.Queries
-	for _, resource := range starterResources {
-		if err := tx.AddResource(resource.id, resource.amount); err != nil {
+	for _, resource := range newCommander.Resources {
+		if err := tx.AddResource(resource.ID, resource.Amount); err != nil {
 			return err
 		}
 	}
