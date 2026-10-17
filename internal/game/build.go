@@ -27,17 +27,14 @@ const (
 	// (SC_12024.worklist_count as captured), the next one starts when one
 	// finishes (BuildShipProxy:activeNextBuild)
 	buildWorkCount = 2
-	// the light pool (ship_data_create_material 2)
-	lightPool = 2
 )
 
-// The new player guide's light build: the official server gave Hatsuharu
-// (301211) in 1500 s. The light pool's drop list is server side, so the
-// guide's build is pinned to what the capture got; later ones are random.
-const (
-	tutorialBuildShip     = 301211
-	tutorialBuildDuration = 1500
-)
+// The new player guide's builds (gamecfg/guide/newguide/sg001.lua: S001 light,
+// S020 heavy) are ordinary draws: the guide only needs a build in the pool it
+// picks client side, either still building (S002, quick finish) or done
+// (S002_1, getFinishCount), whose ship it then puts in the vanguard (S004),
+// which every light pool ship can join (destroyers, light cruisers, vanguard
+// sailing ships). The official server's draw gave Hatsuharu (301211).
 
 // rarityByRateName maps the rate_tip labels to ship_data_statistics rarity.
 var rarityByRateName = map[string]uint32{"Common": 2, "Rare": 3, "Elite": 4, "Super Rare": 5, "Ultra Rare": 6}
@@ -162,22 +159,14 @@ func (game *Game) handleBuildShip(client *connection.Client, req *protobuf.CS_12
 			if len(builds)+int(count) > maxBuilds {
 				return errRefused
 			}
-			// the guide's build is the commander's first
-			built, err := taskCounter(ctx, tx.Queries, client.CommanderID, TaskSubBuild, 0)
-			if err != nil {
-				return err
-			}
 			if err := tx.SpendResource(ResourceGold, pool.Gold*count); err != nil {
 				return err
 			}
 			if err := tx.SpendItem(pool.Item, pool.ItemCount*count); err != nil {
 				return err
 			}
-			for i := range count {
-				template, duration, ok := uint32(tutorialBuildShip), uint32(tutorialBuildDuration), true
-				if built > 0 || i > 0 || req.GetId() != lightPool {
-					template, duration, ok = pickBuildShip(pool)
-				}
+			for range count {
+				template, duration, ok := pickBuildShip(pool)
 				if !ok {
 					return errRefused
 				}
