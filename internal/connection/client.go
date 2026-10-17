@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	queue "gopkg.in/eapache/queue.v1"
 
 	"github.com/ggmolly/belfast/internal/logger"
@@ -86,7 +87,25 @@ func newClient(conn net.Conn, server *Server) *Client {
 // left unset are sent as their zero value (protocol.FillRequired), so a
 // message only spells out the fields that carry meaning.
 func (client *Client) Send(msg proto.Message) error {
+	client.logRefusal(msg)
 	return client.buffer(msg, &client.writeBuffer)
+}
+
+// logRefusal logs a reply whose result isn't 0: the client shows it as an
+// error_message tip ("Invalid Input." for 1), so it's worth knowing which
+// request got it.
+func (client *Client) logRefusal(msg proto.Message) {
+	reflect := msg.ProtoReflect()
+	field := reflect.Descriptor().Fields().ByName("result")
+	if field == nil || field.Kind() != protoreflect.Uint32Kind || reflect.Get(field).Uint() == 0 {
+		return
+	}
+	id, _ := protocol.ServerPacketID(msg)
+	logger.WithFields("Client",
+		logger.FieldValue("reply", id),
+		logger.FieldValue("result", reflect.Get(field).Uint()),
+		logger.FieldValue("commander", client.CommanderID),
+	).Warn("request refused")
 }
 
 // Push queues a message caused by the request being handled (task progress,
