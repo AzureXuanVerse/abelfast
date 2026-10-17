@@ -250,3 +250,11 @@ func (game *Game) handleSellItems(client *connection.Client, req *protobuf.CS_15
 func (game *Game) handleTracking(client *connection.Client, req *protobuf.CS_10991) error {
 	return nil
 }
+
+// handleTrack takes the client's UI action events (TrackCommand, CS_10993),
+// no reply.
+//
+//belfast:static
+func (game *Game) handleTrack(client *connection.Client, req *protobuf.CS_10993) error {
+	return nil
+}
