@@ -66,6 +66,26 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 	return nil
 }
 
+// weightedPick draws the index of one of items by weight, roll(n) being a
+// random number below n; -1 when no item weighs anything.
+func weightedPick[T any](roll func(n uint32) uint32, items []T, weight func(T) uint32) int {
+	total := uint32(0)
+	for _, item := range items {
+		total += weight(item)
+	}
+	if total == 0 {
+		return -1
+	}
+	n := roll(total)
+	for i, item := range items {
+		if n < weight(item) {
+			return i
+		}
+		n -= weight(item)
+	}
+	return -1
+}
+
 // dropInfo is one DROPINFO of a reward: a DROP_TYPE_*, an id and a count.
 func dropInfo(kind, id, number uint32) *protobuf.DROPINFO {
 	return &protobuf.DROPINFO{Type: proto.Uint32(kind), Id: proto.Uint32(id), Number: proto.Uint32(number)}

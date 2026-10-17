@@ -187,24 +187,6 @@ func (session *chapterSession) won() bool {
 	return false
 }
 
-func pickExpedition(list []weightedExpedition) uint32 {
-	total := uint32(0)
-	for _, entry := range list {
-		total += entry.weight
-	}
-	if total == 0 {
-		return 0
-	}
-	roll := rand.Uint32N(total)
-	for _, entry := range list {
-		if roll < entry.weight {
-			return entry.id
-		}
-		roll -= entry.weight
-	}
-	return list[len(list)-1].id
-}
-
 // newChapter lays the chapter out (chapter_template.grids): the fleets on the
 // born cells, enemy_refresh enemies drawn from expedition_id_weight_list on
 // the enemy cells, the boss cells empty until bossRefresh kills.
@@ -239,7 +221,11 @@ func newChapter(template *chapterTemplate, teams []*protobuf.TEAM_INFO, now uint
 	}
 	rand.Shuffle(len(enemies), func(i, j int) { enemies[i], enemies[j] = enemies[j], enemies[i] })
 	for i := 0; i < template.enemyRefresh && i < len(enemies); i++ {
-		setCell(enemies[i], attachEnemy, pickExpedition(template.enemies), cellFlagActive)
+		expedition := uint32(0)
+		if pick := weightedPick(rand.Uint32N, template.enemies, func(enemy weightedExpedition) uint32 { return enemy.weight }); pick >= 0 {
+			expedition = template.enemies[pick].id
+		}
+		setCell(enemies[i], attachEnemy, expedition, cellFlagActive)
 	}
 	shipCount := uint32(0)
 	for i, team := range teams {
