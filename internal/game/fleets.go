@@ -65,17 +65,7 @@ func boolOrder(b bool) int {
 // FleetShips returns the ships of a commander's fleet in formation order, for
 // areas that need the current fleet (e.g. exercises, secretary checks).
 func FleetShips(ctx context.Context, queries *db.Queries, commanderID uint32, fleetID uint32) ([]uint32, error) {
-	rows, err := queries.ListFleetShips(ctx, commanderID)
-	if err != nil {
-		return nil, err
-	}
-	var ids []uint32
-	for _, row := range rows {
-		if row.FleetID == fleetID {
-			ids = append(ids, row.ShipID)
-		}
-	}
-	return ids, nil
+	return queries.ListShipsOfFleet(ctx, db.ListShipsOfFleetParams{CommanderID: commanderID, FleetID: fleetID})
 }
 
 // RemoveShipsFromFleets takes ships out of every fleet, for when they leave
@@ -143,18 +133,12 @@ func fleetList(ctx context.Context, queries *db.Queries, commanderID uint32) (*p
 // edit, anything else shows fleet_updateFleet's error tip.
 func (game *Game) handleUpdateFleet(client *connection.Client, req *protobuf.CS_12102) error {
 	ctx := context.Background()
-	ships, err := game.DB.ListShipsByCommander(ctx, client.CommanderID)
+	owned, err := ownsShips(ctx, game.DB.Queries, client.CommanderID, req.GetShipList())
 	if err != nil {
 		return err
 	}
-	owned := make(map[uint32]bool, len(ships))
-	for _, ship := range ships {
-		owned[ship.ID] = true
-	}
-	for _, id := range req.GetShipList() {
-		if !owned[id] {
-			return client.Send(&protobuf.SC_12103{Result: result(errRefused)})
-		}
+	if !owned {
+		return client.Send(&protobuf.SC_12103{Result: result(errRefused)})
 	}
 	err = game.DB.InTx(ctx, func(queries *db.Queries) error {
 		if err := queries.CreateFleet(ctx, db.CreateFleetParams{CommanderID: client.CommanderID, FleetID: req.GetId(), Name: ""}); err != nil {

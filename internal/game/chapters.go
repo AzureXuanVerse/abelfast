@@ -279,20 +279,16 @@ func (game *Game) handleTracking13101(client *connection.Client, req *protobuf.C
 	if template == nil || len(teams) == 0 {
 		return client.Send(&protobuf.SC_13102{Result: result(errRefused)})
 	}
-	ships, err := game.DB.ListShipsByCommander(ctx, client.CommanderID)
+	var ids []uint32
+	for _, team := range teams {
+		ids = append(ids, team.GetShipList()...)
+	}
+	owned, err := ownsShips(ctx, game.DB.Queries, client.CommanderID, ids)
 	if err != nil {
 		return err
 	}
-	owned := make(map[uint32]bool, len(ships))
-	for _, ship := range ships {
-		owned[ship.ID] = true
-	}
-	for _, team := range teams {
-		for _, id := range team.GetShipList() {
-			if !owned[id] {
-				return client.Send(&protobuf.SC_13102{Result: result(errRefused)})
-			}
-		}
+	if !owned {
+		return client.Send(&protobuf.SC_13102{Result: result(errRefused)})
 	}
 	session := &chapterSession{template: template, info: newChapter(template, teams, uint32(time.Now().Unix()))}
 	err = game.tx(ctx, client, func(tx *Tx) error {

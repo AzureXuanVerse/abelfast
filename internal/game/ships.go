@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -193,7 +194,7 @@ func shipEquipments(ctx context.Context, queries *db.Queries, commanderID, shipI
 	} else if err != nil {
 		return nil, err
 	}
-	rows, err := queries.ListShipEquipmentsByCommander(ctx, commanderID)
+	rows, err := queries.ListShipEquipments(ctx, shipID)
 	if err != nil {
 		return nil, err
 	}
@@ -202,11 +203,34 @@ func shipEquipments(ctx context.Context, queries *db.Queries, commanderID, shipI
 		slots[i] = db.ShipEquipment{ShipID: shipID, Pos: uint32(i + 1)}
 	}
 	for _, row := range rows {
-		if row.ShipID == shipID && row.Pos >= 1 && row.Pos <= shipEquipSlots {
+		if row.Pos >= 1 && row.Pos <= shipEquipSlots {
 			slots[row.Pos-1] = row
 		}
 	}
 	return slots, nil
+}
+
+// ownsShips tells whether every ship of ids is the commander's.
+func ownsShips(ctx context.Context, queries *db.Queries, commanderID uint32, ids []uint32) (bool, error) {
+	distinct := slices.Compact(slices.Sorted(slices.Values(ids)))
+	if len(distinct) == 0 {
+		return true, nil
+	}
+	owned, err := queries.CountOwnedShips(ctx, db.CountOwnedShipsParams{CommanderID: commanderID, Ids: distinct})
+	return owned == int64(len(distinct)), err
+}
+
+// shipsByID loads the ships of ids that are the commander's, by id.
+func shipsByID(ctx context.Context, queries *db.Queries, commanderID uint32, ids []uint32) (map[uint32]db.Ship, error) {
+	rows, err := queries.ListShipsByID(ctx, db.ListShipsByIDParams{CommanderID: commanderID, Ids: slices.Compact(slices.Sorted(slices.Values(ids)))})
+	if err != nil {
+		return nil, err
+	}
+	ships := make(map[uint32]db.Ship, len(rows))
+	for _, ship := range rows {
+		ships[ship.ID] = ship
+	}
+	return ships, nil
 }
 
 // grantShipsStarter gives a new commander the starter ship they chose and

@@ -252,6 +252,38 @@ func (q *Queries) ListFleets(ctx context.Context, commanderID uint32) ([]ListFle
 	return items, nil
 }
 
+const listShipsOfFleet = `-- name: ListShipsOfFleet :many
+SELECT ship_id FROM fleet_ships WHERE commander_id = ? AND fleet_id = ? ORDER BY position
+`
+
+type ListShipsOfFleetParams struct {
+	CommanderID uint32
+	FleetID     uint32
+}
+
+func (q *Queries) ListShipsOfFleet(ctx context.Context, arg ListShipsOfFleetParams) ([]uint32, error) {
+	rows, err := q.db.QueryContext(ctx, listShipsOfFleet, arg.CommanderID, arg.FleetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uint32
+	for rows.Next() {
+		var ship_id uint32
+		if err := rows.Scan(&ship_id); err != nil {
+			return nil, err
+		}
+		items = append(items, ship_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const saveChapterProgress = `-- name: SaveChapterProgress :exec
 INSERT INTO chapter_progress (commander_id, chapter_id, progress, kill_boss_count, kill_enemy_count, take_box_count, defeat_count, today_defeat_count, pass_count)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)

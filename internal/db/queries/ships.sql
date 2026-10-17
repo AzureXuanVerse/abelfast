@@ -9,12 +9,21 @@ SELECT * FROM ships WHERE commander_id = ? ORDER BY id;
 -- name: GetShip :one
 SELECT * FROM ships WHERE id = ? AND commander_id = ?;
 
+-- name: ListShipsByID :many
+SELECT * FROM ships WHERE commander_id = ? AND id IN (sqlc.slice(ids)) ORDER BY id;
+
+-- name: CountOwnedShips :one
+SELECT COUNT(*) FROM ships WHERE commander_id = ? AND id IN (sqlc.slice(ids));
+
 -- name: SetShipLocked :exec
 UPDATE ships SET is_locked = ? WHERE id = ? AND commander_id = ?;
 
 -- name: SetShipEquipment :exec
 INSERT INTO ship_equipments (ship_id, pos, equip_id, skin_id) VALUES (?, ?, ?, ?)
 ON CONFLICT (ship_id, pos) DO UPDATE SET equip_id = excluded.equip_id, skin_id = excluded.skin_id;
+
+-- name: ListShipEquipments :many
+SELECT * FROM ship_equipments WHERE ship_id = ? ORDER BY pos;
 
 -- name: ListShipEquipmentsByCommander :many
 SELECT e.ship_id, e.pos, e.equip_id, e.skin_id FROM ship_equipments e

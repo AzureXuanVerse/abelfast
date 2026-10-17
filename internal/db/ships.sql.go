@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"strings"
 )
 
 const addBuildPoints = `-- name: AddBuildPoints :exec
@@ -53,6 +54,33 @@ type AddShipSkillParams struct {
 func (q *Queries) AddShipSkill(ctx context.Context, arg AddShipSkillParams) error {
 	_, err := q.db.ExecContext(ctx, addShipSkill, arg.ShipID, arg.SkillID, arg.Level)
 	return err
+}
+
+const countOwnedShips = `-- name: CountOwnedShips :one
+SELECT COUNT(*) FROM ships WHERE commander_id = ? AND id IN (/*SLICE:ids*/?)
+`
+
+type CountOwnedShipsParams struct {
+	CommanderID uint32
+	Ids         []uint32
+}
+
+func (q *Queries) CountOwnedShips(ctx context.Context, arg CountOwnedShipsParams) (int64, error) {
+	query := countOwnedShips
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.CommanderID)
+	if len(arg.Ids) > 0 {
+		for _, v := range arg.Ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(arg.Ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	row := q.db.QueryRowContext(ctx, query, queryParams...)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const countShipGroups = `-- name: CountShipGroups :one
@@ -273,6 +301,38 @@ func (q *Queries) ListEquipments(ctx context.Context, commanderID uint32) ([]Lis
 	return items, nil
 }
 
+const listShipEquipments = `-- name: ListShipEquipments :many
+SELECT ship_id, pos, equip_id, skin_id FROM ship_equipments WHERE ship_id = ? ORDER BY pos
+`
+
+func (q *Queries) ListShipEquipments(ctx context.Context, shipID uint32) ([]ShipEquipment, error) {
+	rows, err := q.db.QueryContext(ctx, listShipEquipments, shipID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ShipEquipment
+	for rows.Next() {
+		var i ShipEquipment
+		if err := rows.Scan(
+			&i.ShipID,
+			&i.Pos,
+			&i.EquipID,
+			&i.SkinID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listShipEquipmentsByCommander = `-- name: ListShipEquipmentsByCommander :many
 SELECT e.ship_id, e.pos, e.equip_id, e.skin_id FROM ship_equipments e
 JOIN ships s ON s.id = e.ship_id
@@ -381,6 +441,67 @@ SELECT id, commander_id, template_id, level, exp, energy, intimacy, max_level, i
 
 func (q *Queries) ListShipsByCommander(ctx context.Context, commanderID uint32) ([]Ship, error) {
 	rows, err := q.db.QueryContext(ctx, listShipsByCommander, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Ship
+	for rows.Next() {
+		var i Ship
+		if err := rows.Scan(
+			&i.ID,
+			&i.CommanderID,
+			&i.TemplateID,
+			&i.Level,
+			&i.Exp,
+			&i.Energy,
+			&i.Intimacy,
+			&i.MaxLevel,
+			&i.IsLocked,
+			&i.CreatedAt,
+			&i.State,
+			&i.Proficiency,
+			&i.SkinID,
+			&i.Propose,
+			&i.Name,
+			&i.ChangeNameTimestamp,
+			&i.CommonFlag,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listShipsByID = `-- name: ListShipsByID :many
+SELECT id, commander_id, template_id, level, exp, energy, intimacy, max_level, is_locked, created_at, state, proficiency, skin_id, propose, name, change_name_timestamp, common_flag FROM ships WHERE commander_id = ? AND id IN (/*SLICE:ids*/?) ORDER BY id
+`
+
+type ListShipsByIDParams struct {
+	CommanderID uint32
+	Ids         []uint32
+}
+
+func (q *Queries) ListShipsByID(ctx context.Context, arg ListShipsByIDParams) ([]Ship, error) {
+	query := listShipsByID
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.CommanderID)
+	if len(arg.Ids) > 0 {
+		for _, v := range arg.Ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(arg.Ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
 	if err != nil {
 		return nil, err
 	}

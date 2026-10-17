@@ -64,13 +64,9 @@ func (game *Game) handleBeginStage(client *connection.Client, req *protobuf.CS_4
 			return client.Send(&protobuf.SC_40002{Result: result(errRefused)})
 		}
 	}
-	ships, err := game.DB.ListShipsByCommander(ctx, client.CommanderID)
+	byID, err := shipsByID(ctx, game.DB.Queries, client.CommanderID, req.GetShipIdList())
 	if err != nil {
 		return err
-	}
-	byID := make(map[uint32]db.Ship, len(ships))
-	for _, ship := range ships {
-		byID[ship.ID] = ship
 	}
 	err = game.DB.InTx(ctx, func(queries *db.Queries) error {
 		for _, id := range req.GetShipIdList() {
@@ -132,13 +128,13 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 	score := min(req.GetScore(), scoreS)
 	win := score > scoreC
 
-	ships, err := game.DB.ListShipsByCommander(ctx, client.CommanderID)
+	statShips := make([]uint32, len(req.GetStatistics()))
+	for i, stat := range req.GetStatistics() {
+		statShips[i] = stat.GetShipId()
+	}
+	byID, err := shipsByID(ctx, game.DB.Queries, client.CommanderID, statShips)
 	if err != nil {
 		return err
-	}
-	byID := make(map[uint32]db.Ship, len(ships))
-	for _, ship := range ships {
-		byID[ship.ID] = ship
 	}
 
 	reply := &protobuf.SC_40004{Result: result(nil)}

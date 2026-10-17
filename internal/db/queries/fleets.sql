@@ -7,6 +7,9 @@ SELECT fleet_id, name FROM fleets WHERE commander_id = ? ORDER BY fleet_id DESC;
 -- name: ListFleetShips :many
 SELECT fleet_id, ship_id FROM fleet_ships WHERE commander_id = ? ORDER BY fleet_id, position;
 
+-- name: ListShipsOfFleet :many
+SELECT ship_id FROM fleet_ships WHERE commander_id = ? AND fleet_id = ? ORDER BY position;
+
 -- name: ClearFleetShips :exec
 DELETE FROM fleet_ships WHERE commander_id = ? AND fleet_id = ?;
 
