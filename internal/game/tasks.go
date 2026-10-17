@@ -658,8 +658,13 @@ func (game *Game) handleSubmitTask(client *connection.Client, req *protobuf.CS_2
 			return err
 		}
 		tx.event(handbookEvents...)
-		next, err = acceptTasks(ctx, tx.Queries, client.CommanderID, parseIDList(config.NextTask), now)
-		return err
+		// the next tasks start from the counters the claim updated, its
+		// progress doesn't count for them
+		tx.afterEvents(func() error {
+			next, err = acceptTasks(ctx, tx.Queries, client.CommanderID, parseIDList(config.NextTask), now)
+			return err
+		})
+		return nil
 	})
 	if err != nil {
 		return err

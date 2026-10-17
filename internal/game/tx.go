@@ -21,6 +21,7 @@ type Tx struct {
 	commanderID uint32
 
 	events   []TaskEvent
+	after    []func() error
 	pushes   []proto.Message      // SC_17002 archive updates... in the order they happened
 	newShips []*protobuf.SHIPINFO // ships obtained outside of a reply, pushed in SC_12042
 
@@ -30,10 +31,10 @@ type Tx struct {
 }
 
 // tx runs fn in a transaction. Once fn succeeds the task events it recorded
-// are applied in the same transaction; when it commits, their progress
-// pushes (SC_20002, SC_20102, SC_20103, SC_20202) are queued on the client,
-// then the other pushes, then the new ships (SC_12042), all ahead of the
-// reply. Nothing is queued when fn fails.
+// are applied in the same transaction, then its afterEvents functions run.
+// When it commits, the task progress pushes (SC_20002, SC_20102, SC_20103,
+// SC_20202) are queued on the client, then the other pushes, then the new
+// ships (SC_12042), all ahead of the reply. Nothing is queued when it fails.
 func (game *Game) tx(ctx context.Context, client *connection.Client, fn func(tx *Tx) error) error {
 	var tx *Tx
 	var progress []proto.Message
@@ -43,8 +44,15 @@ func (game *Game) tx(ctx context.Context, client *connection.Client, fn func(tx 
 			return err
 		}
 		var err error
-		progress, err = game.applyTaskEvents(ctx, queries, client.CommanderID, tx.events)
-		return err
+		if progress, err = game.applyTaskEvents(ctx, queries, client.CommanderID, tx.events); err != nil {
+			return err
+		}
+		for _, fn := range tx.after {
+			if err := fn(); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return err
@@ -72,6 +80,12 @@ func newTx(ctx context.Context, queries *db.Queries, commanderID uint32) *Tx {
 // event records what the commander did, for the tasks that count it.
 func (tx *Tx) event(events ...TaskEvent) {
 	tx.events = append(tx.events, events...)
+}
+
+// afterEvents runs fn in the transaction once the task events are applied,
+// for what must not count them.
+func (tx *Tx) afterEvents(fn func() error) {
+	tx.after = append(tx.after, fn)
 }
 
 // push queues a message to send ahead of the reply once tx commits.
