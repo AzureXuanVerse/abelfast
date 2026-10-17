@@ -41,17 +41,27 @@ func AppendFrame(dst []byte, id int, index int, payload []byte) []byte {
 	return append(dst, payload...)
 }
 
+// FrameSize returns the length of the whole frame starting with header (at
+// least its 2 byte size field), an error when the size field is too small.
+func FrameSize(header []byte) (int, error) {
+	size := int(binary.BigEndian.Uint16(header))
+	if size < MinFrameSize {
+		return 0, fmt.Errorf("invalid frame size %d", size)
+	}
+	return 2 + size, nil
+}
+
 // ReadFrame reads one complete frame from r.
 func ReadFrame(r io.Reader) ([]byte, error) {
 	var size [2]byte
 	if _, err := io.ReadFull(r, size[:]); err != nil {
 		return nil, err
 	}
-	length := int(binary.BigEndian.Uint16(size[:]))
-	if length < MinFrameSize {
-		return nil, fmt.Errorf("invalid frame size %d", length)
+	length, err := FrameSize(size[:])
+	if err != nil {
+		return nil, err
 	}
-	frame := make([]byte, 2+length)
+	frame := make([]byte, length)
 	copy(frame, size[:])
 	if _, err := io.ReadFull(r, frame[2:]); err != nil {
 		return nil, err

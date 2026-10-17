@@ -165,11 +165,8 @@ func readPacketSize(ring *ringbuffer.RingBuffer) ([2]byte, int, error) {
 	if _, err := io.ReadFull(ring, header[:]); err != nil {
 		return header, 0, err
 	}
-	size := int(header[0])<<8 | int(header[1])
-	if size < protocol.MinFrameSize {
-		return header, 0, fmt.Errorf("invalid packet size %d", size)
-	}
-	return header, size + 2, nil
+	size, err := protocol.FrameSize(header[:])
+	return header, size, err
 }
 
 // isClosedConnError reports errors caused by the peer or the server closing the connection.

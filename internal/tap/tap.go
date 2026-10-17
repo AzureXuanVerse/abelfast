@@ -121,17 +121,16 @@ func (s *session) pump(dst io.Writer, src io.Reader, dir string, done chan<- str
 			buf = append(buf, chunk[:n]...)
 		}
 		for len(buf) > 0 {
-			if len(buf) >= 3 && buf[2] != 0x00 || len(buf) >= 2 && int(buf[0])<<8|int(buf[1]) < protocol.MinFrameSize {
+			total, sizeErr := 0, error(nil)
+			if len(buf) >= 2 {
+				total, sizeErr = protocol.FrameSize(buf)
+			}
+			if len(buf) >= 3 && buf[2] != 0x00 || sizeErr != nil {
 				s.relayRaw(dst, src, dir, buf, err == nil)
 				s.close()
 				return
 			}
-			if len(buf) < 2 {
-				break
-			}
-			size := int(buf[0])<<8 | int(buf[1])
-			total := 2 + size
-			if len(buf) < total {
+			if len(buf) < 2 || len(buf) < total {
 				break
 			}
 			frame := buf[:total]
