@@ -39,6 +39,9 @@ type itemUseConfig struct {
 	Usage       string          `json:"usage"`
 	UsageArg    json.RawMessage `json:"usage_arg"`
 	DisplayIcon json.RawMessage `json:"display_icon"`
+	// combining: compose_number of the item make one target_id
+	ComposeNumber uint32 `json:"compose_number"`
+	TargetID      uint32 `json:"target_id"`
 }
 
 // itemUse is an item_data_statistics usage with its usage_arg read.
@@ -260,7 +263,9 @@ func readTechPack(row itemConfig, gear []packGear, gametip map[string]string) dr
 // opens.
 func readItemUses(items map[uint32]itemConfig, gear []packGear, gametip map[string]string) {
 	itemUses = make(map[uint32]itemUse, len(items))
+	itemComposes = map[uint32]itemCompose{}
 	for id, row := range items {
+		readItemCompose(id, row.itemUseConfig)
 		use := itemUse{usage: row.Usage}
 		var icons, args [][]uint32
 		_ = json.Unmarshal(row.DisplayIcon, &icons)
