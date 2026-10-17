@@ -40,7 +40,11 @@ const (
 )
 
 // Sub types whose event carries the current value (a level, a total) rather
-// than an amount to add.
+// than an amount to add. Progress is counted by the server: neither the Lua
+// (Task.getProgress, model/vo/task/task.lua, only computes the sub types the
+// client can count itself) nor task_data_template says it; their descs do
+// ("Reach Commander lv. 15", "Upgrade the Canteen or the Merchant to Level
+// 2", "Gain a total of 12 stars").
 var taskAbsoluteSubTypes = map[uint32]bool{
 	TaskSubAcademyLevel: true,
 	TaskSubLevel:        true,
@@ -53,7 +57,9 @@ var taskAbsoluteSubTypes = map[uint32]bool{
 // stages cleared, stars and academy level, and with the build count unless
 // they are auto_commit (the manual's "Build 1 ship" started at 0 when "Build
 // 10 times in total" started at 1), while gear crafts / upgrades, wins and
-// kills started back at 0.
+// kills started back at 0. Server behaviour no table holds:
+// task_data_template.count_inherit names one earlier task to take the count
+// of, not a sub type.
 var taskInheritedSubTypes = map[uint32]bool{
 	TaskSubAcademyLevel: true,
 	TaskSubLevel:        true,
@@ -81,8 +87,9 @@ const (
 )
 
 // taskActivityTypes are the activity_template types whose tasks come in
-// SC_20201: TaskProxy holds those of the first four, ActivityTaskProxy the
-// others'.
+// SC_20201: TaskProxy holds those of the first four (TotalTaskProxy's
+// normal_task_type, model/proxy/totaltaskproxy.lua), ActivityTaskProxy the
+// others' (activity_task_type).
 var taskActivityTypes = map[uint32]bool{
 	activityTypeTasks: true, activityTypeCruise: true, activityTypePtHei5: true, activityTypeBossRushDalCollab: true,
 	activityTypeTaskRyza: true, activityTypeHotspring2: true, activityTypeNotTraceable: true,
