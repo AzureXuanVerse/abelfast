@@ -634,53 +634,112 @@ func awardChoice(config taskConfig, chosen []*protobuf.DROPINFO) [][]uint32 {
 // before the reply, as in the capture; the client drops the task itself.
 func (game *Game) handleSubmitTask(client *connection.Client, req *protobuf.CS_20005) error {
 	ctx := context.Background()
-	config, ok := taskConfigs[req.GetId()]
-	task, err := game.DB.GetTask(ctx, db.GetTaskParams{CommanderID: client.CommanderID, TaskID: req.GetId()})
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	claim, ok, err := game.taskClaim(ctx, client.CommanderID, req.GetId())
+	if err != nil {
 		return err
 	}
-	if err != nil || !ok || task.SubmitTime != 0 || task.Progress < config.TargetNum {
+	if ok && len(req.GetChoiceAward()) > 0 {
+		claim.drops = awardChoice(claim.config, req.GetChoiceAward())
+		ok = claim.drops != nil
+	}
+	if !ok {
 		return client.Send(&protobuf.SC_20006{Result: result(errRefused)})
 	}
-	drops := config.awards
-	if len(req.GetChoiceAward()) > 0 {
-		if drops = awardChoice(config, req.GetChoiceAward()); drops == nil {
-			return client.Send(&protobuf.SC_20006{Result: result(errRefused)})
-		}
+	awards, err := game.claimTasks(ctx, client, []taskClaimed{claim})
+	if err != nil {
+		return err
 	}
-	now := uint32(time.Now().Unix())
-	reply := &protobuf.SC_20006{Result: result(nil)}
-	var next *protobuf.SC_20003
-	err = game.tx(ctx, client, func(tx *Tx) error {
-		if _, err := tx.SubmitTask(ctx, db.SubmitTaskParams{SubmitTime: now, CommanderID: client.CommanderID, TaskID: task.TaskID}); err != nil {
-			return err
-		}
-		reply.AwardList = configDrops(drops)
-		if err := tx.grantDrops(reply.AwardList); err != nil {
-			return err
-		}
-		handbookEvents, err := handbookTaskClaimed(ctx, tx.Queries, client.CommanderID, task.TaskID)
+	return client.Send(&protobuf.SC_20006{Result: result(nil), AwardList: awards})
+}
+
+// handleSubmitTasks claims several finished tasks at once
+// (SubmitTaskOneStepCommand, the missions' claim all): the claimed ids and
+// their rewards together. The client checked them all, a task that can't be
+// claimed is left out.
+func (game *Game) handleSubmitTasks(client *connection.Client, req *protobuf.CS_20011) error {
+	ctx := context.Background()
+	reply := &protobuf.SC_20012{}
+	var claims []taskClaimed
+	for _, id := range req.GetIdList() {
+		claim, ok, err := game.taskClaim(ctx, client.CommanderID, id)
 		if err != nil {
 			return err
 		}
-		tx.event(handbookEvents...)
-		// the next tasks start from the counters the claim updated, its
-		// progress doesn't count for them
-		tx.afterEvents(func() error {
-			next, err = acceptTasks(ctx, tx.Queries, client.CommanderID, config.next, now)
+		if ok && !slices.Contains(reply.IdList, id) {
+			claims = append(claims, claim)
+			reply.IdList = append(reply.IdList, id)
+		}
+	}
+	awards, err := game.claimTasks(ctx, client, claims)
+	if err != nil {
+		return err
+	}
+	reply.AwardList = awards
+	return client.Send(reply)
+}
+
+// taskClaimed is a finished, unclaimed task and the drops claiming it gives.
+type taskClaimed struct {
+	task   db.CommanderTask
+	config taskConfig
+	drops  [][]uint32
+}
+
+// taskClaim is task id if the commander can claim it.
+func (game *Game) taskClaim(ctx context.Context, commanderID, id uint32) (taskClaimed, bool, error) {
+	config, ok := taskConfigs[id]
+	task, err := game.DB.GetTask(ctx, db.GetTaskParams{CommanderID: commanderID, TaskID: id})
+	if errors.Is(err, sql.ErrNoRows) {
+		return taskClaimed{}, false, nil
+	}
+	if err != nil {
+		return taskClaimed{}, false, err
+	}
+	ok = ok && task.SubmitTime == 0 && task.Progress >= config.TargetNum
+	return taskClaimed{task: task, config: config, drops: config.awards}, ok, nil
+}
+
+// claimTasks submits claims in one unit of work: their drops, the commander
+// manual progress they make, then the tasks they lead to (next_task), which
+// start from the counters the claims updated and are pushed before the
+// reply.
+func (game *Game) claimTasks(ctx context.Context, client *connection.Client, claims []taskClaimed) ([]*protobuf.DROPINFO, error) {
+	now := uint32(time.Now().Unix())
+	var awards []*protobuf.DROPINFO
+	var next *protobuf.SC_20003
+	err := game.tx(ctx, client, func(tx *Tx) error {
+		var nextIDs []uint32
+		for _, claim := range claims {
+			if _, err := tx.SubmitTask(ctx, db.SubmitTaskParams{SubmitTime: now, CommanderID: client.CommanderID, TaskID: claim.task.TaskID}); err != nil {
+				return err
+			}
+			drops := configDrops(claim.drops)
+			if err := tx.grantDrops(drops); err != nil {
+				return err
+			}
+			awards = append(awards, drops...)
+			handbookEvents, err := handbookTaskClaimed(ctx, tx.Queries, client.CommanderID, claim.task.TaskID)
+			if err != nil {
+				return err
+			}
+			tx.event(handbookEvents...)
+			nextIDs = append(nextIDs, claim.config.next...)
+		}
+		tx.afterEvents(func() (err error) {
+			next, err = acceptTasks(ctx, tx.Queries, client.CommanderID, nextIDs, now)
 			return err
 		})
 		return nil
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if next != nil {
 		if err := client.Push(next); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return client.Send(reply)
+	return awards, nil
 }
 
 // handleClientTaskEvent takes progress the client counts itself
