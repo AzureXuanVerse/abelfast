@@ -9,10 +9,24 @@ import (
 	"context"
 )
 
+const addStory = `-- name: AddStory :exec
+INSERT INTO commander_stories (commander_id, story_id) VALUES (?, ?) ON CONFLICT DO NOTHING
+`
+
+type AddStoryParams struct {
+	CommanderID uint32
+	StoryID     uint32
+}
+
+func (q *Queries) AddStory(ctx context.Context, arg AddStoryParams) error {
+	_, err := q.db.ExecContext(ctx, addStory, arg.CommanderID, arg.StoryID)
+	return err
+}
+
 const createCommander = `-- name: CreateCommander :one
 INSERT INTO commanders (account_id, name, starter_ship, registered_at)
 VALUES (?, ?, ?, ?)
-RETURNING id, account_id, name, starter_ship, registered_at
+RETURNING id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index
 `
 
 type CreateCommanderParams struct {
@@ -36,12 +50,14 @@ func (q *Queries) CreateCommander(ctx context.Context, arg CreateCommanderParams
 		&i.Name,
 		&i.StarterShip,
 		&i.RegisteredAt,
+		&i.GuideIndex,
+		&i.NewGuideIndex,
 	)
 	return i, err
 }
 
 const getCommander = `-- name: GetCommander :one
-SELECT id, account_id, name, starter_ship, registered_at FROM commanders WHERE id = ?
+SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index FROM commanders WHERE id = ?
 `
 
 func (q *Queries) GetCommander(ctx context.Context, id uint32) (Commander, error) {
@@ -53,12 +69,14 @@ func (q *Queries) GetCommander(ctx context.Context, id uint32) (Commander, error
 		&i.Name,
 		&i.StarterShip,
 		&i.RegisteredAt,
+		&i.GuideIndex,
+		&i.NewGuideIndex,
 	)
 	return i, err
 }
 
 const getCommanderByAccount = `-- name: GetCommanderByAccount :one
-SELECT id, account_id, name, starter_ship, registered_at FROM commanders WHERE account_id = ?
+SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index FROM commanders WHERE account_id = ?
 `
 
 func (q *Queries) GetCommanderByAccount(ctx context.Context, accountID uint32) (Commander, error) {
@@ -70,6 +88,63 @@ func (q *Queries) GetCommanderByAccount(ctx context.Context, accountID uint32) (
 		&i.Name,
 		&i.StarterShip,
 		&i.RegisteredAt,
+		&i.GuideIndex,
+		&i.NewGuideIndex,
 	)
 	return i, err
+}
+
+const listStories = `-- name: ListStories :many
+SELECT story_id FROM commander_stories WHERE commander_id = ? ORDER BY story_id
+`
+
+func (q *Queries) ListStories(ctx context.Context, commanderID uint32) ([]uint32, error) {
+	rows, err := q.db.QueryContext(ctx, listStories, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uint32
+	for rows.Next() {
+		var story_id uint32
+		if err := rows.Scan(&story_id); err != nil {
+			return nil, err
+		}
+		items = append(items, story_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setGuideIndex = `-- name: SetGuideIndex :exec
+UPDATE commanders SET guide_index = ? WHERE id = ?
+`
+
+type SetGuideIndexParams struct {
+	GuideIndex uint32
+	ID         uint32
+}
+
+func (q *Queries) SetGuideIndex(ctx context.Context, arg SetGuideIndexParams) error {
+	_, err := q.db.ExecContext(ctx, setGuideIndex, arg.GuideIndex, arg.ID)
+	return err
+}
+
+const setNewGuideIndex = `-- name: SetNewGuideIndex :exec
+UPDATE commanders SET new_guide_index = ? WHERE id = ?
+`
+
+type SetNewGuideIndexParams struct {
+	NewGuideIndex uint32
+	ID            uint32
+}
+
+func (q *Queries) SetNewGuideIndex(ctx context.Context, arg SetNewGuideIndexParams) error {
+	_, err := q.db.ExecContext(ctx, setNewGuideIndex, arg.NewGuideIndex, arg.ID)
+	return err
 }

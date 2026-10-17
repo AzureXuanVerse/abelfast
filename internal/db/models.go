@@ -5,14 +5,34 @@
 package db
 
 type Commander struct {
-	ID           uint32
-	AccountID    uint32
-	Name         string
-	StarterShip  uint32
-	RegisteredAt int64
+	ID            uint32
+	AccountID     uint32
+	Name          string
+	StarterShip   uint32
+	RegisteredAt  int64
+	GuideIndex    uint32
+	NewGuideIndex uint32
+}
+
+type CommanderStory struct {
+	CommanderID uint32
+	StoryID     uint32
 }
 
 type Setting struct {
 	Key   string
 	Value []byte
+}
+
+type Ship struct {
+	ID          uint32
+	CommanderID uint32
+	TemplateID  uint32
+	Level       uint32
+	Exp         uint32
+	Energy      uint32
+	Intimacy    uint32
+	MaxLevel    uint32
+	IsLocked    bool
+	CreatedAt   int64
 }

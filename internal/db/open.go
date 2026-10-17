@@ -4,6 +4,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"embed"
 	"fmt"
@@ -20,9 +21,15 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
+// Store is the generated queries plus the connection they run on.
+type Store struct {
+	*Queries
+	conn *sql.DB
+}
+
 // Open opens (creating it if needed) the database at path and applies the
 // migrations it hasn't seen yet.
-func Open(path string) (*sql.DB, error) {
+func Open(path string) (*Store, error) {
 	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, err
@@ -31,7 +38,20 @@ func Open(path string) (*sql.DB, error) {
 		conn.Close()
 		return nil, err
 	}
-	return conn, nil
+	return &Store{Queries: New(conn), conn: conn}, nil
+}
+
+// InTx runs fn in a transaction, committed if fn returns nil.
+func (store *Store) InTx(ctx context.Context, fn func(*Queries) error) error {
+	tx, err := store.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	if err := fn(store.WithTx(tx)); err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
 }
 
 // migrate applies migrations/NNNN_*.sql in order, each in its own

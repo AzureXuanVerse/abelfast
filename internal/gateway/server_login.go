@@ -11,6 +11,7 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
+	"github.com/ggmolly/belfast/internal/game"
 	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
@@ -63,11 +64,18 @@ func (gateway *Gateway) handleCreatePlayer(client *connection.Client, req *proto
 	case err == nil:
 		logger.LogEvent("Gateway", "CreatePlayer", fmt.Sprintf("account %d already has commander %d", client.AccountID, commander.ID), logger.LOG_LEVEL_WARN)
 	case errors.Is(err, sql.ErrNoRows):
-		commander, err = gateway.DB.CreateCommander(ctx, db.CreateCommanderParams{
-			AccountID:    client.AccountID,
-			Name:         req.GetNickName(),
-			StarterShip:  req.GetShipId(),
-			RegisteredAt: time.Now().Unix(),
+		err = gateway.DB.InTx(ctx, func(queries *db.Queries) error {
+			commander, err = queries.CreateCommander(ctx, db.CreateCommanderParams{
+				AccountID:    client.AccountID,
+				Name:         req.GetNickName(),
+				StarterShip:  req.GetShipId(),
+				RegisteredAt: time.Now().Unix(),
+			})
+			if err != nil {
+				return err
+			}
+			_, err = queries.CreateShip(ctx, game.NewShip(commander.ID, req.GetShipId()))
+			return err
 		})
 		if err != nil {
 			return err

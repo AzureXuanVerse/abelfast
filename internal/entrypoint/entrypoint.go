@@ -28,19 +28,18 @@ func Run() {
 	if err := os.MkdirAll(filepath.Dir(*dbPath), 0o755); err != nil {
 		fatal(err)
 	}
-	conn, err := db.Open(*dbPath)
+	store, err := db.Open(*dbPath)
 	if err != nil {
 		fatal(fmt.Errorf("database %s: %w", *dbPath, err))
 	}
-	queries := db.New(conn)
-	ticketKey, err := gateway.LoadTicketKey(context.Background(), queries)
+	ticketKey, err := gateway.LoadTicketKey(context.Background(), store.Queries)
 	if err != nil {
 		fatal(err)
 	}
 
 	gw := &gateway.Gateway{
 		Upstream:  *upstream,
-		DB:        queries,
+		DB:        store,
 		TicketKey: ticketKey,
 		Servers: []gateway.Server{{
 			ID: 1, Name: "Belfast", Host: *serverHost, Port: uint32(*serverPort),
@@ -48,7 +47,7 @@ func Run() {
 		}},
 	}
 	gw.Register()
-	(&game.Game{DB: queries}).Register()
+	(&game.Game{DB: store}).Register()
 
 	server := connection.NewServer(*listen, packets.Dispatch)
 	server.HTTP = gw.HTTP()

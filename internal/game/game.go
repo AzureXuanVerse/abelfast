@@ -21,12 +21,16 @@ import (
 const mondayReference = 1606114800
 
 type Game struct {
-	DB *db.Queries
+	DB *db.Store
 }
 
 // Register installs the game server packet handlers.
 func (game *Game) Register() {
 	packets.Handle(game.handleLoadPlayerData)
+	packets.Handle(game.handleAuctionGameInit)
+	packets.Handle(game.handleAppreciationVersion)
+	packets.Handle(game.handleGuideIndex)
+	packets.Handle(game.handleStoryRead)
 }
 
 // handleLoadPlayerData answers CS_11001 (LoadPlayerDataCommand): everything
@@ -36,23 +40,53 @@ func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.
 	if client.CommanderID == 0 {
 		return fmt.Errorf("CS_11001 without a commander")
 	}
-	commander, err := game.DB.GetCommander(context.Background(), client.CommanderID)
+	ctx := context.Background()
+	commander, err := game.DB.GetCommander(ctx, client.CommanderID)
 	if err != nil {
 		return err
 	}
-	if err := client.Send(playerInfo(commander)); err != nil {
+	ships, err := game.DB.ListShipsByCommander(ctx, commander.ID)
+	if err != nil {
+		return err
+	}
+	stories, err := game.DB.ListStories(ctx, commander.ID)
+	if err != nil {
+		return err
+	}
+	if err := client.Send(playerInfo(commander, ships, stories)); err != nil {
+		return err
+	}
+	shipList := &protobuf.SC_12001{Shiplist: make([]*protobuf.SHIPINFO, len(ships))}
+	for i, ship := range ships {
+		shipList.Shiplist[i] = shipInfo(ship)
+	}
+	if err := client.Send(shipList); err != nil {
+		return err
+	}
+	// CompensateProxy: no compensation mail
+	if err := client.Send(&protobuf.SC_30101{Number: proto.Uint32(0), MaxTimestamp: proto.Uint32(0)}); err != nil {
+		return err
+	}
+	// ChapterAutoProxy reads its auto battle state from here
+	if err := client.Send(&protobuf.SC_13001{
+		Oil:          proto.Uint32(0),
+		TimeAcc:      proto.Uint32(0),
+		ExtraTimeMax: proto.Uint32(0),
+	}); err != nil {
 		return err
 	}
 	return client.Send(&protobuf.SC_11002{
 		Timestamp:               proto.Uint32(uint32(time.Now().Unix())),
 		Monday_0OclockTimestamp: proto.Uint32(mondayReference),
-		ShipCount:               proto.Uint32(0),
+		ShipCount:               proto.Uint32(uint32(len(ships))),
 	})
 }
 
 // playerInfo is SC_11003, read by PlayerProxy into a Player (model/vo/player.lua).
-func playerInfo(commander db.Commander) *protobuf.SC_11003 {
-	return &protobuf.SC_11003{
+// The secretary (character) and the avatar (display.icon) are the first ship
+// until they can be changed.
+func playerInfo(commander db.Commander, ships []db.Ship, stories []uint32) *protobuf.SC_11003 {
+	info := &protobuf.SC_11003{
 		Id:                        proto.Uint32(commander.ID),
 		Name:                      proto.String(commander.Name),
 		Level:                     proto.Uint32(1), // user_level row
@@ -67,12 +101,12 @@ func playerInfo(commander db.Commander) *protobuf.SC_11003 {
 		PvpAttackCount:            proto.Uint32(0),
 		PvpWinCount:               proto.Uint32(0),
 		CollectAttackCount:        proto.Uint32(0),
-		GuideIndex:                proto.Uint32(0),
+		GuideIndex:                proto.Uint32(commander.GuideIndex),
 		BuyOilCount:               proto.Uint32(0),
 		ChatRoomId:                proto.Uint32(1),
 		MaxRank:                   proto.Uint32(0),
 		RegisterTime:              proto.Uint32(uint32(commander.RegisteredAt)),
-		ShipCount:                 proto.Uint32(0),
+		ShipCount:                 proto.Uint32(uint32(len(ships))),
 		AccPayLv:                  proto.Uint32(0),
 		GuildWaitTime:             proto.Uint32(0),
 		ChatMsgBanTime:            proto.Uint32(0),
@@ -86,7 +120,16 @@ func playerInfo(commander db.Commander) *protobuf.SC_11003 {
 		Cover:                     &protobuf.LIVINGAREA_COVER{Id: proto.Uint32(0)},
 		MailStoreroomLv:           proto.Uint32(0),
 		BattleUi:                  proto.Uint32(0), // item_data_battleui "Standard"
-		NewGuideIndex:             proto.Uint32(0),
+		NewGuideIndex:             proto.Uint32(commander.NewGuideIndex),
+		StoryList:                 stories,
 		LoadingPicOpenFlag:        proto.Uint32(0),
 	}
+	if len(ships) > 0 {
+		info.Character = []*protobuf.KVDATA{{Key: proto.Uint32(ships[0].ID), Value: proto.Uint32(0)}}
+		info.Display = &protobuf.DISPLAYINFO{
+			Icon: proto.Uint32(ships[0].TemplateID), Skin: proto.Uint32(0), IconFrame: proto.Uint32(0), ChatFrame: proto.Uint32(0),
+			IconTheme: proto.Uint32(0), MarryFlag: proto.Uint32(0), TransformFlag: proto.Uint32(0),
+		}
+	}
+	return info
 }

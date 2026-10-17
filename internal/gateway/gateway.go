@@ -86,7 +86,7 @@ type Gateway struct {
 	// downloads from; the reply is passed through unchanged.
 	Upstream   string
 	VersionTTL time.Duration
-	DB         *db.Queries
+	DB         *db.Store
 	// TicketKey signs the server tickets, see LoadTicketKey.
 	TicketKey []byte
 

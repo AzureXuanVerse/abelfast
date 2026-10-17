@@ -14,3 +14,29 @@ sql:
             go_type: uint32
           - column: commanders.starter_ship
             go_type: uint32
+          - column: ships.id
+            go_type: uint32
+          - column: ships.commander_id
+            go_type: uint32
+          - column: ships.template_id
+            go_type: uint32
+          - column: ships.level
+            go_type: uint32
+          - column: ships.exp
+            go_type: uint32
+          - column: ships.energy
+            go_type: uint32
+          - column: ships.intimacy
+            go_type: uint32
+          - column: ships.max_level
+            go_type: uint32
+          - column: ships.is_locked
+            go_type: bool
+          - column: commanders.guide_index
+            go_type: uint32
+          - column: commanders.new_guide_index
+            go_type: uint32
+          - column: commander_stories.commander_id
+            go_type: uint32
+          - column: commander_stories.story_id
+            go_type: uint32
