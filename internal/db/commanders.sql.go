@@ -40,6 +40,23 @@ func (q *Queries) CreateCommander(ctx context.Context, arg CreateCommanderParams
 	return i, err
 }
 
+const getCommander = `-- name: GetCommander :one
+SELECT id, account_id, name, starter_ship, registered_at FROM commanders WHERE id = ?
+`
+
+func (q *Queries) GetCommander(ctx context.Context, id uint32) (Commander, error) {
+	row := q.db.QueryRowContext(ctx, getCommander, id)
+	var i Commander
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.Name,
+		&i.StarterShip,
+		&i.RegisteredAt,
+	)
+	return i, err
+}
+
 const getCommanderByAccount = `-- name: GetCommanderByAccount :one
 SELECT id, account_id, name, starter_ship, registered_at FROM commanders WHERE account_id = ?
 `

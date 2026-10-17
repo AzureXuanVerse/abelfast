@@ -11,6 +11,7 @@ import (
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/consts"
 	"github.com/ggmolly/belfast/internal/db"
+	"github.com/ggmolly/belfast/internal/game"
 	"github.com/ggmolly/belfast/internal/gateway"
 	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/packets"
@@ -47,6 +48,7 @@ func Run() {
 		}},
 	}
 	gw.Register()
+	(&game.Game{DB: queries}).Register()
 
 	server := connection.NewServer(*listen, packets.Dispatch)
 	server.HTTP = gw.HTTP()
