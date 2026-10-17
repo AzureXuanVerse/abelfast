@@ -6,6 +6,7 @@ pkgs.mkShell {
     python3
     luajit
     protobuf
+    sqlc
     android-tools
     scrcpy
     jq
