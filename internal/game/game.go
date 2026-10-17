@@ -40,8 +40,12 @@ func StartCommander(ctx context.Context, queries *db.Queries, commander db.Comma
 	return nil
 }
 
-// Register installs the game server packet handlers.
+// Register loads the game data and installs the game server packet handlers.
+// It panics when the game data can't be loaded.
 func (game *Game) Register() {
+	if err := loadGameData(); err != nil {
+		panic(fmt.Sprintf("game data: %v", err))
+	}
 	game.registerPlayer()
 	game.registerShips()
 	game.registerFleets()

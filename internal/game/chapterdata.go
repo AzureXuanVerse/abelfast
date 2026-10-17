@@ -1,9 +1,10 @@
 package game
 
-// The slices of the game data the campaign needs, copied from the EN config
-// tables (sharecfgdata/chapter_template, expedition_data_template,
-// item_virtual_data_statistics, ShareCfg/ship_level, gameset). Only the
-// chapters listed here can be played; add more by copying their rows.
+import "encoding/json"
+
+// The campaign's game data, built from the config tables chapter_template,
+// expedition_data_template, item_virtual_data_statistics and ship_level (the
+// few gameset values are constants below).
 
 // chapter_template.grids cell kinds (the 4th value of a grid)
 const (
@@ -53,28 +54,26 @@ type chapterTemplate struct {
 	awards        []uint32 // award virtual items, see dropPools
 }
 
-var chapterTemplates = map[uint32]*chapterTemplate{
-	// 1-1 Offshore Exercises
-	101: {
-		id:           101,
-		oil:          10,
-		time:         99999999,
-		ammoTotal:    5,
-		progressBoss: 100,
-		grids: []chapterGrid{
-			{4, 7, true, gridBoss}, {4, 6, true, gridEnemy}, {4, 5, true, gridNone}, {4, 4, true, gridNone},
-			{4, 3, true, gridNone}, {4, 2, true, gridNone}, {4, 1, true, gridBorn},
-		},
-		enemies:       []weightedExpedition{{101010, 160}, {101011, 160}, {101012, 160}},
-		enemyRefresh:  1,
-		bosses:        []uint32{101000},
-		bossRefresh:   1,
-		isAmbush:      true,
-		ambushes:      []uint32{101210},
-		ambushRatios:  []ambushRatio{{anyCell: true, ratio: -20000}, {row: 4, column: 3, ratio: 30000}},
-		winConditions: []chapterWinCondition{{1, 1}},
-		awards:        []uint32{56001, 54011, 54021, 59001},
-	},
+var chapterTemplates map[uint32]*chapterTemplate
+
+// chapter_template row
+type chapterConfig struct {
+	Oil          uint32 `json:"oil"`
+	Time         uint32 `json:"time"`
+	AmmoTotal    uint32 `json:"ammo_total"`
+	ProgressBoss uint32 `json:"progress_boss"`
+	// [row, column, walkable, kind], walkable a boolean or 0/1
+	Grids                  [][4]any   `json:"grids"`
+	ExpeditionIDWeightList [][]uint32 `json:"expedition_id_weight_list"`
+	EnemyRefresh           []int      `json:"enemy_refresh"`
+	BossExpeditionID       []uint32   `json:"boss_expedition_id"`
+	BossRefresh            uint32     `json:"boss_refresh"`
+	IsAmbush               uint32     `json:"is_ambush"`
+	AmbushExpeditionList   []uint32   `json:"ambush_expedition_list"`
+	AmbushRatioExtra       [][]int    `json:"ambush_ratio_extra"`
+	// [kind, param], param a cell for the kinds that name one
+	WinCondition [][2]any    `json:"win_condition"`
+	Awards       [][2]uint32 `json:"awards"` // [type, virtual item]
 }
 
 // expedition_data_template.type
@@ -89,12 +88,13 @@ type expeditionTemplate struct {
 	level uint32
 }
 
-var expeditionTemplates = map[uint32]expeditionTemplate{
-	101010: {80, 1, 1},
-	101011: {80, 1, 1},
-	101012: {80, 1, 1},
-	101210: {80, 1, 1},
-	101000: {150, expeditionTypeBoss, 2},
+var expeditionTemplates map[uint32]expeditionTemplate
+
+// expedition_data_template row
+type expeditionConfig struct {
+	Exp   uint32 `json:"exp"`
+	Type  uint32 `json:"type"`
+	Level uint32 `json:"level"`
 }
 
 func (expedition expeditionTemplate) isBoss() bool {
@@ -107,10 +107,12 @@ type dropRef struct {
 
 // dropPools are the "chance to receive" award items of
 // item_virtual_data_statistics, display_icon listing what they can turn into.
-var dropPools = map[uint32][]dropRef{
-	56001: {{dropTypeShip, 101061}, {dropTypeShip, 101071}, {dropTypeShip, 201081}, {dropTypeShip, 201091}, {dropTypeShip, 201101}}, // Mystery Ship
-	54011: {{dropTypeItem, 17001}, {dropTypeItem, 17011}, {dropTypeItem, 17021}, {dropTypeItem, 17031}, {dropTypeItem, 17041}},      // T1 Mystery Gear Part
-	54021: {{dropTypeItem, 30011}, {dropTypeItem, 30021}, {dropTypeItem, 30031}, {dropTypeItem, 30041}},                             // Mystery T1 Tech Pack
+var dropPools map[uint32][]dropRef
+
+// item_virtual_data_statistics row: display_icon is a list of
+// [type, id, count], or "" when there is none
+type virtualItemConfig struct {
+	DisplayIcon json.RawMessage `json:"display_icon"`
 }
 
 // Specialized Core: virtual item 59011 (virtual_type 20) is stored as item
@@ -127,20 +129,113 @@ const (
 	battleConsumeEnergy = 2   // battle_consume_energy
 )
 
-// shipLevelExp is ShareCfg/ship_level exp by level: shipLevelExp[n-1] takes a
-// ship from level n to n+1.
-var shipLevelExp = []uint32{
-	100, 200, 300, 400, 500, 600, 700, 800, 900, 1000,
-	1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000,
-	2100, 2200, 2300, 2400, 2500, 2600, 2700, 2800, 2900, 3000,
-	3100, 3200, 3300, 3400, 3500, 3600, 3700, 3800, 3900, 4000,
-	4200, 4400, 4600, 4800, 5000, 5200, 5400, 5600, 5800, 6000,
-	6200, 6400, 6600, 6800, 7000, 7200, 7400, 7600, 7800, 8000,
-	8300, 8600, 8900, 9200, 9500, 9800, 10100, 10400, 10700, 12100,
-	12540, 12980, 13420, 13860, 14300, 14740, 15180, 15620, 16060, 17250,
-	17825, 18400, 18975, 19550, 20125, 20700, 21275, 21850, 22425, 24000,
-	25200, 26400, 28800, 31200, 36000, 42000, 48000, 72000, 158400, 50000,
-	53000, 56000, 59000, 62000, 65000, 71000, 77000, 83000, 89000, 95000,
-	105000, 115000, 125000, 135000, 145000, 160000, 175000, 190000, 205000, 220000,
-	241000, 262000, 283000, 304000, 0,
+// shipLevelExp is ship_level exp by level: shipLevelExp[n-1] takes a ship
+// from level n to n+1.
+var shipLevelExp []uint32
+
+// ship_level row
+type shipLevelConfig struct {
+	Level uint32 `json:"level"`
+	Exp   uint32 `json:"exp"`
+}
+
+// loadChapterData builds every chapter of chapter_template, the expeditions
+// fought in them, the award pools and the ship level curve.
+func loadChapterData() error {
+	chapters, err := readConfigTable[chapterConfig]("chapter_template")
+	if err != nil {
+		return err
+	}
+	chapterTemplates = make(map[uint32]*chapterTemplate, len(chapters))
+	for id, row := range chapters {
+		template := &chapterTemplate{
+			id:           id,
+			oil:          row.Oil,
+			time:         row.Time,
+			ammoTotal:    row.AmmoTotal,
+			progressBoss: row.ProgressBoss,
+			bosses:       row.BossExpeditionID,
+			bossRefresh:  row.BossRefresh,
+			isAmbush:     row.IsAmbush != 0,
+			ambushes:     row.AmbushExpeditionList,
+		}
+		for _, grid := range row.Grids {
+			cellRow, _ := grid[0].(float64)
+			cellColumn, _ := grid[1].(float64)
+			kind, _ := grid[3].(float64)
+			walkable, ok := grid[2].(bool)
+			if !ok {
+				number, _ := grid[2].(float64)
+				walkable = number != 0
+			}
+			template.grids = append(template.grids, chapterGrid{uint32(cellRow), uint32(cellColumn), walkable, uint32(kind)})
+		}
+		for _, entry := range row.ExpeditionIDWeightList {
+			if len(entry) >= 2 {
+				template.enemies = append(template.enemies, weightedExpedition{entry[0], entry[1]})
+			}
+		}
+		if len(row.EnemyRefresh) > 0 {
+			template.enemyRefresh = row.EnemyRefresh[0]
+		}
+		for _, extra := range row.AmbushRatioExtra {
+			switch len(extra) {
+			case 1:
+				template.ambushRatios = append(template.ambushRatios, ambushRatio{anyCell: true, ratio: extra[0]})
+			case 3:
+				template.ambushRatios = append(template.ambushRatios, ambushRatio{row: uint32(extra[0]), column: uint32(extra[1]), ratio: extra[2]})
+			}
+		}
+		for _, condition := range row.WinCondition {
+			kind, _ := condition[0].(float64)
+			param, _ := condition[1].(float64)
+			template.winConditions = append(template.winConditions, chapterWinCondition{uint32(kind), uint32(param)})
+		}
+		for _, award := range row.Awards {
+			template.awards = append(template.awards, award[1])
+		}
+		chapterTemplates[id] = template
+	}
+
+	expeditions, err := readConfigTable[expeditionConfig]("expedition_data_template")
+	if err != nil {
+		return err
+	}
+	expeditionTemplates = make(map[uint32]expeditionTemplate, len(expeditions))
+	for id, row := range expeditions {
+		expeditionTemplates[id] = expeditionTemplate{exp: row.Exp, kind: row.Type, level: row.Level}
+	}
+
+	items, err := readConfigTable[virtualItemConfig]("item_virtual_data_statistics")
+	if err != nil {
+		return err
+	}
+	dropPools = map[uint32][]dropRef{}
+	for id, row := range items {
+		var icons [][]uint32
+		if json.Unmarshal(row.DisplayIcon, &icons) != nil {
+			continue
+		}
+		for _, icon := range icons {
+			if len(icon) >= 2 {
+				dropPools[id] = append(dropPools[id], dropRef{icon[0], icon[1]})
+			}
+		}
+	}
+
+	levels, err := readConfigTable[shipLevelConfig]("ship_level")
+	if err != nil {
+		return err
+	}
+	maxLevel := uint32(0)
+	for _, row := range levels {
+		maxLevel = max(maxLevel, row.Level)
+	}
+	shipLevelExp = make([]uint32, maxLevel)
+	for _, row := range levels {
+		if row.Level > 0 {
+			shipLevelExp[row.Level-1] = row.Exp
+		}
+	}
+	return nil
 }

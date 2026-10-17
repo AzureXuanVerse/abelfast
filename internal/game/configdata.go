@@ -99,3 +99,19 @@ func (table *configTable[T]) get() (map[uint32]T, error) {
 	})
 	return table.rows, table.err
 }
+
+// loadGameData builds what the handlers index directly (ships, construction,
+// equipment, the campaign, sign-in drops...) from the config tables, once at
+// startup.
+func loadGameData() error {
+	for _, load := range []func() error{
+		loadShipData,
+		loadChapterData,
+		loadSignInData,
+	} {
+		if err := load(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
