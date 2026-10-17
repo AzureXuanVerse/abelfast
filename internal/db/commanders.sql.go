@@ -9,6 +9,22 @@ import (
 	"context"
 )
 
+const addFurniture = `-- name: AddFurniture :exec
+INSERT INTO commander_furniture (commander_id, furniture_id, count) VALUES (?, ?, ?)
+ON CONFLICT (commander_id, furniture_id) DO UPDATE SET count = count + excluded.count
+`
+
+type AddFurnitureParams struct {
+	CommanderID uint32
+	FurnitureID uint32
+	Count       uint32
+}
+
+func (q *Queries) AddFurniture(ctx context.Context, arg AddFurnitureParams) error {
+	_, err := q.db.ExecContext(ctx, addFurniture, arg.CommanderID, arg.FurnitureID, arg.Count)
+	return err
+}
+
 const addStory = `-- name: AddStory :exec
 INSERT INTO commander_stories (commander_id, story_id) VALUES (?, ?) ON CONFLICT DO NOTHING
 `
@@ -21,6 +37,17 @@ type AddStoryParams struct {
 func (q *Queries) AddStory(ctx context.Context, arg AddStoryParams) error {
 	_, err := q.db.ExecContext(ctx, addStory, arg.CommanderID, arg.StoryID)
 	return err
+}
+
+const countCommanders = `-- name: CountCommanders :one
+SELECT COUNT(*) FROM commanders
+`
+
+func (q *Queries) CountCommanders(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countCommanders)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const createCommander = `-- name: CreateCommander :one
@@ -121,6 +148,70 @@ func (q *Queries) GetCommanderByAccount(ctx context.Context, accountID uint32) (
 	return i, err
 }
 
+const listFurniture = `-- name: ListFurniture :many
+SELECT furniture_id, count FROM commander_furniture WHERE commander_id = ? ORDER BY furniture_id
+`
+
+type ListFurnitureRow struct {
+	FurnitureID uint32
+	Count       uint32
+}
+
+func (q *Queries) ListFurniture(ctx context.Context, commanderID uint32) ([]ListFurnitureRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFurniture, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFurnitureRow
+	for rows.Next() {
+		var i ListFurnitureRow
+		if err := rows.Scan(&i.FurnitureID, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSecretaries = `-- name: ListSecretaries :many
+SELECT commander_id, position, ship_id, phantom_id FROM commander_secretaries WHERE commander_id = ? ORDER BY position
+`
+
+func (q *Queries) ListSecretaries(ctx context.Context, commanderID uint32) ([]CommanderSecretary, error) {
+	rows, err := q.db.QueryContext(ctx, listSecretaries, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CommanderSecretary
+	for rows.Next() {
+		var i CommanderSecretary
+		if err := rows.Scan(
+			&i.CommanderID,
+			&i.Position,
+			&i.ShipID,
+			&i.PhantomID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStories = `-- name: ListStories :many
 SELECT story_id FROM commander_stories WHERE commander_id = ? ORDER BY story_id
 `
@@ -148,6 +239,20 @@ func (q *Queries) ListStories(ctx context.Context, commanderID uint32) ([]uint32
 	return items, nil
 }
 
+const setChatRoom = `-- name: SetChatRoom :exec
+UPDATE commanders SET chat_room_id = ? WHERE id = ?
+`
+
+type SetChatRoomParams struct {
+	ChatRoomID uint32
+	ID         uint32
+}
+
+func (q *Queries) SetChatRoom(ctx context.Context, arg SetChatRoomParams) error {
+	_, err := q.db.ExecContext(ctx, setChatRoom, arg.ChatRoomID, arg.ID)
+	return err
+}
+
 const setGuideIndex = `-- name: SetGuideIndex :exec
 UPDATE commanders SET guide_index = ? WHERE id = ?
 `
@@ -173,5 +278,27 @@ type SetNewGuideIndexParams struct {
 
 func (q *Queries) SetNewGuideIndex(ctx context.Context, arg SetNewGuideIndexParams) error {
 	_, err := q.db.ExecContext(ctx, setNewGuideIndex, arg.NewGuideIndex, arg.ID)
+	return err
+}
+
+const setSecretary = `-- name: SetSecretary :exec
+INSERT INTO commander_secretaries (commander_id, position, ship_id, phantom_id) VALUES (?, ?, ?, ?)
+ON CONFLICT (commander_id, position) DO UPDATE SET ship_id = excluded.ship_id, phantom_id = excluded.phantom_id
+`
+
+type SetSecretaryParams struct {
+	CommanderID uint32
+	Position    uint32
+	ShipID      uint32
+	PhantomID   uint32
+}
+
+func (q *Queries) SetSecretary(ctx context.Context, arg SetSecretaryParams) error {
+	_, err := q.db.ExecContext(ctx, setSecretary,
+		arg.CommanderID,
+		arg.Position,
+		arg.ShipID,
+		arg.PhantomID,
+	)
 	return err
 }

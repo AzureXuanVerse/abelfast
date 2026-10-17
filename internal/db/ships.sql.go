@@ -10,37 +10,6 @@ import (
 	"strings"
 )
 
-const addBuildPoints = `-- name: AddBuildPoints :exec
-INSERT INTO commander_build_states (commander_id, exchange_count) VALUES (?, ?)
-ON CONFLICT (commander_id) DO UPDATE SET exchange_count = exchange_count + excluded.exchange_count
-`
-
-type AddBuildPointsParams struct {
-	CommanderID   uint32
-	ExchangeCount uint32
-}
-
-func (q *Queries) AddBuildPoints(ctx context.Context, arg AddBuildPointsParams) error {
-	_, err := q.db.ExecContext(ctx, addBuildPoints, arg.CommanderID, arg.ExchangeCount)
-	return err
-}
-
-const addEquipment = `-- name: AddEquipment :exec
-INSERT INTO commander_equipments (commander_id, equip_id, count) VALUES (?, ?, ?)
-ON CONFLICT (commander_id, equip_id) DO UPDATE SET count = count + excluded.count
-`
-
-type AddEquipmentParams struct {
-	CommanderID uint32
-	EquipID     uint32
-	Count       uint32
-}
-
-func (q *Queries) AddEquipment(ctx context.Context, arg AddEquipmentParams) error {
-	_, err := q.db.ExecContext(ctx, addEquipment, arg.CommanderID, arg.EquipID, arg.Count)
-	return err
-}
-
 const addShipGroup = `-- name: AddShipGroup :execrows
 INSERT INTO commander_ship_groups (commander_id, group_id, intimacy_max, lv_max) VALUES (?, ?, ?, ?)
 ON CONFLICT DO NOTHING
@@ -119,40 +88,6 @@ func (q *Queries) CountShipGroups(ctx context.Context, commanderID uint32) (int6
 	return count, err
 }
 
-const createBuild = `-- name: CreateBuild :one
-INSERT INTO builds (commander_id, pool_id, template_id, duration, finish_time)
-VALUES (?, ?, ?, ?, ?)
-RETURNING id, commander_id, pool_id, template_id, duration, finish_time
-`
-
-type CreateBuildParams struct {
-	CommanderID uint32
-	PoolID      uint32
-	TemplateID  uint32
-	Duration    uint32
-	FinishTime  int64
-}
-
-func (q *Queries) CreateBuild(ctx context.Context, arg CreateBuildParams) (Build, error) {
-	row := q.db.QueryRowContext(ctx, createBuild,
-		arg.CommanderID,
-		arg.PoolID,
-		arg.TemplateID,
-		arg.Duration,
-		arg.FinishTime,
-	)
-	var i Build
-	err := row.Scan(
-		&i.ID,
-		&i.CommanderID,
-		&i.PoolID,
-		&i.TemplateID,
-		&i.Duration,
-		&i.FinishTime,
-	)
-	return i, err
-}
-
 const createShip = `-- name: CreateShip :one
 INSERT INTO ships (commander_id, template_id, level, exp, energy, intimacy, max_level, is_locked, created_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -206,26 +141,6 @@ func (q *Queries) CreateShip(ctx context.Context, arg CreateShipParams) (Ship, e
 	return i, err
 }
 
-const deleteBuild = `-- name: DeleteBuild :exec
-DELETE FROM builds WHERE id = ?
-`
-
-func (q *Queries) DeleteBuild(ctx context.Context, id uint32) error {
-	_, err := q.db.ExecContext(ctx, deleteBuild, id)
-	return err
-}
-
-const getBuildPoints = `-- name: GetBuildPoints :one
-SELECT exchange_count FROM commander_build_states WHERE commander_id = ?
-`
-
-func (q *Queries) GetBuildPoints(ctx context.Context, commanderID uint32) (uint32, error) {
-	row := q.db.QueryRowContext(ctx, getBuildPoints, commanderID)
-	var exchange_count uint32
-	err := row.Scan(&exchange_count)
-	return exchange_count, err
-}
-
 const getShip = `-- name: GetShip :one
 SELECT id, commander_id, template_id, level, exp, energy, intimacy, max_level, is_locked, created_at, state, proficiency, skin_id, propose, name, change_name_timestamp, common_flag FROM ships WHERE id = ? AND commander_id = ?
 `
@@ -258,72 +173,6 @@ func (q *Queries) GetShip(ctx context.Context, arg GetShipParams) (Ship, error) 
 		&i.CommonFlag,
 	)
 	return i, err
-}
-
-const listBuilds = `-- name: ListBuilds :many
-SELECT id, commander_id, pool_id, template_id, duration, finish_time FROM builds WHERE commander_id = ? ORDER BY id
-`
-
-func (q *Queries) ListBuilds(ctx context.Context, commanderID uint32) ([]Build, error) {
-	rows, err := q.db.QueryContext(ctx, listBuilds, commanderID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Build
-	for rows.Next() {
-		var i Build
-		if err := rows.Scan(
-			&i.ID,
-			&i.CommanderID,
-			&i.PoolID,
-			&i.TemplateID,
-			&i.Duration,
-			&i.FinishTime,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listEquipments = `-- name: ListEquipments :many
-SELECT equip_id, count FROM commander_equipments WHERE commander_id = ? AND count > 0 ORDER BY equip_id
-`
-
-type ListEquipmentsRow struct {
-	EquipID uint32
-	Count   uint32
-}
-
-func (q *Queries) ListEquipments(ctx context.Context, commanderID uint32) ([]ListEquipmentsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listEquipments, commanderID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListEquipmentsRow
-	for rows.Next() {
-		var i ListEquipmentsRow
-		if err := rows.Scan(&i.EquipID, &i.Count); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const listShipEquipments = `-- name: ListShipEquipments :many
@@ -598,20 +447,6 @@ func (q *Queries) ListTrophies(ctx context.Context, commanderID uint32) ([]Comma
 	return items, nil
 }
 
-const setBuildFinishTime = `-- name: SetBuildFinishTime :exec
-UPDATE builds SET finish_time = ? WHERE id = ?
-`
-
-type SetBuildFinishTimeParams struct {
-	FinishTime int64
-	ID         uint32
-}
-
-func (q *Queries) SetBuildFinishTime(ctx context.Context, arg SetBuildFinishTimeParams) error {
-	_, err := q.db.ExecContext(ctx, setBuildFinishTime, arg.FinishTime, arg.ID)
-	return err
-}
-
 const setShipEquipment = `-- name: SetShipEquipment :exec
 INSERT INTO ship_equipments (ship_id, pos, equip_id, skin_id) VALUES (?, ?, ?, ?)
 ON CONFLICT (ship_id, pos) DO UPDATE SET equip_id = excluded.equip_id, skin_id = excluded.skin_id
@@ -671,59 +506,27 @@ func (q *Queries) SetTrophy(ctx context.Context, arg SetTrophyParams) error {
 	return err
 }
 
-const spendEquipment = `-- name: SpendEquipment :execrows
-UPDATE commander_equipments SET count = count - ?1
-WHERE commander_id = ?2 AND equip_id = ?3 AND count >= ?1
+const updateShipBattleState = `-- name: UpdateShipBattleState :exec
+UPDATE ships SET level = ?, exp = ?, intimacy = ?, energy = ? WHERE id = ? AND commander_id = ?
 `
 
-type SpendEquipmentParams struct {
-	Count       uint32
+type UpdateShipBattleStateParams struct {
+	Level       uint32
+	Exp         uint32
+	Intimacy    uint32
+	Energy      uint32
+	ID          uint32
 	CommanderID uint32
-	EquipID     uint32
 }
 
-func (q *Queries) SpendEquipment(ctx context.Context, arg SpendEquipmentParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, spendEquipment, arg.Count, arg.CommanderID, arg.EquipID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
-const spendItem = `-- name: SpendItem :execrows
-UPDATE commander_items SET count = count - ?1
-WHERE commander_id = ?2 AND item_id = ?3 AND count >= ?1
-`
-
-type SpendItemParams struct {
-	Count       uint32
-	CommanderID uint32
-	ItemID      uint32
-}
-
-func (q *Queries) SpendItem(ctx context.Context, arg SpendItemParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, spendItem, arg.Count, arg.CommanderID, arg.ItemID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
-const spendResource = `-- name: SpendResource :execrows
-UPDATE commander_resources SET amount = amount - ?1
-WHERE commander_id = ?2 AND resource_id = ?3 AND amount >= ?1
-`
-
-type SpendResourceParams struct {
-	Amount      uint32
-	CommanderID uint32
-	ResourceID  uint32
-}
-
-func (q *Queries) SpendResource(ctx context.Context, arg SpendResourceParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, spendResource, arg.Amount, arg.CommanderID, arg.ResourceID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
+func (q *Queries) UpdateShipBattleState(ctx context.Context, arg UpdateShipBattleStateParams) error {
+	_, err := q.db.ExecContext(ctx, updateShipBattleState,
+		arg.Level,
+		arg.Exp,
+		arg.Intimacy,
+		arg.Energy,
+		arg.ID,
+		arg.CommanderID,
+	)
+	return err
 }

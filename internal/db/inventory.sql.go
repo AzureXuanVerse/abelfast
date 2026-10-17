@@ -9,6 +9,22 @@ import (
 	"context"
 )
 
+const addEquipment = `-- name: AddEquipment :exec
+INSERT INTO commander_equipments (commander_id, equip_id, count) VALUES (?, ?, ?)
+ON CONFLICT (commander_id, equip_id) DO UPDATE SET count = count + excluded.count
+`
+
+type AddEquipmentParams struct {
+	CommanderID uint32
+	EquipID     uint32
+	Count       uint32
+}
+
+func (q *Queries) AddEquipment(ctx context.Context, arg AddEquipmentParams) error {
+	_, err := q.db.ExecContext(ctx, addEquipment, arg.CommanderID, arg.EquipID, arg.Count)
+	return err
+}
+
 const addItem = `-- name: AddItem :exec
 INSERT INTO commander_items (commander_id, item_id, count) VALUES (?, ?, ?)
 ON CONFLICT (commander_id, item_id) DO UPDATE SET count = count + excluded.count
@@ -39,6 +55,70 @@ type AddResourceParams struct {
 func (q *Queries) AddResource(ctx context.Context, arg AddResourceParams) error {
 	_, err := q.db.ExecContext(ctx, addResource, arg.CommanderID, arg.ResourceID, arg.Amount)
 	return err
+}
+
+const addVirtualItem = `-- name: AddVirtualItem :exec
+INSERT INTO commander_virtual_items (commander_id, item_id, amount) VALUES (?, ?, ?)
+ON CONFLICT (commander_id, item_id) DO UPDATE SET amount = amount + excluded.amount
+`
+
+type AddVirtualItemParams struct {
+	CommanderID uint32
+	ItemID      uint32
+	Amount      uint32
+}
+
+func (q *Queries) AddVirtualItem(ctx context.Context, arg AddVirtualItemParams) error {
+	_, err := q.db.ExecContext(ctx, addVirtualItem, arg.CommanderID, arg.ItemID, arg.Amount)
+	return err
+}
+
+const getVirtualItem = `-- name: GetVirtualItem :one
+SELECT amount FROM commander_virtual_items WHERE commander_id = ? AND item_id = ?
+`
+
+type GetVirtualItemParams struct {
+	CommanderID uint32
+	ItemID      uint32
+}
+
+func (q *Queries) GetVirtualItem(ctx context.Context, arg GetVirtualItemParams) (uint32, error) {
+	row := q.db.QueryRowContext(ctx, getVirtualItem, arg.CommanderID, arg.ItemID)
+	var amount uint32
+	err := row.Scan(&amount)
+	return amount, err
+}
+
+const listEquipments = `-- name: ListEquipments :many
+SELECT equip_id, count FROM commander_equipments WHERE commander_id = ? AND count > 0 ORDER BY equip_id
+`
+
+type ListEquipmentsRow struct {
+	EquipID uint32
+	Count   uint32
+}
+
+func (q *Queries) ListEquipments(ctx context.Context, commanderID uint32) ([]ListEquipmentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listEquipments, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListEquipmentsRow
+	for rows.Next() {
+		var i ListEquipmentsRow
+		if err := rows.Scan(&i.EquipID, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listItems = `-- name: ListItems :many
@@ -103,4 +183,61 @@ func (q *Queries) ListResources(ctx context.Context, commanderID uint32) ([]List
 		return nil, err
 	}
 	return items, nil
+}
+
+const spendEquipment = `-- name: SpendEquipment :execrows
+UPDATE commander_equipments SET count = count - ?1
+WHERE commander_id = ?2 AND equip_id = ?3 AND count >= ?1
+`
+
+type SpendEquipmentParams struct {
+	Count       uint32
+	CommanderID uint32
+	EquipID     uint32
+}
+
+func (q *Queries) SpendEquipment(ctx context.Context, arg SpendEquipmentParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, spendEquipment, arg.Count, arg.CommanderID, arg.EquipID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const spendItem = `-- name: SpendItem :execrows
+UPDATE commander_items SET count = count - ?1
+WHERE commander_id = ?2 AND item_id = ?3 AND count >= ?1
+`
+
+type SpendItemParams struct {
+	Count       uint32
+	CommanderID uint32
+	ItemID      uint32
+}
+
+func (q *Queries) SpendItem(ctx context.Context, arg SpendItemParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, spendItem, arg.Count, arg.CommanderID, arg.ItemID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const spendResource = `-- name: SpendResource :execrows
+UPDATE commander_resources SET amount = amount - ?1
+WHERE commander_id = ?2 AND resource_id = ?3 AND amount >= ?1
+`
+
+type SpendResourceParams struct {
+	Amount      uint32
+	CommanderID uint32
+	ResourceID  uint32
+}
+
+func (q *Queries) SpendResource(ctx context.Context, arg SpendResourceParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, spendResource, arg.Amount, arg.CommanderID, arg.ResourceID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

@@ -9,55 +9,6 @@ import (
 	"context"
 )
 
-const addHandbookFinished = `-- name: AddHandbookFinished :execrows
-INSERT INTO commander_handbook_finished (commander_id, page_id, task_id) VALUES (?, ?, ?)
-ON CONFLICT DO NOTHING
-`
-
-type AddHandbookFinishedParams struct {
-	CommanderID uint32
-	PageID      uint32
-	TaskID      uint32
-}
-
-func (q *Queries) AddHandbookFinished(ctx context.Context, arg AddHandbookFinishedParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, addHandbookFinished, arg.CommanderID, arg.PageID, arg.TaskID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
-const addVirtualItem = `-- name: AddVirtualItem :exec
-INSERT INTO commander_virtual_items (commander_id, item_id, amount) VALUES (?, ?, ?)
-ON CONFLICT (commander_id, item_id) DO UPDATE SET amount = amount + excluded.amount
-`
-
-type AddVirtualItemParams struct {
-	CommanderID uint32
-	ItemID      uint32
-	Amount      uint32
-}
-
-func (q *Queries) AddVirtualItem(ctx context.Context, arg AddVirtualItemParams) error {
-	_, err := q.db.ExecContext(ctx, addVirtualItem, arg.CommanderID, arg.ItemID, arg.Amount)
-	return err
-}
-
-const createHandbookPage = `-- name: CreateHandbookPage :exec
-INSERT INTO commander_handbook_pages (commander_id, page_id) VALUES (?, ?) ON CONFLICT DO NOTHING
-`
-
-type CreateHandbookPageParams struct {
-	CommanderID uint32
-	PageID      uint32
-}
-
-func (q *Queries) CreateHandbookPage(ctx context.Context, arg CreateHandbookPageParams) error {
-	_, err := q.db.ExecContext(ctx, createHandbookPage, arg.CommanderID, arg.PageID)
-	return err
-}
-
 const createTask = `-- name: CreateTask :execrows
 INSERT INTO commander_tasks (commander_id, task_id, progress, accept_time) VALUES (?, ?, ?, ?)
 ON CONFLICT DO NOTHING
@@ -160,22 +111,6 @@ func (q *Queries) GetTaskCounter(ctx context.Context, arg GetTaskCounterParams) 
 	return value, err
 }
 
-const getVirtualItem = `-- name: GetVirtualItem :one
-SELECT amount FROM commander_virtual_items WHERE commander_id = ? AND item_id = ?
-`
-
-type GetVirtualItemParams struct {
-	CommanderID uint32
-	ItemID      uint32
-}
-
-func (q *Queries) GetVirtualItem(ctx context.Context, arg GetVirtualItemParams) (uint32, error) {
-	row := q.db.QueryRowContext(ctx, getVirtualItem, arg.CommanderID, arg.ItemID)
-	var amount uint32
-	err := row.Scan(&amount)
-	return amount, err
-}
-
 const getWeeklyRewardLevel = `-- name: GetWeeklyRewardLevel :one
 SELECT reward_lv FROM commander_weekly WHERE commander_id = ?
 `
@@ -216,65 +151,6 @@ func (q *Queries) ListActivityTasks(ctx context.Context, commanderID uint32) ([]
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listHandbookFinished = `-- name: ListHandbookFinished :many
-SELECT page_id, task_id FROM commander_handbook_finished WHERE commander_id = ? ORDER BY rowid
-`
-
-type ListHandbookFinishedRow struct {
-	PageID uint32
-	TaskID uint32
-}
-
-func (q *Queries) ListHandbookFinished(ctx context.Context, commanderID uint32) ([]ListHandbookFinishedRow, error) {
-	rows, err := q.db.QueryContext(ctx, listHandbookFinished, commanderID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListHandbookFinishedRow
-	for rows.Next() {
-		var i ListHandbookFinishedRow
-		if err := rows.Scan(&i.PageID, &i.TaskID); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listHandbookPages = `-- name: ListHandbookPages :many
-SELECT page_id FROM commander_handbook_pages WHERE commander_id = ? ORDER BY page_id
-`
-
-func (q *Queries) ListHandbookPages(ctx context.Context, commanderID uint32) ([]uint32, error) {
-	rows, err := q.db.QueryContext(ctx, listHandbookPages, commanderID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []uint32
-	for rows.Next() {
-		var page_id uint32
-		if err := rows.Scan(&page_id); err != nil {
-			return nil, err
-		}
-		items = append(items, page_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

@@ -3,11 +3,11 @@ INSERT INTO ships (commander_id, template_id, level, exp, energy, intimacy, max_
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
--- name: ListShipsByCommander :many
-SELECT * FROM ships WHERE commander_id = ? ORDER BY id;
-
 -- name: GetShip :one
 SELECT * FROM ships WHERE id = ? AND commander_id = ?;
+
+-- name: ListShipsByCommander :many
+SELECT * FROM ships WHERE commander_id = ? ORDER BY id;
 
 -- name: ListShipsByID :many
 SELECT * FROM ships WHERE commander_id = ? AND id IN (sqlc.slice(ids)) ORDER BY id;
@@ -17,6 +17,9 @@ SELECT COUNT(*) FROM ships WHERE commander_id = ? AND id IN (sqlc.slice(ids));
 
 -- name: SetShipLocked :exec
 UPDATE ships SET is_locked = ? WHERE id = ? AND commander_id = ?;
+
+-- name: UpdateShipBattleState :exec
+UPDATE ships SET level = ?, exp = ?, intimacy = ?, energy = ? WHERE id = ? AND commander_id = ?;
 
 -- name: SetShipEquipment :exec
 INSERT INTO ship_equipments (ship_id, pos, equip_id, skin_id) VALUES (?, ?, ?, ?)
@@ -37,46 +40,6 @@ INSERT INTO ship_skills (ship_id, skill_id, level, exp) VALUES (?, ?, ?, 0) ON C
 SELECT k.ship_id, k.skill_id, k.level, k.exp FROM ship_skills k
 JOIN ships s ON s.id = k.ship_id
 WHERE s.commander_id = ? ORDER BY k.ship_id, k.rowid;
-
--- name: ListEquipments :many
-SELECT equip_id, count FROM commander_equipments WHERE commander_id = ? AND count > 0 ORDER BY equip_id;
-
--- name: AddEquipment :exec
-INSERT INTO commander_equipments (commander_id, equip_id, count) VALUES (?, ?, ?)
-ON CONFLICT (commander_id, equip_id) DO UPDATE SET count = count + excluded.count;
-
--- name: SpendEquipment :execrows
-UPDATE commander_equipments SET count = count - sqlc.arg(count)
-WHERE commander_id = sqlc.arg(commander_id) AND equip_id = sqlc.arg(equip_id) AND count >= sqlc.arg(count);
-
--- name: SpendItem :execrows
-UPDATE commander_items SET count = count - sqlc.arg(count)
-WHERE commander_id = sqlc.arg(commander_id) AND item_id = sqlc.arg(item_id) AND count >= sqlc.arg(count);
-
--- name: SpendResource :execrows
-UPDATE commander_resources SET amount = amount - sqlc.arg(amount)
-WHERE commander_id = sqlc.arg(commander_id) AND resource_id = sqlc.arg(resource_id) AND amount >= sqlc.arg(amount);
-
--- name: CreateBuild :one
-INSERT INTO builds (commander_id, pool_id, template_id, duration, finish_time)
-VALUES (?, ?, ?, ?, ?)
-RETURNING *;
-
--- name: ListBuilds :many
-SELECT * FROM builds WHERE commander_id = ? ORDER BY id;
-
--- name: SetBuildFinishTime :exec
-UPDATE builds SET finish_time = ? WHERE id = ?;
-
--- name: DeleteBuild :exec
-DELETE FROM builds WHERE id = ?;
-
--- name: GetBuildPoints :one
-SELECT exchange_count FROM commander_build_states WHERE commander_id = ?;
-
--- name: AddBuildPoints :exec
-INSERT INTO commander_build_states (commander_id, exchange_count) VALUES (?, ?)
-ON CONFLICT (commander_id) DO UPDATE SET exchange_count = exchange_count + excluded.exchange_count;
 
 -- name: AddShipGroup :execrows
 INSERT INTO commander_ship_groups (commander_id, group_id, intimacy_max, lv_max) VALUES (?, ?, ?, ?)
