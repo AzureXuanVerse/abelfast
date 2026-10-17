@@ -1,0 +1,646 @@
+package game
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"math/rand/v2"
+	"strings"
+	"time"
+
+	"google.golang.org/protobuf/proto"
+
+	"github.com/ggmolly/belfast/internal/connection"
+	"github.com/ggmolly/belfast/internal/db"
+	"github.com/ggmolly/belfast/internal/protobuf"
+	"github.com/ggmolly/belfast/internal/protocol"
+)
+
+// ChapterConst attachments (CHAPTERCELLINFO_P13.item_type)
+const (
+	attachNone   = 0
+	attachElite  = 4
+	attachAmbush = 5
+	attachEnemy  = 6
+	attachBoss   = 8
+)
+
+// ChapterConst cell flags (CHAPTERCELLINFO_P13.item_flag)
+const (
+	cellFlagActive   = 0
+	cellFlagDisabled = 1 // a defeated enemy keeps its cell, disabled
+	cellFlagAmbush   = 2 // an ambush waiting for the fleet's answer (OpAmbush)
+)
+
+// ChapterConst.Op* (CS_13103.act)
+const (
+	opRetreat    = 0
+	opMove       = 1
+	opAmbush     = 4
+	opEnemyRound = 8
+	opSubState   = 9
+	opRequest    = 49
+)
+
+// fullHP is a ship's hp_rant at full health (ten-thousandths).
+const fullHP = 10000
+
+// bossSpawnFlag marks the cells the boss can appear on: the capture sends
+// flag_list [1] on 1-1's boss cell from the start, it has no client meaning.
+const bossSpawnFlag = 1
+
+// chapterDueExtra: the capture's CURRENTCHAPTERINFO.time is start_time plus
+// chapter_template.time plus 365 days.
+const chapterDueExtra = 365 * 24 * 3600
+
+// chapterSession is the active sortie, stored as the CURRENTCHAPTERINFO the
+// client gets plus the scripted ambushes already sprung.
+type chapterSession struct {
+	template *chapterTemplate
+	info     *protobuf.CURRENTCHAPTERINFO
+	ambushed []string
+}
+
+// loadChapter returns the commander's active chapter, nil if there is none.
+func loadChapter(ctx context.Context, queries *db.Queries, commanderID uint32) (*chapterSession, error) {
+	row, err := queries.GetChapterState(ctx, commanderID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	template := chapterTemplates[row.ChapterID]
+	if template == nil {
+		return nil, fmt.Errorf("active chapter %d has no template", row.ChapterID)
+	}
+	info := &protobuf.CURRENTCHAPTERINFO{}
+	if err := proto.Unmarshal(row.State, info); err != nil {
+		return nil, err
+	}
+	session := &chapterSession{template: template, info: info}
+	if row.Ambushed != "" {
+		session.ambushed = strings.Split(row.Ambushed, ";")
+	}
+	return session, nil
+}
+
+func (session *chapterSession) save(ctx context.Context, queries *db.Queries, commanderID uint32) error {
+	state, err := proto.Marshal(session.info)
+	if err != nil {
+		return err
+	}
+	return queries.SaveChapterState(ctx, db.SaveChapterStateParams{
+		CommanderID: commanderID,
+		ChapterID:   session.template.id,
+		State:       state,
+		Ambushed:    strings.Join(session.ambushed, ";"),
+	})
+}
+
+func cellKey(row, column uint32) string {
+	return fmt.Sprintf("%d,%d", row, column)
+}
+
+func cellPos(row, column uint32) *protobuf.CHAPTERCELLPOS_P13 {
+	return &protobuf.CHAPTERCELLPOS_P13{Row: proto.Uint32(row), Column: proto.Uint32(column)}
+}
+
+func (session *chapterSession) cell(row, column uint32) *protobuf.CHAPTERCELLINFO_P13 {
+	for _, cell := range session.info.CellList {
+		if cell.GetPos().GetRow() == row && cell.GetPos().GetColumn() == column {
+			return cell
+		}
+	}
+	return nil
+}
+
+func (session *chapterSession) group(id uint32) *protobuf.GROUPINCHAPTER_P13 {
+	for _, group := range session.info.MainGroupList {
+		if group.GetId() == id {
+			return group
+		}
+	}
+	return nil
+}
+
+// activeGroup is the fleet a battle is fought with: the one standing on an
+// enemy, else the first.
+func (session *chapterSession) activeGroup() *protobuf.GROUPINCHAPTER_P13 {
+	for _, group := range session.info.MainGroupList {
+		if isEnemyCell(session.cell(group.GetPos().GetRow(), group.GetPos().GetColumn())) {
+			return group
+		}
+	}
+	if len(session.info.MainGroupList) > 0 {
+		return session.info.MainGroupList[0]
+	}
+	return nil
+}
+
+func isEnemyCell(cell *protobuf.CHAPTERCELLINFO_P13) bool {
+	if cell == nil || cell.GetItemFlag() == cellFlagDisabled {
+		return false
+	}
+	switch cell.GetItemType() {
+	case attachEnemy, attachBoss, attachElite, attachAmbush:
+		return true
+	}
+	return false
+}
+
+func setCell(cell *protobuf.CHAPTERCELLINFO_P13, kind, id, flag uint32) {
+	cell.ItemType = proto.Uint32(kind)
+	cell.ItemId = proto.Uint32(id)
+	cell.ItemFlag = proto.Uint32(flag)
+	cell.ItemData = proto.Uint32(0)
+}
+
+func cloneCell(cell *protobuf.CHAPTERCELLINFO_P13) *protobuf.CHAPTERCELLINFO_P13 {
+	return proto.Clone(cell).(*protobuf.CHAPTERCELLINFO_P13)
+}
+
+// bossesDown counts the defeated bosses, ChapterConst win condition 1.
+func (session *chapterSession) bossesDown() uint32 {
+	count := uint32(0)
+	for _, cell := range session.info.CellList {
+		if cell.GetItemType() == attachBoss && cell.GetItemFlag() == cellFlagDisabled {
+			count++
+		}
+	}
+	return count
+}
+
+// won is Chapter:CheckChapterWin for the conditions the supported chapters use.
+func (session *chapterSession) won() bool {
+	for _, condition := range session.template.winConditions {
+		switch condition.kind {
+		case 1: // bosses defeated
+			if session.bossesDown() >= condition.param {
+				return true
+			}
+		case 2: // enemies defeated
+			if session.info.GetKillCount() >= condition.param {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func pickExpedition(list []weightedExpedition) uint32 {
+	total := uint32(0)
+	for _, entry := range list {
+		total += entry.weight
+	}
+	if total == 0 {
+		return 0
+	}
+	roll := rand.Uint32N(total)
+	for _, entry := range list {
+		if roll < entry.weight {
+			return entry.id
+		}
+		roll -= entry.weight
+	}
+	return list[len(list)-1].id
+}
+
+// newChapter lays the chapter out (chapter_template.grids): the fleets on the
+// born cells, enemy_refresh enemies drawn from expedition_id_weight_list on
+// the enemy cells, the boss cells empty until bossRefresh kills.
+func newChapter(template *chapterTemplate, teams []*protobuf.TEAM_INFO, now uint32) *protobuf.CURRENTCHAPTERINFO {
+	info := &protobuf.CURRENTCHAPTERINFO{
+		Id:                    proto.Uint32(template.id),
+		Time:                  proto.Uint32(now + template.time + chapterDueExtra),
+		Round:                 proto.Uint32(0),
+		IsSubmarineAutoAttack: proto.Uint32(1),
+		ModelActCount:         proto.Uint32(0),
+		LoopFlag:              proto.Uint32(0),
+		ChapterHp:             proto.Uint32(0),
+		KillCount:             proto.Uint32(0),
+		ContinuousKillCount:   proto.Uint32(0),
+		MoveStepCount:         proto.Uint32(0),
+		StartTime:             proto.Uint32(now),
+	}
+	var born, enemies []*protobuf.CHAPTERCELLINFO_P13
+	for _, grid := range template.grids {
+		cell := &protobuf.CHAPTERCELLINFO_P13{Pos: cellPos(grid.row, grid.column)}
+		setCell(cell, attachNone, 0, 0)
+		// the client lists the grids from the end, so does the capture
+		info.CellList = append([]*protobuf.CHAPTERCELLINFO_P13{cell}, info.CellList...)
+		switch grid.kind {
+		case gridBorn:
+			born = append(born, cell)
+		case gridEnemy:
+			enemies = append(enemies, cell)
+		case gridBoss:
+			info.CellFlagList = append(info.CellFlagList, &protobuf.CELLFLAG{Pos: cellPos(grid.row, grid.column), FlagList: []uint32{bossSpawnFlag}})
+		}
+	}
+	rand.Shuffle(len(enemies), func(i, j int) { enemies[i], enemies[j] = enemies[j], enemies[i] })
+	for i := 0; i < template.enemyRefresh && i < len(enemies); i++ {
+		setCell(enemies[i], attachEnemy, pickExpedition(template.enemies), cellFlagActive)
+	}
+	shipCount := uint32(0)
+	for i, team := range teams {
+		pos := cellPos(0, 0)
+		if i < len(born) {
+			pos = cellPos(born[i].GetPos().GetRow(), born[i].GetPos().GetColumn())
+		}
+		group := &protobuf.GROUPINCHAPTER_P13{
+			Id:           proto.Uint32(team.GetId()),
+			Pos:          pos,
+			StepCount:    proto.Uint32(0),
+			Bullet:       proto.Uint32(template.ammoTotal),
+			StartPos:     cellPos(0, 0),
+			MoveStepDown: proto.Uint32(0),
+			KillCount:    proto.Uint32(0),
+			FleetId:      proto.Uint32(team.GetId()),
+			VisionLv:     proto.Uint32(0),
+		}
+		for _, id := range team.GetShipList() {
+			group.ShipList = append(group.ShipList, &protobuf.SHIPINCHAPTER_P13{Id: proto.Uint32(id), HpRant: proto.Uint32(fullHP)})
+			shipCount++
+		}
+		info.MainGroupList = append(info.MainGroupList, group)
+	}
+	info.InitShipCount = proto.Uint32(shipCount)
+	return info
+}
+
+// handleTracking13101 starts a sortie (TrackingCommand, CS_13101): the
+// fleets from FLEET_INFO.main_team enter the chapter, chapter_template.oil is
+// spent (the client subtracts it too) and the map comes back in SC_13102.
+// Non-zero results make the client show levelScene_tracking_erro.
+func (game *Game) handleTracking13101(client *connection.Client, req *protobuf.CS_13101) error {
+	ctx := context.Background()
+	template := chapterTemplates[req.GetId()]
+	teams := req.GetFleet().GetMainTeam()
+	if template == nil || len(teams) == 0 {
+		return client.Send(&protobuf.SC_13102{Result: proto.Uint32(1)})
+	}
+	ships, err := game.DB.ListShipsByCommander(ctx, client.CommanderID)
+	if err != nil {
+		return err
+	}
+	owned := make(map[uint32]bool, len(ships))
+	for _, ship := range ships {
+		owned[ship.ID] = true
+	}
+	for _, team := range teams {
+		for _, id := range team.GetShipList() {
+			if !owned[id] {
+				return client.Send(&protobuf.SC_13102{Result: proto.Uint32(1)})
+			}
+		}
+	}
+	session := &chapterSession{template: template, info: newChapter(template, teams, uint32(time.Now().Unix()))}
+	err = game.DB.InTx(ctx, func(queries *db.Queries) error {
+		if err := queries.SpendResource(ctx, db.SpendResourceParams{Amount: template.oil, CommanderID: client.CommanderID, ResourceID: ResourceOil}); err != nil {
+			return err
+		}
+		return session.save(ctx, queries, client.CommanderID)
+	})
+	if err != nil {
+		return err
+	}
+	return client.Send(&protobuf.SC_13102{Result: proto.Uint32(0), CurrentChapter: session.info})
+}
+
+// opReply is the SC_13104 every op gets: the capture always sets
+// auto_battle_time_update (0, no auto battle).
+func opReply(result uint32) *protobuf.SC_13104 {
+	return &protobuf.SC_13104{Result: proto.Uint32(result), AutoBattleTimeUpdate: proto.Uint32(0)}
+}
+
+// handleChapterOp runs a map action (ChapterOpCommand, CS_13103). act is a
+// ChapterConst.Op*, group_id the fleet. A non-zero result makes the client
+// show levelScene_operation and resync with OpRequest.
+func (game *Game) handleChapterOp(client *connection.Client, req *protobuf.CS_13103) error {
+	ctx := context.Background()
+	session, err := loadChapter(ctx, game.DB.Queries, client.CommanderID)
+	if err != nil {
+		return err
+	}
+	if session == nil {
+		return client.Send(opReply(1))
+	}
+	reply := opReply(0)
+	switch req.GetAct() {
+	case opRetreat:
+		return game.retreat(ctx, client, session, req.GetGroupId())
+	case opMove:
+		reply = session.move(req.GetGroupId(), req.GetActArg_1(), req.GetActArg_2())
+	case opAmbush:
+		reply = session.answerAmbush(req.GetGroupId(), req.GetActArg_1())
+	case opEnemyRound:
+		session.info.Round = proto.Uint32(session.info.GetRound() + 1)
+	case opSubState:
+		session.info.IsSubmarineAutoAttack = proto.Uint32(req.GetActArg_1())
+	case opRequest:
+		reply = session.resync(req.GetGroupId())
+	}
+	if reply.GetResult() == 0 {
+		if err := session.save(ctx, game.DB.Queries, client.CommanderID); err != nil {
+			return err
+		}
+	}
+	return client.Send(reply)
+}
+
+// retreat ends the sortie (OpRetreat, group 0) or pulls one fleet out. Ending
+// a won chapter (ChapterLevelData:UpdateProgressOnRetreat) adds progress_boss
+// to its progress, counts a clear, and a pass when it was already cleared.
+func (game *Game) retreat(ctx context.Context, client *connection.Client, session *chapterSession, groupID uint32) error {
+	if groupID != 0 && len(session.info.MainGroupList) > 1 {
+		groups := session.info.MainGroupList[:0]
+		for _, group := range session.info.MainGroupList {
+			if group.GetId() != groupID {
+				groups = append(groups, group)
+			}
+		}
+		session.info.MainGroupList = groups
+		if err := session.save(ctx, game.DB.Queries, client.CommanderID); err != nil {
+			return err
+		}
+		return client.Send(opReply(0))
+	}
+	err := game.DB.InTx(ctx, func(queries *db.Queries) error {
+		if session.won() {
+			progress, err := chapterProgress(ctx, queries, client.CommanderID, session.template.id)
+			if err != nil {
+				return err
+			}
+			if progress.Progress >= 100 {
+				progress.PassCount++
+			}
+			progress.Progress = min(progress.Progress+session.template.progressBoss, 100)
+			progress.DefeatCount++
+			progress.TodayDefeatCount++
+			if err := saveChapterProgress(ctx, queries, progress); err != nil {
+				return err
+			}
+		}
+		return queries.DeleteChapterState(ctx, client.CommanderID)
+	})
+	if err != nil {
+		return err
+	}
+	return client.Send(opReply(0))
+}
+
+// move walks a fleet to (row, column) (OpMove). The path goes around enemies
+// (it may end on one, the client then starts the battle) and stops early when
+// an ambush springs; the client animates move_path and merges map_update.
+func (session *chapterSession) move(groupID, row, column uint32) *protobuf.SC_13104 {
+	group := session.group(groupID)
+	if group == nil {
+		return opReply(1)
+	}
+	path := session.findPath(group.GetPos().GetRow(), group.GetPos().GetColumn(), row, column)
+	if path == nil {
+		return opReply(1)
+	}
+	reply := opReply(0)
+	for _, step := range path {
+		reply.MovePath = append(reply.MovePath, cellPos(step[0], step[1]))
+		if cell := session.springAmbush(step[0], step[1]); cell != nil {
+			reply.MapUpdate = append(reply.MapUpdate, cloneCell(cell))
+			break
+		}
+	}
+	last := reply.MovePath[len(reply.MovePath)-1]
+	steps := uint32(len(reply.MovePath))
+	group.Pos = cellPos(last.GetRow(), last.GetColumn())
+	group.StepCount = proto.Uint32(group.GetStepCount() + steps)
+	session.info.MoveStepCount = proto.Uint32(session.info.GetMoveStepCount() + steps)
+	session.info.Round = proto.Uint32(session.info.GetRound() + 1)
+	return reply
+}
+
+// findPath is a shortest walk over walkable cells, without the start cell.
+// Cells holding an enemy can only be the destination.
+func (session *chapterSession) findPath(fromRow, fromColumn, toRow, toColumn uint32) [][2]uint32 {
+	walkable := map[[2]uint32]bool{}
+	for _, grid := range session.template.grids {
+		walkable[[2]uint32{grid.row, grid.column}] = grid.walkable
+	}
+	start, goal := [2]uint32{fromRow, fromColumn}, [2]uint32{toRow, toColumn}
+	if !walkable[goal] || start == goal {
+		return nil
+	}
+	previous := map[[2]uint32][2]uint32{start: start}
+	queue := [][2]uint32{start}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		if current == goal {
+			var path [][2]uint32
+			for step := goal; step != start; step = previous[step] {
+				path = append([][2]uint32{step}, path...)
+			}
+			return path
+		}
+		if current != start && isEnemyCell(session.cell(current[0], current[1])) {
+			continue
+		}
+		for _, delta := range [][2]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
+			next := [2]uint32{uint32(int(current[0]) + delta[0]), uint32(int(current[1]) + delta[1])}
+			if _, seen := previous[next]; seen || !walkable[next] {
+				continue
+			}
+			previous[next] = current
+			queue = append(queue, next)
+		}
+	}
+	return nil
+}
+
+// springAmbush rolls Chapter:getAmbushRate on a cell the fleet walks
+// through: 5% plus the matching ambush_ratio_extra rows (1-1's (4,3) is
+// certain). The investigation term needs fleet stats the server doesn't
+// model, so it is left out; a sprung cell doesn't spring again this sortie.
+func (session *chapterSession) springAmbush(row, column uint32) *protobuf.CHAPTERCELLINFO_P13 {
+	if !session.template.isAmbush || len(session.template.ambushes) == 0 {
+		return nil
+	}
+	cell := session.cell(row, column)
+	if cell == nil || cell.GetItemType() != attachNone {
+		return nil
+	}
+	key := cellKey(row, column)
+	for _, done := range session.ambushed {
+		if done == key {
+			return nil
+		}
+	}
+	rate := 500
+	for _, extra := range session.template.ambushRatios {
+		if extra.anyCell || (extra.row == row && extra.column == column) {
+			rate += extra.ratio
+		}
+	}
+	if rate <= 0 || rand.IntN(10000) >= rate {
+		return nil
+	}
+	session.ambushed = append(session.ambushed, key)
+	setCell(cell, attachAmbush, session.template.ambushes[rand.IntN(len(session.template.ambushes))], cellFlagAmbush)
+	return cell
+}
+
+// scriptedAmbush is whether a cell has its own ambush_ratio_extra row.
+func (session *chapterSession) scriptedAmbush(row, column uint32) bool {
+	for _, extra := range session.template.ambushRatios {
+		if !extra.anyCell && extra.row == row && extra.column == column {
+			return true
+		}
+	}
+	return false
+}
+
+// answerAmbush is OpAmbush: arg 1 tries to evade, 0 fights. An evaded ambush
+// is cleared (map_update with item_type 0, the client shows
+// chapter_tip_aovid_succeed), otherwise it turns into an active enemy the
+// client battles. Evasion needs the fleet's dodge stats
+// (Chapter:getAmbushDodge), which the server doesn't model: the scripted
+// tutorial ambush is always evaded as in the capture, others never are.
+func (session *chapterSession) answerAmbush(groupID, evade uint32) *protobuf.SC_13104 {
+	group := session.group(groupID)
+	if group == nil {
+		return opReply(1)
+	}
+	row, column := group.GetPos().GetRow(), group.GetPos().GetColumn()
+	cell := session.cell(row, column)
+	if cell == nil || cell.GetItemType() != attachAmbush || cell.GetItemFlag() != cellFlagAmbush {
+		return opReply(1)
+	}
+	if evade == 1 && session.scriptedAmbush(row, column) {
+		setCell(cell, attachNone, 0, 0)
+	} else {
+		cell.ItemFlag = proto.Uint32(cellFlagActive)
+	}
+	reply := opReply(0)
+	reply.MapUpdate = []*protobuf.CHAPTERCELLINFO_P13{cloneCell(cell)}
+	return reply
+}
+
+// resync is OpRequest, sent after a failed op: the fleet's position and the
+// whole map again.
+func (session *chapterSession) resync(groupID uint32) *protobuf.SC_13104 {
+	reply := opReply(0)
+	if group := session.group(groupID); group != nil {
+		reply.MovePath = []*protobuf.CHAPTERCELLPOS_P13{cellPos(group.GetPos().GetRow(), group.GetPos().GetColumn())}
+		reply.ShipUpdate = group.ShipList
+	}
+	reply.MapUpdate = session.info.CellList
+	reply.CellFlagList = session.info.CellFlagList
+	return reply
+}
+
+// handleChapterBattleResult answers CS_13106 (ChapterBattleResultRequestCommand),
+// sent after every chapter battle: SC_13105 carries what the map does next.
+// Once bossRefresh enemies are down the boss appears on a boss cell.
+func (game *Game) handleChapterBattleResult(client *connection.Client, req *protobuf.CS_13106) error {
+	ctx := context.Background()
+	session, err := loadChapter(ctx, game.DB.Queries, client.CommanderID)
+	if err != nil {
+		return err
+	}
+	reply := &protobuf.SC_13105{}
+	if session != nil {
+		if cell := session.spawnBoss(); cell != nil {
+			reply.MapUpdate = append(reply.MapUpdate, cloneCell(cell))
+			if err := session.save(ctx, game.DB.Queries, client.CommanderID); err != nil {
+				return err
+			}
+		}
+	}
+	return client.Send(reply)
+}
+
+func (session *chapterSession) spawnBoss() *protobuf.CHAPTERCELLINFO_P13 {
+	if len(session.template.bosses) == 0 || session.info.GetKillCount() < session.template.bossRefresh {
+		return nil
+	}
+	var free []*protobuf.CHAPTERCELLINFO_P13
+	for _, grid := range session.template.grids {
+		cell := session.cell(grid.row, grid.column)
+		if cell == nil {
+			continue
+		}
+		if cell.GetItemType() == attachBoss {
+			return nil
+		}
+		if grid.kind == gridBoss && cell.GetItemType() == attachNone {
+			free = append(free, cell)
+		}
+	}
+	if len(free) == 0 {
+		return nil
+	}
+	cell := free[rand.IntN(len(free))]
+	setCell(cell, attachBoss, session.template.bosses[rand.IntN(len(session.template.bosses))], cellFlagActive)
+	return cell
+}
+
+// handleRemasterInfo answers RemasterInfoRequestCommand (CS_13505): the
+// archive chapters' reward counters, none taken yet.
+func (game *Game) handleRemasterInfo(client *connection.Client, req *protobuf.CS_13505) error {
+	return client.Send(&protobuf.SC_13506{})
+}
+
+func chapterProgress(ctx context.Context, queries *db.Queries, commanderID, chapterID uint32) (db.ChapterProgress, error) {
+	progress, err := queries.GetChapterProgress(ctx, db.GetChapterProgressParams{CommanderID: commanderID, ChapterID: chapterID})
+	if errors.Is(err, sql.ErrNoRows) {
+		return db.ChapterProgress{CommanderID: commanderID, ChapterID: chapterID}, nil
+	}
+	return progress, err
+}
+
+func saveChapterProgress(ctx context.Context, queries *db.Queries, progress db.ChapterProgress) error {
+	return queries.SaveChapterProgress(ctx, db.SaveChapterProgressParams(progress))
+}
+
+// chapterList is SC_13001: the chapters played so far (Chapter.New reads
+// CHAPTERINFO), no remaster tickets, elite fleets or auto battles.
+func chapterList(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobuf.SC_13001, error) {
+	rows, err := queries.ListChapterProgress(ctx, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	msg := &protobuf.SC_13001{
+		ReactChapter: &protobuf.REACTCHAPTER_INFO{},
+		Oil:          proto.Uint32(0),
+		TimeAcc:      proto.Uint32(0),
+		ExtraTimeMax: proto.Uint32(0),
+	}
+	for _, row := range rows {
+		msg.ChapterList = append(msg.ChapterList, &protobuf.CHAPTERINFO{
+			Id:               proto.Uint32(row.ChapterID),
+			Progress:         proto.Uint32(row.Progress),
+			KillBossCount:    proto.Uint32(row.KillBossCount),
+			KillEnemyCount:   proto.Uint32(row.KillEnemyCount),
+			TakeBoxCount:     proto.Uint32(row.TakeBoxCount),
+			DefeatCount:      proto.Uint32(row.DefeatCount),
+			TodayDefeatCount: proto.Uint32(row.TodayDefeatCount),
+			PassCount:        proto.Uint32(row.PassCount),
+		})
+	}
+	return protocol.FillRequired(msg), nil
+}
+
+// currentChapter is SC_13000: the sortie in progress, if any, so the client
+// goes back into it. Repairs aren't counted yet.
+func currentChapter(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobuf.SC_13000, error) {
+	msg := &protobuf.SC_13000{DailyRepairCount: proto.Uint32(0)}
+	session, err := loadChapter(ctx, queries, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	if session != nil {
+		msg.CurrentChapter = session.info
+	}
+	return msg, nil
+}
