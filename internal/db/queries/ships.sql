@@ -78,11 +78,9 @@ SELECT exchange_count FROM commander_build_states WHERE commander_id = ?;
 INSERT INTO commander_build_states (commander_id, exchange_count) VALUES (?, ?)
 ON CONFLICT (commander_id) DO UPDATE SET exchange_count = exchange_count + excluded.exchange_count;
 
--- name: UpsertShipGroup :exec
+-- name: AddShipGroup :execrows
 INSERT INTO commander_ship_groups (commander_id, group_id, intimacy_max, lv_max) VALUES (?, ?, ?, ?)
-ON CONFLICT (commander_id, group_id) DO UPDATE SET
-	intimacy_max = MAX(intimacy_max, excluded.intimacy_max),
-	lv_max = MAX(lv_max, excluded.lv_max);
+ON CONFLICT DO NOTHING;
 
 -- name: ListShipGroups :many
 SELECT * FROM commander_ship_groups WHERE commander_id = ? ORDER BY rowid;

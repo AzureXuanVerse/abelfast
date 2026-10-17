@@ -391,27 +391,24 @@ func collectionState(ctx context.Context, queries *db.Queries, commanderID uint3
 	return msg, nil
 }
 
-// recordShipGroup adds a ship to the archives, and returns the SC_17002 of
-// the archive count medal when its group is new.
+// recordShipGroup adds a new ship to the archives, and returns the SC_17002
+// of the archive count medal when its group is new. A new ship (level 1,
+// newShipIntimacy) never raises the best values of a group already there.
 func recordShipGroup(ctx context.Context, queries *db.Queries, ship db.Ship) (*protobuf.SC_17002, error) {
-	before, err := queries.CountShipGroups(ctx, ship.CommanderID)
-	if err != nil {
-		return nil, err
-	}
-	err = queries.UpsertShipGroup(ctx, db.UpsertShipGroupParams{
+	added, err := queries.AddShipGroup(ctx, db.AddShipGroupParams{
 		CommanderID: ship.CommanderID,
 		GroupID:     ship.TemplateID / 10, // ship_data_template.group_type
 		IntimacyMax: ship.Intimacy,
 		LvMax:       ship.Level,
 	})
+	if err != nil || added == 0 {
+		return nil, err
+	}
+	groups, err := queries.CountShipGroups(ctx, ship.CommanderID)
 	if err != nil {
 		return nil, err
 	}
-	after, err := queries.CountShipGroups(ctx, ship.CommanderID)
-	if err != nil || after == before {
-		return nil, err
-	}
-	return SetTrophy(ctx, queries, ship.CommanderID, archiveCountTrophy, uint32(after))
+	return SetTrophy(ctx, queries, ship.CommanderID, archiveCountTrophy, uint32(groups))
 }
 
 // SetTrophy stores a medal_template progress and returns its SC_17002 push.

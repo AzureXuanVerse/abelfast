@@ -41,6 +41,31 @@ func (q *Queries) AddEquipment(ctx context.Context, arg AddEquipmentParams) erro
 	return err
 }
 
+const addShipGroup = `-- name: AddShipGroup :execrows
+INSERT INTO commander_ship_groups (commander_id, group_id, intimacy_max, lv_max) VALUES (?, ?, ?, ?)
+ON CONFLICT DO NOTHING
+`
+
+type AddShipGroupParams struct {
+	CommanderID uint32
+	GroupID     uint32
+	IntimacyMax uint32
+	LvMax       uint32
+}
+
+func (q *Queries) AddShipGroup(ctx context.Context, arg AddShipGroupParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, addShipGroup,
+		arg.CommanderID,
+		arg.GroupID,
+		arg.IntimacyMax,
+		arg.LvMax,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const addShipSkill = `-- name: AddShipSkill :exec
 INSERT INTO ship_skills (ship_id, skill_id, level, exp) VALUES (?, ?, ?, 0) ON CONFLICT DO NOTHING
 `
@@ -701,28 +726,4 @@ func (q *Queries) SpendResource(ctx context.Context, arg SpendResourceParams) (i
 		return 0, err
 	}
 	return result.RowsAffected()
-}
-
-const upsertShipGroup = `-- name: UpsertShipGroup :exec
-INSERT INTO commander_ship_groups (commander_id, group_id, intimacy_max, lv_max) VALUES (?, ?, ?, ?)
-ON CONFLICT (commander_id, group_id) DO UPDATE SET
-	intimacy_max = MAX(intimacy_max, excluded.intimacy_max),
-	lv_max = MAX(lv_max, excluded.lv_max)
-`
-
-type UpsertShipGroupParams struct {
-	CommanderID uint32
-	GroupID     uint32
-	IntimacyMax uint32
-	LvMax       uint32
-}
-
-func (q *Queries) UpsertShipGroup(ctx context.Context, arg UpsertShipGroupParams) error {
-	_, err := q.db.ExecContext(ctx, upsertShipGroup,
-		arg.CommanderID,
-		arg.GroupID,
-		arg.IntimacyMax,
-		arg.LvMax,
-	)
-	return err
 }
