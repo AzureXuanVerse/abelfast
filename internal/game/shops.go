@@ -1,11 +1,15 @@
 package game
 
 import (
+	"maps"
+	"math/rand/v2"
+	"slices"
 	"time"
 
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ggmolly/belfast/internal/connection"
+	"github.com/ggmolly/belfast/internal/gamedata"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -15,30 +19,74 @@ func (game *Game) handleChargeList(client *connection.Client, req *protobuf.CS_1
 	return client.Send(&protobuf.SC_16105{})
 }
 
-// medalShopGoods is this month's medal exchange rotation, picked by the
-// server among honormedal_goods_list (the captured one), in the official
-// order.
-var medalShopGoods = []uint32{
-	45, 32, 28, 27, 55, 54, 53, 52, 51, 48, 41, 26, 25, 22, 21, 20, 19, 18,
-	17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1,
-}
-
 // honormedal_goods_list row
 type medalGoodsConfig struct {
+	Group         uint32 `json:"group"`
+	Order         uint32 `json:"order"`
 	PurchaseLimit uint32 `json:"goods_purchase_limit"`
 }
 
 var medalGoods map[uint32]medalGoodsConfig
 
-// handleMedalShop answers GetMedalShopCommand: the medal exchange, every
-// purchase left (count is what can still be bought); it refreshes with the
-// month.
+// medalShopGroups are the honormedal_goods_list groups the medal exchange
+// stocks, group descending (the official order), each with its rows by id.
+// The table doesn't say which rows are on sale: its order is the slot
+// MedalShop sorts the goods by (model/vo/shop/medalshop.lua), and newer rows
+// reuse the slot of the ones they replace (each General Blueprint series
+// takes slots 6 and 7). The official shop stocks, for every slot, its newest
+// group (highest group id), which is exactly the captured shop: the series 8
+// blueprints but no older series, and one of the SR ship boxes of groups
+// 20003 and 20004.
+var medalShopGroups [][]uint32
+
+func loadMedalShop() error {
+	goods, err := gamedata.Table[medalGoodsConfig]("honormedal_goods_list")
+	if err != nil {
+		return err
+	}
+	newest := map[uint32]uint32{}
+	for _, row := range goods {
+		newest[row.Order] = max(newest[row.Order], row.Group)
+	}
+	rows := map[uint32][]uint32{}
+	for id, row := range goods {
+		if newest[row.Order] == row.Group {
+			rows[row.Group] = append(rows[row.Group], id)
+		}
+	}
+	groups := slices.Sorted(maps.Keys(rows))
+	medalGoods, medalShopGroups = goods, nil
+	for _, group := range slices.Backward(groups) {
+		slices.Sort(rows[group])
+		medalShopGroups = append(medalShopGroups, rows[group])
+	}
+	return nil
+}
+
+// medalShopGoods draws a commander's medal exchange for the month ending at
+// next: one row of each stocked group, uniformly (the table has no weights;
+// the captured shop is one draw for groups 20003 and 20004). The draw is
+// seeded by both, so the shop stays the same until it refreshes without
+// being stored.
+func medalShopGoods(commanderID uint32, next time.Time) []uint32 {
+	random := rand.New(rand.NewPCG(uint64(commanderID), uint64(next.Unix())))
+	goods := make([]uint32, 0, len(medalShopGroups))
+	for _, rows := range medalShopGroups {
+		goods = append(goods, rows[random.IntN(len(rows))])
+	}
+	return goods
+}
+
+// handleMedalShop answers GetMedalShopCommand: this month's medal exchange,
+// every purchase left (count is what can still be bought); it refreshes with
+// the month.
 func (game *Game) handleMedalShop(client *connection.Client, req *protobuf.CS_16106) error {
+	next := nextMonth(time.Now())
 	reply := &protobuf.SC_16107{
 		Result:        result(nil),
-		ItemFlashTime: proto.Uint32(uint32(nextMonth(time.Now()).Unix())),
+		ItemFlashTime: proto.Uint32(uint32(next.Unix())),
 	}
-	for _, id := range medalShopGoods {
+	for _, id := range medalShopGoods(client.CommanderID, next) {
 		reply.GoodList = append(reply.GoodList, &protobuf.GOODS_INFO_P16{Id: proto.Uint32(id), Count: proto.Uint32(medalGoods[id].PurchaseLimit)})
 	}
 	return client.Send(reply)

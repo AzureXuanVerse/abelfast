@@ -15,7 +15,7 @@ func loadGameData() error {
 		gamedata.Load("constellation_challenge_month", &limitChallengeMonths),
 		loadArenaShop,
 		loadCommissionTeams,
-		gamedata.Load("honormedal_goods_list", &medalGoods),
+		loadMedalShop,
 		loadEducateData,
 	)
 }
