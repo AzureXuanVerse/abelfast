@@ -75,6 +75,36 @@ func (game *Game) handleWorldBoss(client *connection.Client, req *protobuf.CS_34
 	return client.Send(&protobuf.SC_34502{SelfBossLv: proto.Uint32(1)})
 }
 
+// handleWorldState answers WorldConst.ReqWorldCheck (type 0: entering mail,
+// compensation or Operation Siren scenes, or a ship status check while the
+// world is still the SC_33114 base one) and ReqWorldForServer (type 1, after
+// a reconnect) with the full Operation Siren state: open as in SC_33114, but
+// never started. WorldProxy:NetFullUpdate reads world and count_info
+// unconditionally, so both are sent with every required field zero; map_id 0
+// means no active map.
+func (game *Game) handleWorldState(client *connection.Client, req *protobuf.CS_33000) error {
+	return client.Send(&protobuf.SC_33001{
+		World: &protobuf.WORLDINFO{
+			MapId:                    proto.Uint32(0),
+			SubmarineState:           proto.Uint32(0),
+			ActionPower:              proto.Uint32(0),
+			ActionPowerExtra:         proto.Uint32(0),
+			LastRecoverTimestamp:     proto.Uint32(0),
+			ActionPowerFetchCount:    proto.Uint32(0),
+			LastChangeGroupTimestamp: proto.Uint32(0),
+			EnterMapId:               proto.Uint32(0),
+		},
+		IsWorldOpen: proto.Uint32(1),
+		Camp:        proto.Uint32(0),
+		CountInfo: &protobuf.COUNTINFO{
+			StepCount:     proto.Uint32(0),
+			TreasureCount: proto.Uint32(0),
+			TaskProgress:  proto.Uint32(0),
+			ActivateCount: proto.Uint32(0),
+		},
+	})
+}
+
 // handleMetaPTData answers MetaPTDataRequestCommand, the META ship points of
 // the groups the client asks for: none earned.
 func (game *Game) handleMetaPTData(client *connection.Client, req *protobuf.CS_34001) error {

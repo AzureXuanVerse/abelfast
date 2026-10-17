@@ -56,6 +56,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleClientReport)
 	packets.Handle(game.handleCommanderHome)
 	packets.Handle(game.handleWorldBoss)
+	packets.Handle(game.handleWorldState)
 	packets.Handle(game.handleMetaPTData)
 	packets.Handle(game.handleGuildInfo)
 	packets.Handle(game.handlePublicGuildTech)
