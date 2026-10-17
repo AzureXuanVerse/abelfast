@@ -124,3 +124,49 @@ sql:
             go_type: uint32
           - column: commander_trophies.timestamp
             go_type: uint32
+          - column: commanders.level
+            go_type: uint32
+          - column: commanders.exp
+            go_type: uint32
+          - column: commanders.ship_bag_max
+            go_type: uint32
+          - column: commanders.equip_bag_max
+            go_type: uint32
+          - column: commanders.commander_bag_max
+            go_type: uint32
+          - column: commanders.rank
+            go_type: uint32
+          - column: commanders.chat_room_id
+            go_type: uint32
+          - column: commanders.mail_storeroom_lv
+            go_type: uint32
+          - column: commanders.icon
+            go_type: uint32
+          - column: commanders.dorm_load_time
+            go_type: uint32
+          - column: commander_secretaries.commander_id
+            go_type: uint32
+          - column: commander_secretaries.position
+            go_type: uint32
+          - column: commander_secretaries.ship_id
+            go_type: uint32
+          - column: commander_secretaries.phantom_id
+            go_type: uint32
+          - column: commander_furniture.commander_id
+            go_type: uint32
+          - column: commander_furniture.furniture_id
+            go_type: uint32
+          - column: commander_furniture.count
+            go_type: uint32
+          - column: commander_activities.commander_id
+            go_type: uint32
+          - column: commander_activities.activity_id
+            go_type: uint32
+          - column: commander_activities.data1
+            go_type: uint32
+          - column: commander_activities.data2
+            go_type: uint32
+          - column: commander_activities.data3
+            go_type: uint32
+          - column: commander_activities.data4
+            go_type: uint32

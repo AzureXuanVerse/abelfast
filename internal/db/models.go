@@ -15,13 +15,34 @@ type Build struct {
 }
 
 type Commander struct {
-	ID            uint32
-	AccountID     uint32
-	Name          string
-	StarterShip   uint32
-	RegisteredAt  int64
-	GuideIndex    uint32
-	NewGuideIndex uint32
+	ID              uint32
+	AccountID       uint32
+	Name            string
+	StarterShip     uint32
+	RegisteredAt    int64
+	GuideIndex      uint32
+	NewGuideIndex   uint32
+	Level           uint32
+	Exp             uint32
+	ShipBagMax      uint32
+	EquipBagMax     uint32
+	CommanderBagMax uint32
+	Rank            uint32
+	ChatRoomID      uint32
+	MailStoreroomLv uint32
+	Manifesto       string
+	Icon            uint32
+	DormLoadTime    uint32
+}
+
+type CommanderActivity struct {
+	CommanderID uint32
+	ActivityID  uint32
+	Data1       uint32
+	Data2       uint32
+	Data3       uint32
+	Data4       uint32
+	Data1List   string
 }
 
 type CommanderBuildState struct {
@@ -36,6 +57,12 @@ type CommanderEquipment struct {
 	Count       uint32
 }
 
+type CommanderFurniture struct {
+	CommanderID uint32
+	FurnitureID uint32
+	Count       uint32
+}
+
 type CommanderItem struct {
 	CommanderID uint32
 	ItemID      uint32
@@ -46,6 +73,13 @@ type CommanderResource struct {
 	CommanderID uint32
 	ResourceID  uint32
 	Amount      uint32
+}
+
+type CommanderSecretary struct {
+	CommanderID uint32
+	Position    uint32
+	ShipID      uint32
+	PhantomID   uint32
 }
 
 type CommanderShipGroup struct {

@@ -26,7 +26,7 @@ func (q *Queries) AddStory(ctx context.Context, arg AddStoryParams) error {
 const createCommander = `-- name: CreateCommander :one
 INSERT INTO commanders (account_id, name, starter_ship, registered_at)
 VALUES (?, ?, ?, ?)
-RETURNING id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index
+RETURNING id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, icon, dorm_load_time
 `
 
 type CreateCommanderParams struct {
@@ -52,12 +52,23 @@ func (q *Queries) CreateCommander(ctx context.Context, arg CreateCommanderParams
 		&i.RegisteredAt,
 		&i.GuideIndex,
 		&i.NewGuideIndex,
+		&i.Level,
+		&i.Exp,
+		&i.ShipBagMax,
+		&i.EquipBagMax,
+		&i.CommanderBagMax,
+		&i.Rank,
+		&i.ChatRoomID,
+		&i.MailStoreroomLv,
+		&i.Manifesto,
+		&i.Icon,
+		&i.DormLoadTime,
 	)
 	return i, err
 }
 
 const getCommander = `-- name: GetCommander :one
-SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index FROM commanders WHERE id = ?
+SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, icon, dorm_load_time FROM commanders WHERE id = ?
 `
 
 func (q *Queries) GetCommander(ctx context.Context, id uint32) (Commander, error) {
@@ -71,12 +82,23 @@ func (q *Queries) GetCommander(ctx context.Context, id uint32) (Commander, error
 		&i.RegisteredAt,
 		&i.GuideIndex,
 		&i.NewGuideIndex,
+		&i.Level,
+		&i.Exp,
+		&i.ShipBagMax,
+		&i.EquipBagMax,
+		&i.CommanderBagMax,
+		&i.Rank,
+		&i.ChatRoomID,
+		&i.MailStoreroomLv,
+		&i.Manifesto,
+		&i.Icon,
+		&i.DormLoadTime,
 	)
 	return i, err
 }
 
 const getCommanderByAccount = `-- name: GetCommanderByAccount :one
-SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index FROM commanders WHERE account_id = ?
+SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, icon, dorm_load_time FROM commanders WHERE account_id = ?
 `
 
 func (q *Queries) GetCommanderByAccount(ctx context.Context, accountID uint32) (Commander, error) {
@@ -90,6 +112,17 @@ func (q *Queries) GetCommanderByAccount(ctx context.Context, accountID uint32) (
 		&i.RegisteredAt,
 		&i.GuideIndex,
 		&i.NewGuideIndex,
+		&i.Level,
+		&i.Exp,
+		&i.ShipBagMax,
+		&i.EquipBagMax,
+		&i.CommanderBagMax,
+		&i.Rank,
+		&i.ChatRoomID,
+		&i.MailStoreroomLv,
+		&i.Manifesto,
+		&i.Icon,
+		&i.DormLoadTime,
 	)
 	return i, err
 }
