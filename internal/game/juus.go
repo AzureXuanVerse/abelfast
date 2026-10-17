@@ -101,17 +101,12 @@ var (
 
 // loadJuusData reads the Juus chats and the posts the server sends.
 func loadJuusData() error {
-	for _, load := range []func() error{
+	return loadAll(
 		loadTable("activity_ins_chat_group", &juusTopicConfigs),
 		loadTable("activity_ins_chat_language", &juusWordConfigs),
 		loadTable("activity_ins_redpackage", &juusRedPacketConfigs),
 		loadJuusPosts,
-	} {
-		if err := load(); err != nil {
-			return err
-		}
-	}
-	return nil
+	)
 }
 
 func (game *Game) registerJuus() {

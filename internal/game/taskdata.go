@@ -13,10 +13,12 @@ type taskConfig struct {
 	SubType      uint32          `json:"sub_type"`
 	TargetID     json.RawMessage `json:"target_id"`
 	TargetNum    uint32          `json:"target_num"`
-	AwardDisplay [][]uint32      `json:"award_display"`
+	AwardDisplay json.RawMessage `json:"award_display"`
 	AwardChoice  json.RawMessage `json:"award_choice"`
 	NextTask     json.RawMessage `json:"next_task"`
 	AutoCommit   uint32          `json:"auto_commit"`
+
+	awards [][]uint32 // award_display
 }
 
 // weekly_task_template row (WeekPtTask)
@@ -66,16 +68,24 @@ var (
 // loadTaskData reads the tasks, weekly missions, activities, cruise pass
 // task groups and commander manual pages.
 func loadTaskData() error {
-	for _, load := range []func() error{
+	err := loadAll(
 		loadTable("task_data_template", &taskConfigs),
 		loadTable("weekly_task_template", &weeklyTaskConfigs),
 		loadTable("activity_template", &activityConfigs),
 		loadTable("battlepass_task_group", &battlepassTaskGroups),
 		loadTable("tutorial_handbook_task", &handbookPageConfigs),
-	} {
-		if err := load(); err != nil {
-			return err
+	)
+	if err != nil {
+		return err
+	}
+	for id, config := range taskConfigs {
+		// a task whose award_display isn't a drop list (one is a Lua
+		// string) is left out like any row that doesn't fit
+		if json.Unmarshal(config.AwardDisplay, &config.awards) != nil {
+			delete(taskConfigs, id)
+			continue
 		}
+		taskConfigs[id] = config
 	}
 	return nil
 }

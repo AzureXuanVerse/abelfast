@@ -136,7 +136,15 @@ type shipLevelConfig struct {
 // loadChapterData builds every chapter of chapter_template, the expeditions
 // fought in them, the award pools and the ship level curve.
 func loadChapterData() error {
-	chapters, err := readConfigTable[chapterConfig]("chapter_template")
+	var chapters map[uint32]chapterConfig
+	var items map[uint32]virtualItemConfig
+	var levels map[uint32]shipLevelConfig
+	err := loadAll(
+		loadTable("chapter_template", &chapters),
+		loadTable("expedition_data_template", &expeditionTemplates),
+		loadTable("item_virtual_data_statistics", &items),
+		loadTable("ship_level", &levels),
+	)
 	if err != nil {
 		return err
 	}
@@ -191,14 +199,6 @@ func loadChapterData() error {
 		chapterTemplates[id] = template
 	}
 
-	if expeditionTemplates, err = readConfigTable[expeditionTemplate]("expedition_data_template"); err != nil {
-		return err
-	}
-
-	items, err := readConfigTable[virtualItemConfig]("item_virtual_data_statistics")
-	if err != nil {
-		return err
-	}
 	dropPools = map[uint32][]dropRef{}
 	for id, row := range items {
 		var icons [][]uint32
@@ -212,10 +212,6 @@ func loadChapterData() error {
 		}
 	}
 
-	levels, err := readConfigTable[shipLevelConfig]("ship_level")
-	if err != nil {
-		return err
-	}
 	maxLevel := uint32(0)
 	for _, row := range levels {
 		maxLevel = max(maxLevel, row.Level)

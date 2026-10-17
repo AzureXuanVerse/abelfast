@@ -70,9 +70,10 @@ type composeRecipe struct {
 	MaterialCount uint32 `json:"material_num"`
 }
 
-// item_data_statistics row
+// item_data_statistics row: price is [resource, amount], or "" when the
+// item doesn't sell
 type itemConfig struct {
-	Price []uint32 `json:"price"`
+	Price json.RawMessage `json:"price"`
 }
 
 var (
@@ -98,14 +99,24 @@ var (
 // obtained (base templates, id ending in 1, that have statistics), the
 // construction pools, equipment upgrades, crafting recipes and item prices.
 func loadShipData() error {
-	templates, err := readConfigTable[shipTemplate]("ship_data_template")
+	var templates map[uint32]shipTemplate
+	var stats map[uint32]shipStatisticsConfig
+	var pools map[uint32]buildPool
+	var groups map[uint32]shipGroupConfig
+	var items map[uint32]itemConfig
+	err := loadAll(
+		loadTable("ship_data_template", &templates),
+		loadTable("ship_data_statistics", &stats),
+		loadTable("ship_data_create_material", &pools),
+		loadTable("ship_data_group", &groups),
+		loadTable("equip_data_template", &equipUpgrades),
+		loadTable("compose_data_template", &composes),
+		loadTable("item_data_statistics", &items),
+	)
 	if err != nil {
 		return err
 	}
-	stats, err := readConfigTable[shipStatisticsConfig]("ship_data_statistics")
-	if err != nil {
-		return err
-	}
+
 	shipTemplates = map[uint32]shipTemplate{}
 	for id, row := range templates {
 		stat, ok := stats[id]
@@ -116,14 +127,6 @@ func loadShipData() error {
 		shipTemplates[id] = row
 	}
 
-	pools, err := readConfigTable[buildPool]("ship_data_create_material")
-	if err != nil {
-		return err
-	}
-	groups, err := readConfigTable[shipGroupConfig]("ship_data_group")
-	if err != nil {
-		return err
-	}
 	buildPools = map[uint32]buildPool{}
 	for id, name := range buildPoolNames {
 		pool, ok := pools[id]
@@ -149,24 +152,14 @@ func loadShipData() error {
 		buildPools[id] = pool
 	}
 
-	if equipUpgrades, err = readConfigTable[equipUpgrade]("equip_data_template"); err != nil {
-		return err
-	}
 	// only the equipment that upgrades into another
 	maps.DeleteFunc(equipUpgrades, func(_ uint32, upgrade equipUpgrade) bool { return upgrade.Next == 0 })
 
-	if composes, err = readConfigTable[composeRecipe]("compose_data_template"); err != nil {
-		return err
-	}
-
-	items, err := readConfigTable[itemConfig]("item_data_statistics")
-	if err != nil {
-		return err
-	}
 	itemPrices = map[uint32][2]uint32{}
 	for id, row := range items {
-		if len(row.Price) >= 2 {
-			itemPrices[id] = [2]uint32{row.Price[0], row.Price[1]}
+		var price []uint32
+		if json.Unmarshal(row.Price, &price) == nil && len(price) >= 2 {
+			itemPrices[id] = [2]uint32{price[0], price[1]}
 		}
 	}
 	return nil

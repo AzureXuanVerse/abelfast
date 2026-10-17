@@ -598,7 +598,7 @@ func (game *Game) handleSubmitTask(client *connection.Client, req *protobuf.CS_2
 	if err != nil || !ok || task.SubmitTime != 0 || task.Progress < config.TargetNum {
 		return client.Send(&protobuf.SC_20006{Result: result(errRefused)})
 	}
-	drops := config.AwardDisplay
+	drops := config.awards
 	if len(req.GetChoiceAward()) > 0 {
 		if drops = awardChoice(config, req.GetChoiceAward()); drops == nil {
 			return client.Send(&protobuf.SC_20006{Result: result(errRefused)})
@@ -689,7 +689,7 @@ func (game *Game) handleSubmitActivityTasks(client *connection.Client, req *prot
 			if err := tx.FinishActivityTask(ctx, db.FinishActivityTaskParams{CommanderID: client.CommanderID, ActID: req.GetActId(), TaskID: task.taskID, Progress: task.progress}); err != nil {
 				return err
 			}
-			awards := configDrops(taskConfigs[task.taskID].AwardDisplay)
+			awards := configDrops(taskConfigs[task.taskID].awards)
 			if err := tx.grantDrops(awards); err != nil {
 				return err
 			}
