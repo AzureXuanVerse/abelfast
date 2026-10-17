@@ -1,9 +1,12 @@
 // Package tap is a transparent framing-aware proxy for the game protocol:
 // every client connection is relayed verbatim to a fixed upstream while each
 // framed packet is decoded into a JSONL capture for later disassembly.
+// Non-protocol traffic on the same port (HTTP probes) is relayed too and
+// captured raw.
 package tap
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -12,6 +15,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -125,8 +130,9 @@ func (s *session) close() {
 }
 
 // pump reads framed packets from src, captures them, and forwards the bytes
-// verbatim to dst. Non-protocol traffic (e.g. HTTP probes) is captured as hex
-// and the session is dropped.
+// verbatim to dst. Once a direction carries non-protocol traffic (e.g. the
+// SDK's HTTP probe on the gateway port and its response), the rest of it is
+// relayed raw and captured chunk by chunk.
 func (s *session) pump(dst io.Writer, src io.Reader, dir string, done chan<- struct{}) {
 	defer func() { done <- struct{}{} }()
 	prototype := protocol.ClientMessage
@@ -141,8 +147,8 @@ func (s *session) pump(dst io.Writer, src io.Reader, dir string, done chan<- str
 			buf = append(buf, chunk[:n]...)
 		}
 		for len(buf) > 0 {
-			if len(buf) >= 3 && buf[2] != 0x00 {
-				s.captureJunk(dir, buf)
+			if len(buf) >= 3 && buf[2] != 0x00 || len(buf) >= 2 && int(buf[0])<<8|int(buf[1]) < protocol.MinFrameSize {
+				s.relayRaw(dst, src, dir, buf, err == nil)
 				s.close()
 				return
 			}
@@ -150,11 +156,6 @@ func (s *session) pump(dst io.Writer, src io.Reader, dir string, done chan<- str
 				break
 			}
 			size := int(buf[0])<<8 | int(buf[1])
-			if size < protocol.MinFrameSize {
-				s.captureJunk(dir, buf)
-				s.close()
-				return
-			}
 			total := 2 + size
 			if len(buf) < total {
 				break
@@ -194,12 +195,41 @@ func (s *session) capturePacket(dir string, prototype func(int) proto.Message, f
 	s.tap.Sink.line(entry)
 }
 
-func (s *session) captureJunk(dir string, buf []byte) {
-	if len(buf) > 512 {
-		buf = buf[:512]
+// relayRaw forwards non-protocol bytes verbatim: first pending, then (if more)
+// everything else src sends until it closes, capturing each chunk.
+func (s *session) relayRaw(dst io.Writer, src io.Reader, dir string, pending []byte, more bool) {
+	s.captureRaw(dir, pending)
+	if _, err := dst.Write(pending); err != nil || !more {
+		return
 	}
-	s.tap.Sink.line(map[string]any{
+	chunk := make([]byte, 32<<10)
+	for {
+		n, err := src.Read(chunk)
+		if n > 0 {
+			s.captureRaw(dir, chunk[:n])
+			if _, werr := dst.Write(chunk[:n]); werr != nil {
+				return
+			}
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
+// captureRaw records a chunk of non-protocol traffic, as text when it is
+// printable UTF-8 (HTTP), hex otherwise.
+func (s *session) captureRaw(dir string, data []byte) {
+	entry := map[string]any{
 		"ts":    time.Now().UTC().Format(time.RFC3339Nano),
-		"event": "junk", "dir": dir, "hex": hex.EncodeToString(buf),
-	})
+		"event": "raw", "dir": dir, "len": len(data),
+	}
+	if utf8.Valid(data) && !bytes.ContainsFunc(data, func(r rune) bool {
+		return unicode.IsControl(r) && r != '\r' && r != '\n' && r != '\t'
+	}) {
+		entry["text"] = string(data)
+	} else {
+		entry["hex"] = hex.EncodeToString(data)
+	}
+	s.tap.Sink.line(entry)
 }
