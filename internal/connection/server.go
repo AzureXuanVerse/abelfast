@@ -1,13 +1,15 @@
 package connection
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"net"
-	"strconv"
+	"net/http"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/smallnest/ringbuffer"
 
@@ -28,13 +30,17 @@ type Server struct {
 	address    string
 	dispatcher Dispatcher
 
+	// HTTP, when set, serves connections that open with an HTTP request
+	// instead of a frame (the SDK probes the gateway port with GET /?cmd=test?).
+	HTTP http.Handler
+
 	clientsMu sync.Mutex
 	clients   map[uint64]*Client
 }
 
-func NewServer(bindAddress string, port int, dispatcher Dispatcher) *Server {
+func NewServer(address string, dispatcher Dispatcher) *Server {
 	return &Server{
-		address:    net.JoinHostPort(bindAddress, strconv.Itoa(port)),
+		address:    address,
 		dispatcher: dispatcher,
 		clients:    make(map[uint64]*Client),
 	}
@@ -93,6 +99,14 @@ func (server *Server) removeClient(client *Client) {
 
 func (server *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
+	var head [4]byte
+	if _, err := io.ReadFull(conn, head[:]); err != nil {
+		return
+	}
+	if server.HTTP != nil && isHTTPRequest(head[:]) {
+		server.serveHTTP(conn, head[:])
+		return
+	}
 	client := newClient(conn, server)
 	logger.WithFields("Server", logger.FieldValue("remote", conn.RemoteAddr().String()), logger.FieldValue("local", conn.LocalAddr().String())).Info("connection accepted")
 
@@ -100,6 +114,10 @@ func (server *Server) handleConnection(conn net.Conn) {
 	client.startDispatcher()
 
 	ring := ringbuffer.New(readBufferSize).SetBlocking(true)
+	if _, err := ring.Write(head[:]); err != nil {
+		server.removeClient(client)
+		return
+	}
 	go func() {
 		_, err := ring.ReadFrom(conn)
 		if err != nil && !isClosedConnError(err) {
@@ -158,3 +176,59 @@ func isClosedConnError(err error) bool {
 	return errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) || errors.Is(err, ringbuffer.ErrWriteOnClosed) ||
 		errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET)
 }
+
+var httpMethods = [][]byte{[]byte("GET "), []byte("POST"), []byte("HEAD"), []byte("PUT "), []byte("OPTI"), []byte("DELE"), []byte("PATC")}
+
+// isHTTPRequest reports whether the first bytes of a connection start an HTTP
+// request. A frame's third byte is always 0x00, so the two never overlap.
+func isHTTPRequest(head []byte) bool {
+	for _, method := range httpMethods {
+		if bytes.Equal(head, method) {
+			return true
+		}
+	}
+	return false
+}
+
+// serveHTTP serves one HTTP connection (head being its already read first
+// bytes) with server.HTTP, keep-alive included, and returns once it is closed.
+func (server *Server) serveHTTP(conn net.Conn, head []byte) {
+	logger.WithFields("Server", logger.FieldValue("remote", conn.RemoteAddr().String())).Debug("http connection")
+	c := &httpConn{Conn: conn, reader: io.MultiReader(bytes.NewReader(head), conn), done: make(chan struct{})}
+	httpServer := &http.Server{Handler: server.HTTP, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second}
+	go httpServer.Serve(&singleConnListener{conn: c})
+	<-c.done
+}
+
+// httpConn replays the sniffed bytes and signals when net/http closes it.
+type httpConn struct {
+	net.Conn
+	reader    io.Reader
+	done      chan struct{}
+	closeOnce sync.Once
+}
+
+func (c *httpConn) Read(p []byte) (int, error) { return c.reader.Read(p) }
+
+func (c *httpConn) Close() error {
+	c.closeOnce.Do(func() { close(c.done) })
+	return c.Conn.Close()
+}
+
+// singleConnListener hands out one connection, then blocks until it is closed.
+type singleConnListener struct {
+	conn     *httpConn
+	accepted bool
+}
+
+func (l *singleConnListener) Accept() (net.Conn, error) {
+	if !l.accepted {
+		l.accepted = true
+		return l.conn, nil
+	}
+	<-l.conn.done
+	return nil, net.ErrClosed
+}
+
+func (l *singleConnListener) Close() error   { return nil }
+func (l *singleConnListener) Addr() net.Addr { return l.conn.LocalAddr() }
