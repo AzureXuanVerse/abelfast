@@ -37,6 +37,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handlePublicGuildTech)
 	packets.Handle(game.handleMiniGameHubs)
 	packets.Handle(game.handleEmojiInfo)
+	packets.Handle(game.handleLimitChallenge)
 }
 
 // handleLoadPlayerData answers CS_11001 (LoadPlayerDataCommand): everything

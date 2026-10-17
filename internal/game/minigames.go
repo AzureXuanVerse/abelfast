@@ -44,3 +44,9 @@ func (game *Game) handleMiniGameHubs(client *connection.Client, req *protobuf.CS
 func (game *Game) handleEmojiInfo(client *connection.Client, req *protobuf.CS_11601) error {
 	return client.Send(&protobuf.SC_11602{})
 }
+
+// handleLimitChallenge answers LimitChallengeReqCommand: no limit challenge
+// cleared or awarded this month.
+func (game *Game) handleLimitChallenge(client *connection.Client, req *protobuf.CS_24020) error {
+	return client.Send(&protobuf.SC_24021{Result: proto.Uint32(0)})
+}
