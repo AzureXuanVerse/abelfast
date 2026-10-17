@@ -157,6 +157,26 @@ func Gameset() (map[string]uint32, error) {
 	return gameset, nil
 }
 
+// GamesetDescription decodes a gameset setting's description (the lists some
+// settings hold instead of a key_value) into value.
+func GamesetDescription(key string, value any) error {
+	raw, err := file("gameset")
+	if err != nil {
+		return err
+	}
+	var rows map[string]struct {
+		Description json.RawMessage `json:"description"`
+	}
+	if err := json.Unmarshal(raw, &rows); err != nil {
+		return fmt.Errorf("config table gameset: %w", err)
+	}
+	row, ok := rows[key]
+	if !ok || json.Unmarshal(row.Description, value) != nil {
+		return Missing("gameset", "%s description", key)
+	}
+	return nil
+}
+
 // Load reads a table into *table as is.
 func Load[T any](name string, table *map[uint32]T) func() error {
 	return func() (err error) {

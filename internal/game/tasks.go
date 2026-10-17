@@ -219,13 +219,14 @@ func grantTasksStarter(tx *Tx, commander db.Commander) error {
 // grouped by tens: 10001-10007, 10011-10016...) open at level that the
 // commander doesn't have yet, and returns them.
 func unlockWeeklyTasks(ctx context.Context, queries *db.Queries, commanderID uint32, level uint32) ([]uint32, error) {
-	current, err := queries.ListWeeklyTasks(ctx, commanderID)
+	// claimed steps included: a chain claimed to its end isn't given again
+	current, err := queries.ListWeeklyTaskIDs(ctx, commanderID)
 	if err != nil {
 		return nil, err
 	}
 	have := map[uint32]bool{}
-	for _, task := range current {
-		have[task.TaskID/10] = true
+	for _, id := range current {
+		have[id/10] = true
 	}
 	first := map[uint32]weeklyTaskConfig{}
 	for _, config := range weeklyTaskConfigs {
