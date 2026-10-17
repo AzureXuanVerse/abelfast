@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"math/rand/v2"
 	"slices"
 	"time"
 
@@ -156,11 +157,34 @@ func (game *Game) weeklyInfo(ctx context.Context, queries *db.Queries, commander
 	return info, nil
 }
 
+// Task types (task_data_template type, model/vo/task/task.lua)
+const (
+	taskTypeScenario  = 1  // Task.TYPE_SCENARIO, the main story
+	taskTypeNewWeekly = 13 // Task.TYPE_NEW_WEEKLY
+)
+
 // starterTasks are the tasks besides the commander manual unlock ones a new
-// commander has in the capture's SC_20001: the first main story task ("An
-// Exercise") and two TYPE_NEW_WEEKLY (13) tasks the server picked, enhance
-// gear (7307) and touch the secretary (7310).
-var starterTasks = []uint32{1, 7310, 7307}
+// commander at level gets: the head of the main story chain (TYPE_SCENARIO
+// with is_head, task 1 "An Exercise") and a draw of weeklyBonusTasks
+// TYPE_NEW_WEEKLY tasks open at level (the capture drew 7307 and 7310 out of
+// 7304, 7306, 7307, 7310; weekly_fixed_task 7311 is level 80).
+func starterTasks(level uint32) []uint32 {
+	var tasks, bonus []uint32
+	for id, config := range taskConfigs {
+		if config.Level > level {
+			continue
+		}
+		switch {
+		case config.Type == taskTypeScenario && config.IsHead == 1:
+			tasks = append(tasks, id)
+		case config.Type == taskTypeNewWeekly:
+			bonus = append(bonus, id)
+		}
+	}
+	slices.Sort(tasks)
+	rand.Shuffle(len(bonus), func(i, j int) { bonus[i], bonus[j] = bonus[j], bonus[i] })
+	return append(tasks, bonus[:min(int(weeklyBonusTasks), len(bonus))]...)
+}
 
 // grantTasksStarter gives a new commander the capture's SC_20001 tasks: the
 // tasks that unlock commander manual pages (tutorial_handbook_task.unlock,
@@ -169,16 +193,16 @@ var starterTasks = []uint32{1, 7310, 7307}
 func grantTasksStarter(tx *Tx, commander db.Commander) error {
 	ctx, queries := tx.ctx, tx.Queries
 	// what a new commander already is, for tasks that start from it
-	for _, counter := range []TaskEvent{{SubType: TaskSubLevel, Count: 1}, {SubType: TaskSubAcademyLevel, Count: 1}} {
+	for _, counter := range []TaskEvent{{SubType: TaskSubLevel, Count: commander.Level}, {SubType: TaskSubAcademyLevel, Count: 1}} {
 		if err := queries.SetTaskCounter(ctx, db.SetTaskCounterParams{CommanderID: commander.ID, SubType: counter.SubType, Value: counter.Count}); err != nil {
 			return err
 		}
 	}
-	tasks := append(slices.Clone(handbookUnlockTasks), starterTasks...)
+	tasks := append(slices.Clone(handbookUnlockTasks), starterTasks(commander.Level)...)
 	if _, err := acceptTasks(ctx, queries, commander.ID, tasks, uint32(commander.RegisteredAt)); err != nil {
 		return err
 	}
-	if _, err := unlockWeeklyTasks(ctx, queries, commander.ID, 1); err != nil {
+	if _, err := unlockWeeklyTasks(ctx, queries, commander.ID, commander.Level); err != nil {
 		return err
 	}
 	return queries.SetWeeklyRewardLevel(ctx, db.SetWeeklyRewardLevelParams{CommanderID: commander.ID, RewardLv: 0})
