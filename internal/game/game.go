@@ -85,6 +85,9 @@ func (game *Game) Register() {
 	// tasks and activities
 	packets.Handle(game.handleSubmitTask)
 	packets.Handle(game.handleSubmitTasks)
+	packets.Handle(game.handleSubmitWeeklyTask)
+	packets.Handle(game.handleSubmitWeeklyTasks)
+	packets.Handle(game.handleSubmitWeeklyProgress)
 	packets.Handle(game.handleClientTaskEvent)
 	packets.Handle(game.handleSubmitActivityTasks)
 	packets.Handle(game.handleHandbookGetTasks)

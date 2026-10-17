@@ -29,10 +29,13 @@ type taskConfig struct {
 
 // weekly_task_template row (WeekPtTask)
 type weeklyTaskConfig struct {
-	ID       uint32          `json:"id"`
-	Level    uint32          `json:"level"`
-	SubType  uint32          `json:"sub_type"`
-	TargetID json.RawMessage `json:"target_id"`
+	ID        uint32          `json:"id"`
+	Level     uint32          `json:"level"`
+	SubType   uint32          `json:"sub_type"`
+	TargetID  json.RawMessage `json:"target_id"`
+	TargetNum uint32          `json:"target_num"`
+	// one drop, the weekly mission points: [8, 59012, n] (WeekPtTask.GetAward)
+	AwardDisplay []uint32 `json:"award_display"`
 
 	target taskTarget // target_id
 }
@@ -90,6 +93,15 @@ var (
 	// offered (gameset weekly_bonus_task, server side: no Lua reads it; their
 	// names end in "奖励任务", bonus task, and the capture has 2)
 	weeklyBonusTasks uint32
+
+	// weeklyTargets are the weekly mission points each phase of the weekly
+	// reward bar needs (gameset weekly_target, WeekTaskProgress.targets), and
+	// weeklyPhaseDrops what each phase gives (gameset weekly_drop_client,
+	// WeekTaskProgress.dropData). The server's own gameset weekly_drop names
+	// drop ids (7400-7419) of a table the client doesn't have, so the
+	// rewards the client shows are the ones given.
+	weeklyTargets    []uint32
+	weeklyPhaseDrops [][][]uint32
 )
 
 // handbookTaskPage is a commander manual page a task belongs to: as one of
@@ -114,6 +126,8 @@ func loadTaskData() error {
 			gameset, err = gamedata.Gameset()
 			return err
 		},
+		func() error { return gamedata.GamesetDescription("weekly_target", &weeklyTargets) },
+		func() error { return gamedata.GamesetDescription("weekly_drop_client", &weeklyPhaseDrops) },
 	)
 	if err != nil {
 		return err
@@ -137,6 +151,10 @@ func loadTaskData() error {
 	}
 	weeklyTaskIDsBySubType = map[uint32][]uint32{}
 	for id, config := range weeklyTaskConfigs {
+		if len(config.AwardDisplay) < 3 {
+			delete(weeklyTaskConfigs, id)
+			continue
+		}
 		config.target = parseTaskTarget(config.TargetID)
 		weeklyTaskConfigs[id] = config
 		weeklyTaskIDsBySubType[config.SubType] = append(weeklyTaskIDsBySubType[config.SubType], id)
