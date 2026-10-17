@@ -113,7 +113,7 @@ func (game *Game) handleHandbookGetTasks(client *connection.Client, req *protobu
 		return err
 	}
 	if added != nil {
-		if err := client.Send(added); err != nil {
+		if err := client.Push(added); err != nil {
 			return err
 		}
 	}

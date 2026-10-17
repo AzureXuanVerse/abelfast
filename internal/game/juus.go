@@ -316,9 +316,8 @@ func (game *Game) handleJuusChatReply(client *connection.Client, req *protobuf.C
 	ctx := context.Background()
 	now := uint32(time.Now().Unix())
 	reply := &protobuf.SC_11713{Result: proto.Uint32(0), OpTime: proto.Uint32(now)}
-	var events []TaskEvent
-	err := game.DB.InTx(ctx, func(queries *db.Queries) error {
-		touched, err := queries.TouchJuusTopic(ctx, db.TouchJuusTopicParams{OpTime: now, CommanderID: client.CommanderID, TopicID: req.GetChatGroupId()})
+	err := game.tx(ctx, client, func(tx *Tx) error {
+		touched, err := tx.TouchJuusTopic(ctx, db.TouchJuusTopicParams{OpTime: now, CommanderID: client.CommanderID, TopicID: req.GetChatGroupId()})
 		if err != nil {
 			return err
 		}
@@ -326,7 +325,7 @@ func (game *Game) handleJuusChatReply(client *connection.Client, req *protobuf.C
 			reply.Result = proto.Uint32(resultFailed)
 			return nil
 		}
-		if err := queries.AddJuusReply(ctx, db.AddJuusReplyParams{CommanderID: client.CommanderID, TopicID: req.GetChatGroupId(), ChatID: req.GetChatId(), Value: req.GetValue()}); err != nil {
+		if err := tx.AddJuusReply(ctx, db.AddJuusReplyParams{CommanderID: client.CommanderID, TopicID: req.GetChatGroupId(), ChatID: req.GetChatId(), Value: req.GetValue()}); err != nil {
 			return err
 		}
 		drop := juusRedPacket(req.GetChatId())
@@ -334,14 +333,9 @@ func (game *Game) handleJuusChatReply(client *connection.Client, req *protobuf.C
 			return nil
 		}
 		reply.DropList = configDrops([][]uint32{drop})
-		got, err := grantDrops(ctx, queries, client.CommanderID, reply.DropList)
-		events = got.Events
-		return err
+		return tx.grantDrops(reply.DropList)
 	})
 	if err != nil {
-		return err
-	}
-	if err := game.taskEvent(ctx, client, events...); err != nil {
 		return err
 	}
 	return client.Send(reply)

@@ -297,19 +297,16 @@ func (game *Game) handleTracking13101(client *connection.Client, req *protobuf.C
 		}
 	}
 	session := &chapterSession{template: template, info: newChapter(template, teams, uint32(time.Now().Unix()))}
-	err = game.DB.InTx(ctx, func(queries *db.Queries) error {
-		if err := SpendResource(ctx, queries, client.CommanderID, ResourceOil, template.oil); err != nil {
+	err = game.tx(ctx, client, func(tx *Tx) error {
+		if err := tx.SpendResource(ResourceOil, template.oil); err != nil {
 			return err
 		}
-		return session.save(ctx, queries, client.CommanderID)
+		return session.save(ctx, tx.Queries, client.CommanderID)
 	})
 	if errors.Is(err, ErrNotEnough) {
 		return client.Send(&protobuf.SC_13102{Result: proto.Uint32(1)})
 	}
 	if err != nil {
-		return err
-	}
-	if err := game.taskEvent(ctx, client, TaskEvent{SubType: TaskSubSpendOil, Count: template.oil}); err != nil {
 		return err
 	}
 	return client.Send(&protobuf.SC_13102{Result: proto.Uint32(0), CurrentChapter: session.info})
@@ -373,8 +370,8 @@ func (game *Game) retreat(ctx context.Context, client *connection.Client, sessio
 		}
 		return client.Send(opReply(0))
 	}
-	var events []TaskEvent
-	err := game.DB.InTx(ctx, func(queries *db.Queries) error {
+	err := game.tx(ctx, client, func(tx *Tx) error {
+		queries := tx.Queries
 		if session.won() {
 			progress, err := chapterProgress(ctx, queries, client.CommanderID, session.template.id)
 			if err != nil {
@@ -384,7 +381,7 @@ func (game *Game) retreat(ctx context.Context, client *connection.Client, sessio
 				progress.PassCount++
 			}
 			if progress.Progress < 100 && progress.Progress+session.template.progressBoss >= 100 {
-				events = append(events, TaskEvent{SubType: TaskSubClearStage, Target: session.template.id, Count: 1})
+				tx.event(TaskEvent{SubType: TaskSubClearStage, Target: session.template.id, Count: 1})
 			}
 			progress.Progress = min(progress.Progress+session.template.progressBoss, 100)
 			progress.DefeatCount++
@@ -396,9 +393,6 @@ func (game *Game) retreat(ctx context.Context, client *connection.Client, sessio
 		return queries.DeleteChapterState(ctx, client.CommanderID)
 	})
 	if err != nil {
-		return err
-	}
-	if err := game.taskEvent(ctx, client, events...); err != nil {
 		return err
 	}
 	return client.Send(opReply(0))

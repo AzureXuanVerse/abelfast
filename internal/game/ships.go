@@ -73,19 +73,20 @@ func NewShip(commanderID uint32, templateID uint32) db.CreateShipParams {
 	return params
 }
 
-// AddShip gives a commander a new ship of templateID, with the equipment
+// AddShip gives the commander a new ship of templateID, with the equipment
 // (ship_data_template equip_id_1..3) and skills (buff_list, level 1) it comes
-// with, and records it in the archives. pushes holds the SC_17002 to send
-// when that unlocked a new archive entry (the official server sends it before
-// the reply or push carrying the ship).
-func AddShip(ctx context.Context, queries *db.Queries, commanderID, templateID uint32) (ship *protobuf.SHIPINFO, pushes []proto.Message, err error) {
+// with, and records it in the archives. When that unlocks a new archive entry
+// its SC_17002 is pushed (the official server sends it before the reply or
+// push carrying the ship).
+func (tx *Tx) AddShip(templateID uint32) (*protobuf.SHIPINFO, error) {
+	ctx, queries := tx.ctx, tx.Queries
 	template, ok := shipTemplates[templateID]
 	if !ok {
-		return nil, nil, fmt.Errorf("ship template %d: %w", templateID, errRefused)
+		return nil, fmt.Errorf("ship template %d: %w", templateID, errRefused)
 	}
-	row, err := queries.CreateShip(ctx, NewShip(commanderID, templateID))
+	row, err := queries.CreateShip(ctx, NewShip(tx.commanderID, templateID))
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	equips := make([]db.ShipEquipment, shipEquipSlots)
 	for i := range equips {
@@ -94,24 +95,24 @@ func AddShip(ctx context.Context, queries *db.Queries, commanderID, templateID u
 			equips[i].EquipID = template.Equips[i]
 		}
 		if err := queries.SetShipEquipment(ctx, db.SetShipEquipmentParams{ShipID: row.ID, Pos: equips[i].Pos, EquipID: equips[i].EquipID}); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 	skills := make([]db.ShipSkill, len(template.Skills))
 	for i, skill := range template.Skills {
 		skills[i] = db.ShipSkill{ShipID: row.ID, SkillID: skill, Level: 1}
 		if err := queries.AddShipSkill(ctx, db.AddShipSkillParams{ShipID: row.ID, SkillID: skill, Level: 1}); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 	push, err := recordShipGroup(ctx, queries, row)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if push != nil {
-		pushes = append(pushes, push)
+		tx.push(push)
 	}
-	return fullShipInfo(row, equips, skills), pushes, nil
+	return fullShipInfo(row, equips, skills), nil
 }
 
 // NewShipsPush is SC_12042, ships obtained outside of a reply (drops...),
@@ -223,18 +224,21 @@ func shipEquipments(ctx context.Context, queries *db.Queries, commanderID, shipI
 
 // grantShipsStarter gives a new commander the starter ship they chose and
 // Long Island, equipped, and the starting bag (SC_12001 / SC_15001 of the
-// capture).
+// capture). What a new commander starts with is no progress: the task events
+// and pushes it records are dropped.
 func grantShipsStarter(ctx context.Context, queries *db.Queries, commander db.Commander) error {
+	tx := newTx(ctx, queries, commander.ID)
 	for _, template := range []uint32{commander.StarterShip, starterGiftShip} {
-		if _, _, err := AddShip(ctx, queries, commander.ID, template); err != nil {
+		if _, err := tx.AddShip(template); err != nil {
 			return err
 		}
 	}
-	return grantStarterRest(ctx, queries, commander.ID)
+	return grantStarterRest(tx)
 }
 
-func grantStarterRest(ctx context.Context, queries *db.Queries, commanderID uint32) error {
-	if err := grantStarterItems(ctx, queries, commanderID); err != nil {
+func grantStarterRest(tx *Tx) error {
+	ctx, queries, commanderID := tx.ctx, tx.Queries, tx.commanderID
+	if err := grantStarterItems(tx); err != nil {
 		return err
 	}
 	// Renovation Merit Medal (decor tokens spent) starts at 14 (captured)
@@ -314,8 +318,8 @@ func (game *Game) handleShipLock(client *connection.Client, req *protobuf.CS_120
 // CS_12006). What was in the slot goes back to the depot.
 func (game *Game) handleShipEquip(client *connection.Client, req *protobuf.CS_12006) error {
 	ctx := context.Background()
-	err := game.DB.InTx(ctx, func(queries *db.Queries) error {
-		slots, err := shipEquipments(ctx, queries, client.CommanderID, req.GetShipId())
+	err := game.tx(ctx, client, func(tx *Tx) error {
+		slots, err := shipEquipments(ctx, tx.Queries, client.CommanderID, req.GetShipId())
 		if err != nil {
 			return err
 		}
@@ -325,18 +329,18 @@ func (game *Game) handleShipEquip(client *connection.Client, req *protobuf.CS_12
 		}
 		slot := slots[pos-1]
 		if req.GetEquipId() != 0 {
-			if err := SpendEquipment(ctx, queries, client.CommanderID, req.GetEquipId(), 1); err != nil {
+			if err := tx.SpendEquipment(req.GetEquipId(), 1); err != nil {
 				return err
 			}
 		} else if slot.EquipID == 0 {
 			return errRefused
 		}
 		if slot.EquipID != 0 {
-			if err := AddEquipment(ctx, queries, client.CommanderID, slot.EquipID, 1); err != nil {
+			if err := tx.AddEquipment(slot.EquipID, 1); err != nil {
 				return err
 			}
 		}
-		return queries.SetShipEquipment(ctx, db.SetShipEquipmentParams{ShipID: slot.ShipID, Pos: pos, EquipID: req.GetEquipId(), SkinID: slot.SkinID})
+		return tx.SetShipEquipment(ctx, db.SetShipEquipmentParams{ShipID: slot.ShipID, Pos: pos, EquipID: req.GetEquipId(), SkinID: slot.SkinID})
 	})
 	if err != nil && !refused(err) {
 		return err

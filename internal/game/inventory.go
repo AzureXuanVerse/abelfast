@@ -45,51 +45,62 @@ var bagLimits = []*protobuf.ITEMINFO{{Id: proto.Uint32(59010), Count: proto.Uint
 // commander.
 const spweaponBagSize = 150
 
-// AddResource gives a commander amount of a player_resource.
-func AddResource(ctx context.Context, queries *db.Queries, commanderID, resourceID, amount uint32) error {
-	return queries.AddResource(ctx, db.AddResourceParams{CommanderID: commanderID, ResourceID: resourceID, Amount: amount})
+// AddResource gives the commander amount of a player_resource.
+func (tx *Tx) AddResource(resourceID, amount uint32) error {
+	return tx.Queries.AddResource(tx.ctx, db.AddResourceParams{CommanderID: tx.commanderID, ResourceID: resourceID, Amount: amount})
 }
 
 // SpendResource takes amount of a player_resource, ErrNotEnough if the
-// commander has less.
-func SpendResource(ctx context.Context, queries *db.Queries, commanderID, resourceID, amount uint32) error {
+// commander has less. Oil spent counts for TaskSubSpendOil.
+func (tx *Tx) SpendResource(resourceID, amount uint32) error {
 	if amount == 0 {
 		return nil
 	}
-	n, err := queries.SpendResource(ctx, db.SpendResourceParams{CommanderID: commanderID, ResourceID: resourceID, Amount: amount})
+	n, err := tx.Queries.SpendResource(tx.ctx, db.SpendResourceParams{CommanderID: tx.commanderID, ResourceID: resourceID, Amount: amount})
 	if err == nil && n == 0 {
 		err = ErrNotEnough
+	}
+	if err == nil && resourceID == ResourceOil {
+		tx.event(TaskEvent{SubType: TaskSubSpendOil, Count: amount})
 	}
 	return err
 }
 
-// AddItem puts count of an item in a commander's bag.
-func AddItem(ctx context.Context, queries *db.Queries, commanderID, itemID, count uint32) error {
-	return queries.AddItem(ctx, db.AddItemParams{CommanderID: commanderID, ItemID: itemID, Count: count})
+// AddItem puts count of an item in the commander's bag, which counts for
+// TaskSubObtainItem.
+func (tx *Tx) AddItem(itemID, count uint32) error {
+	if err := tx.Queries.AddItem(tx.ctx, db.AddItemParams{CommanderID: tx.commanderID, ItemID: itemID, Count: count}); err != nil {
+		return err
+	}
+	tx.event(TaskEvent{SubType: TaskSubObtainItem, Target: itemID, Count: count})
+	return nil
 }
 
 // SpendItem takes count of an item from the bag, ErrNotEnough if there are
-// fewer.
-func SpendItem(ctx context.Context, queries *db.Queries, commanderID, itemID, count uint32) error {
+// fewer. It counts for TaskSubUseItem.
+func (tx *Tx) SpendItem(itemID, count uint32) error {
 	if count == 0 {
 		return nil
 	}
-	n, err := queries.SpendItem(ctx, db.SpendItemParams{CommanderID: commanderID, ItemID: itemID, Count: count})
+	n, err := tx.Queries.SpendItem(tx.ctx, db.SpendItemParams{CommanderID: tx.commanderID, ItemID: itemID, Count: count})
 	if err == nil && n == 0 {
 		err = ErrNotEnough
+	}
+	if err == nil {
+		tx.event(TaskEvent{SubType: TaskSubUseItem, Target: itemID, Count: count})
 	}
 	return err
 }
 
 // AddEquipment puts count of an equip_data_template id in the depot.
-func AddEquipment(ctx context.Context, queries *db.Queries, commanderID, equipID, count uint32) error {
-	return queries.AddEquipment(ctx, db.AddEquipmentParams{CommanderID: commanderID, EquipID: equipID, Count: count})
+func (tx *Tx) AddEquipment(equipID, count uint32) error {
+	return tx.Queries.AddEquipment(tx.ctx, db.AddEquipmentParams{CommanderID: tx.commanderID, EquipID: equipID, Count: count})
 }
 
 // SpendEquipment takes count of an equipment from the depot, ErrNotEnough if
 // there are fewer.
-func SpendEquipment(ctx context.Context, queries *db.Queries, commanderID, equipID, count uint32) error {
-	n, err := queries.SpendEquipment(ctx, db.SpendEquipmentParams{CommanderID: commanderID, EquipID: equipID, Count: count})
+func (tx *Tx) SpendEquipment(equipID, count uint32) error {
+	n, err := tx.Queries.SpendEquipment(tx.ctx, db.SpendEquipmentParams{CommanderID: tx.commanderID, EquipID: equipID, Count: count})
 	if err == nil && n == 0 {
 		err = ErrNotEnough
 	}
@@ -97,9 +108,9 @@ func SpendEquipment(ctx context.Context, queries *db.Queries, commanderID, equip
 }
 
 // grantStarterItems fills the bag of a new commander.
-func grantStarterItems(ctx context.Context, queries *db.Queries, commanderID uint32) error {
+func grantStarterItems(tx *Tx) error {
 	for _, item := range starterItems {
-		if err := AddItem(ctx, queries, commanderID, item.id, item.count); err != nil {
+		if err := tx.AddItem(item.id, item.count); err != nil {
 			return err
 		}
 	}
@@ -150,8 +161,8 @@ func result(ok bool) *uint32 {
 // next; the client takes the same costs off its own state on result 0.
 func (game *Game) handleUpgradeShipEquipment(client *connection.Client, req *protobuf.CS_14002) error {
 	ctx := context.Background()
-	err := game.DB.InTx(ctx, func(queries *db.Queries) error {
-		equips, err := shipEquipments(ctx, queries, client.CommanderID, req.GetShipId())
+	err := game.tx(ctx, client, func(tx *Tx) error {
+		equips, err := shipEquipments(ctx, tx.Queries, client.CommanderID, req.GetShipId())
 		if err != nil {
 			return err
 		}
@@ -165,25 +176,21 @@ func (game *Game) handleUpgradeShipEquipment(client *connection.Client, req *pro
 			if !ok {
 				return errRefused
 			}
-			if err := SpendResource(ctx, queries, client.CommanderID, ResourceGold, upgrade.Gold); err != nil {
+			if err := tx.SpendResource(ResourceGold, upgrade.Gold); err != nil {
 				return err
 			}
 			for _, item := range upgrade.Items {
-				if err := SpendItem(ctx, queries, client.CommanderID, item[0], item[1]); err != nil {
+				if err := tx.SpendItem(item[0], item[1]); err != nil {
 					return err
 				}
 			}
 			equip.EquipID = upgrade.Next
 		}
-		return queries.SetShipEquipment(ctx, db.SetShipEquipmentParams{ShipID: equip.ShipID, Pos: pos, EquipID: equip.EquipID, SkinID: equip.SkinID})
+		tx.event(TaskEvent{SubType: TaskSubEnhanceGear, Count: 1})
+		return tx.SetShipEquipment(ctx, db.SetShipEquipmentParams{ShipID: equip.ShipID, Pos: pos, EquipID: equip.EquipID, SkinID: equip.SkinID})
 	})
 	if err != nil && !refused(err) {
 		return err
-	}
-	if err == nil {
-		if err := game.taskEvent(ctx, client, TaskEvent{SubType: TaskSubEnhanceGear, Count: 1}); err != nil {
-			return err
-		}
 	}
 	return client.Send(&protobuf.SC_14003{Result: result(err == nil)})
 }
@@ -197,23 +204,19 @@ func (game *Game) handleComposeEquipment(client *connection.Client, req *protobu
 	num := req.GetNum()
 	err := errRefused
 	if ok && num > 0 {
-		err = game.DB.InTx(ctx, func(queries *db.Queries) error {
-			if err := SpendResource(ctx, queries, client.CommanderID, ResourceGold, recipe.Gold*num); err != nil {
+		err = game.tx(ctx, client, func(tx *Tx) error {
+			if err := tx.SpendResource(ResourceGold, recipe.Gold*num); err != nil {
 				return err
 			}
-			if err := SpendItem(ctx, queries, client.CommanderID, recipe.Material, recipe.MaterialCount*num); err != nil {
+			if err := tx.SpendItem(recipe.Material, recipe.MaterialCount*num); err != nil {
 				return err
 			}
-			return AddEquipment(ctx, queries, client.CommanderID, recipe.Equip, num)
+			tx.event(TaskEvent{SubType: TaskSubCraftGear, Count: num})
+			return tx.AddEquipment(recipe.Equip, num)
 		})
 	}
 	if err != nil && !refused(err) {
 		return err
-	}
-	if err == nil {
-		if err := game.taskEvent(ctx, client, TaskEvent{SubType: TaskSubCraftGear, Count: req.GetNum()}); err != nil {
-			return err
-		}
 	}
 	return client.Send(&protobuf.SC_14007{Result: result(err == nil)})
 }
@@ -224,16 +227,16 @@ func (game *Game) handleComposeEquipment(client *connection.Client, req *protobu
 // price (BagProxy:GetSellingPrice) itself on result 0.
 func (game *Game) handleSellItems(client *connection.Client, req *protobuf.CS_15008) error {
 	ctx := context.Background()
-	err := game.DB.InTx(ctx, func(queries *db.Queries) error {
+	err := game.tx(ctx, client, func(tx *Tx) error {
 		for _, item := range req.GetItemList() {
 			price, ok := itemPrices[item.GetId()]
 			if !ok {
 				return errRefused
 			}
-			if err := SpendItem(ctx, queries, client.CommanderID, item.GetId(), item.GetCount()); err != nil {
+			if err := tx.SpendItem(item.GetId(), item.GetCount()); err != nil {
 				return err
 			}
-			if err := AddResource(ctx, queries, client.CommanderID, price[0], price[1]*item.GetCount()); err != nil {
+			if err := tx.AddResource(price[0], price[1]*item.GetCount()); err != nil {
 				return err
 			}
 		}

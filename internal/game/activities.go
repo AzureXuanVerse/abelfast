@@ -275,7 +275,8 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 			break
 		}
 		days := signs[config.ConfigID].FrontDrops
-		err = game.DB.InTx(ctx, func(queries *db.Queries) error {
+		err = game.tx(ctx, client, func(tx *Tx) error {
+			queries := tx.Queries
 			state, err := activityState(ctx, queries, client.CommanderID, activity)
 			if err != nil {
 				return err
@@ -296,7 +297,8 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 			return queries.SaveActivity(ctx, db.SaveActivityParams(state))
 		})
 	case activityTypeMonthSign:
-		err = game.DB.InTx(ctx, func(queries *db.Queries) error {
+		err = game.tx(ctx, client, func(tx *Tx) error {
+			queries := tx.Queries
 			state, err := activityState(ctx, queries, client.CommanderID, activity)
 			if err != nil {
 				return err
