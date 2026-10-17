@@ -170,3 +170,45 @@ sql:
             go_type: uint32
           - column: commander_activities.data4
             go_type: uint32
+          - column: fleets.commander_id
+            go_type: uint32
+          - column: fleets.fleet_id
+            go_type: uint32
+          - column: fleet_ships.commander_id
+            go_type: uint32
+          - column: fleet_ships.fleet_id
+            go_type: uint32
+          - column: fleet_ships.position
+            go_type: uint32
+          - column: fleet_ships.ship_id
+            go_type: uint32
+          - column: chapter_progress.commander_id
+            go_type: uint32
+          - column: chapter_progress.chapter_id
+            go_type: uint32
+          - column: chapter_progress.progress
+            go_type: uint32
+          - column: chapter_progress.kill_boss_count
+            go_type: uint32
+          - column: chapter_progress.kill_enemy_count
+            go_type: uint32
+          - column: chapter_progress.take_box_count
+            go_type: uint32
+          - column: chapter_progress.defeat_count
+            go_type: uint32
+          - column: chapter_progress.today_defeat_count
+            go_type: uint32
+          - column: chapter_progress.pass_count
+            go_type: uint32
+          - column: chapter_states.commander_id
+            go_type: uint32
+          - column: chapter_states.chapter_id
+            go_type: uint32
+          - column: commander_commissions.commander_id
+            go_type: uint32
+          - column: commander_commissions.collection_id
+            go_type: uint32
+          - column: commander_commissions.finish_time
+            go_type: uint32
+          - column: commander_commissions.over_time
+            go_type: uint32

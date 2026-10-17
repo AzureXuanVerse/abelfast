@@ -20,12 +20,6 @@ import (
 // drop is a reward: a DROP_TYPE_* (const.lua), an id and a count.
 type drop struct{ typ, id, count uint32 }
 
-// DROP_TYPE_* (const.lua)
-const (
-	dropTypeResource = 1
-	dropTypeItem     = 2
-)
-
 // ActivityConst types belfast operates (CS_11202)
 const (
 	activityType7DaysLogin = 3
