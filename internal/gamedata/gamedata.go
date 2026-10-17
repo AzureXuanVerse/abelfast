@@ -157,6 +157,29 @@ func Gameset() (map[string]uint32, error) {
 	return gameset, nil
 }
 
+// Gametip reads the gametip strings (what the client's i18n(key) shows), by
+// key.
+func Gametip() (map[string]string, error) {
+	raw, err := file("gametip")
+	if err != nil {
+		return nil, err
+	}
+	var rows map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &rows); err != nil {
+		return nil, fmt.Errorf("config table gametip: %w", err)
+	}
+	tips := make(map[string]string, len(rows))
+	for key, raw := range rows {
+		var row struct {
+			Tip string `json:"tip"`
+		}
+		if json.Unmarshal(raw, &row) == nil {
+			tips[key] = row.Tip
+		}
+	}
+	return tips, nil
+}
+
 // GamesetDescription decodes a gameset setting's description (the lists some
 // settings hold instead of a key_value) into value.
 func GamesetDescription(key string, value any) error {

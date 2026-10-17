@@ -17,6 +17,7 @@ func loadGameData() error {
 		loadCommissionData,
 		loadMedalShop,
 		loadShopData,
+		loadItemData,
 		loadEducateData,
 		loadNewCommander,
 		loadStarterFurniture,

@@ -11,16 +11,17 @@ import (
 const (
 	dropTypeResource = 1 // player_resource
 	dropTypeItem     = 2 // item_data_statistics
+	dropTypeEquip    = 3 // equip_data_statistics
 	dropTypeShip     = 4 // ship_data_template
 	dropTypeVItem    = 8 // item_virtual_data_statistics
 )
 
-// grantDrops stores rewards: resources, bag items, ships (with their default
-// equipment, skills and archive entry, pushed in SC_12042), and virtual items
-// (the Specialized Core is stored as its link item, the cruise pass points
-// as their task counter, the rest as virtual item counters), recording the
-// task progress they cause. Gear, furniture, skins... have no storage yet and
-// are only logged.
+// grantDrops stores rewards: resources, bag items, equipment, ships (with
+// their default equipment, skills and archive entry, pushed in SC_12042), and
+// virtual items (the Specialized Core is stored as its link item, the cruise
+// pass points as their task counter, the rest as virtual item counters),
+// recording the task progress they cause. Furniture, skins, gear skins... have
+// no storage yet and are only logged.
 func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 	for _, entry := range drops {
 		kind, id, count := entry.GetType(), entry.GetId(), entry.GetNumber()
@@ -31,6 +32,10 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 			}
 		case kind == dropTypeItem:
 			if err := tx.AddItem(id, count); err != nil {
+				return err
+			}
+		case kind == dropTypeEquip:
+			if err := tx.AddEquipment(id, count); err != nil {
 				return err
 			}
 		case kind == dropTypeShip:

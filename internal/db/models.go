@@ -48,6 +48,7 @@ type Commander struct {
 	ChatRoomID      uint32
 	MailStoreroomLv uint32
 	Manifesto       string
+	DormFood        uint32
 }
 
 type CommanderActivity struct {

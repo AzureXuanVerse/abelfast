@@ -73,6 +73,9 @@ const intimacyPropose = 6
 // tables' base lookup in include.lua).
 type equipStatisticsConfig struct {
 	Base            uint32          `json:"base"`
+	Nationality     uint32          `json:"nationality"`
+	Rarity          uint32          `json:"rarity"`
+	Tech            uint32          `json:"tech"` // its T1-T3 grade, 0 for the gear no tech pack holds
 	Attribute1      json.RawMessage `json:"attribute_1"`
 	Attribute2      json.RawMessage `json:"attribute_2"`
 	Attribute3      json.RawMessage `json:"attribute_3"`
@@ -88,6 +91,7 @@ type equipStatisticsConfig struct {
 type equipTemplateConfig struct {
 	equipUpgrade
 	Base       uint32  `json:"base"`
+	Prev       uint32  `json:"prev"` // 0 for a gear's +0
 	EquipLimit *uint32 `json:"equip_limit"`
 }
 
@@ -149,6 +153,7 @@ type composeRecipe struct {
 // item doesn't sell
 type itemConfig struct {
 	Price json.RawMessage `json:"price"`
+	itemUseConfig
 }
 
 // medal_template row
@@ -246,6 +251,7 @@ var (
 	equipUpgrades map[uint32]equipUpgrade
 	composes      map[uint32]composeRecipe
 	itemPrices    map[uint32][2]uint32 // item_data_statistics.price: [resource, amount]
+	equipIDs      map[uint32]bool      // every equip_data_template id
 )
 
 // what a ship's evasion is computed from (shipDodge)
@@ -273,7 +279,8 @@ var (
 
 // loadShipData builds the ship, construction and equipment data: ships as
 // obtained (base templates, id ending in 1, that have statistics), the
-// construction pools, equipment upgrades, crafting recipes and item prices.
+// construction pools, equipment upgrades, crafting recipes, item prices and
+// uses.
 func loadShipData() error {
 	var templates map[uint32]shipTemplate
 	var stats map[uint32]shipStatisticsConfig
@@ -285,6 +292,7 @@ func loadShipData() error {
 	var equips map[uint32]equipTemplateConfig
 	var equipStats map[uint32]equipStatisticsConfig
 	var gameset map[string]uint32
+	var gametip map[string]string
 	err := gamedata.LoadAll(
 		gamedata.Load("ship_data_template", &templates),
 		gamedata.Load("ship_data_statistics", &stats),
@@ -299,6 +307,10 @@ func loadShipData() error {
 		loadBuildTimes,
 		func() (err error) {
 			gameset, err = gamedata.Gameset()
+			return err
+		},
+		func() (err error) {
+			gametip, err = gamedata.Gametip()
 			return err
 		},
 	)
@@ -408,6 +420,11 @@ func loadShipData() error {
 		if json.Unmarshal(row.Price, &price) == nil && len(price) >= 2 {
 			itemPrices[id] = [2]uint32{price[0], price[1]}
 		}
+	}
+	readItemUses(items, techPackGear(equips, equipStats), gametip)
+	equipIDs = make(map[uint32]bool, len(equips))
+	for id := range equips {
+		equipIDs[id] = true
 	}
 	return nil
 }

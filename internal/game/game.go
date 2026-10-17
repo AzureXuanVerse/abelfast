@@ -73,6 +73,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleUpgradeShipEquipment)
 	packets.Handle(game.handleComposeEquipment)
 	packets.HandleLenient(game.handleSellItems)
+	packets.Handle(game.handleUseItem)
 	packets.Handle(game.handleTracking)
 	packets.Handle(game.handleTrack)
 	// fleets, the campaign and battles

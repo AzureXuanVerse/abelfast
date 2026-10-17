@@ -109,7 +109,7 @@ func (q *Queries) CountCommanders(ctx context.Context) (int64, error) {
 const createCommander = `-- name: CreateCommander :one
 INSERT INTO commanders (account_id, name, starter_ship, registered_at)
 VALUES (?, ?, ?, ?)
-RETURNING id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto
+RETURNING id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food
 `
 
 type CreateCommanderParams struct {
@@ -144,12 +144,13 @@ func (q *Queries) CreateCommander(ctx context.Context, arg CreateCommanderParams
 		&i.ChatRoomID,
 		&i.MailStoreroomLv,
 		&i.Manifesto,
+		&i.DormFood,
 	)
 	return i, err
 }
 
 const getCommander = `-- name: GetCommander :one
-SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto FROM commanders WHERE id = ?
+SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food FROM commanders WHERE id = ?
 `
 
 func (q *Queries) GetCommander(ctx context.Context, id uint32) (Commander, error) {
@@ -172,12 +173,13 @@ func (q *Queries) GetCommander(ctx context.Context, id uint32) (Commander, error
 		&i.ChatRoomID,
 		&i.MailStoreroomLv,
 		&i.Manifesto,
+		&i.DormFood,
 	)
 	return i, err
 }
 
 const getCommanderByAccount = `-- name: GetCommanderByAccount :one
-SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto FROM commanders WHERE account_id = ?
+SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food FROM commanders WHERE account_id = ?
 `
 
 func (q *Queries) GetCommanderByAccount(ctx context.Context, accountID uint32) (Commander, error) {
@@ -200,6 +202,7 @@ func (q *Queries) GetCommanderByAccount(ctx context.Context, accountID uint32) (
 		&i.ChatRoomID,
 		&i.MailStoreroomLv,
 		&i.Manifesto,
+		&i.DormFood,
 	)
 	return i, err
 }
@@ -333,6 +336,20 @@ type SetChatRoomParams struct {
 
 func (q *Queries) SetChatRoom(ctx context.Context, arg SetChatRoomParams) error {
 	_, err := q.db.ExecContext(ctx, setChatRoom, arg.ChatRoomID, arg.ID)
+	return err
+}
+
+const setDormFood = `-- name: SetDormFood :exec
+UPDATE commanders SET dorm_food = ? WHERE id = ?
+`
+
+type SetDormFoodParams struct {
+	DormFood uint32
+	ID       uint32
+}
+
+func (q *Queries) SetDormFood(ctx context.Context, arg SetDormFoodParams) error {
+	_, err := q.db.ExecContext(ctx, setDormFood, arg.DormFood, arg.ID)
 	return err
 }
 

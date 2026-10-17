@@ -156,7 +156,7 @@ func navalAcademy() *protobuf.SC_22001 {
 }
 
 // dorm is SC_19001, the backyard (DormProxy): level 1 (dorm_data_template 1),
-// one floor, two training slots, the owned furniture, no ships or food.
+// one floor, two training slots, the owned furniture and food, no ships.
 func (game *Game) dorm(ctx context.Context, commander db.Commander) (*protobuf.SC_19001, error) {
 	furniture, err := game.DB.ListFurniture(ctx, commander.ID)
 	if err != nil {
@@ -168,6 +168,7 @@ func (game *Game) dorm(ctx context.Context, commander db.Commander) (*protobuf.S
 	}
 	return &protobuf.SC_19001{
 		Lv:              proto.Uint32(1),
+		Food:            proto.Uint32(commander.DormFood),
 		FurnitureIdList: list,
 		FloorNum:        proto.Uint32(1),
 		ExpPos:          proto.Uint32(2),

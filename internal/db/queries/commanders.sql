@@ -30,6 +30,9 @@ UPDATE commanders SET equip_bag_max = equip_bag_max + ? WHERE id = ?;
 -- name: AddCommanderBagMax :exec
 UPDATE commanders SET commander_bag_max = commander_bag_max + ? WHERE id = ?;
 
+-- name: SetDormFood :exec
+UPDATE commanders SET dorm_food = ? WHERE id = ?;
+
 -- name: AddStory :exec
 INSERT INTO commander_stories (commander_id, story_id) VALUES (?, ?) ON CONFLICT DO NOTHING;
 
