@@ -16,7 +16,7 @@ import (
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
-// ActivityConst types belfast operates (CS_11202)
+// ActivityConst.ACTIVITY_TYPE_* belfast operates (CS_11202)
 const (
 	activityType7DaysLogin = 3
 	activityTypeMonthSign  = 6

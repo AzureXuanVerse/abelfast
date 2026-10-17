@@ -62,23 +62,31 @@ var taskInheritedSubTypes = map[uint32]bool{
 	TaskSubStars:        true,
 }
 
-var taskInheritedCountSubTypes = map[uint32]bool{
-	TaskSubBuild: true,
-}
-
 // item_virtual_data_statistics ids earned from tasks (drop type 8)
 const (
 	VirtualItemWeeklyPt = 59012 // weekly mission points (WeekTaskProgress)
 	VirtualItemCruisePt = 59599 // cruise pass points (SubmitActiveTaskCommand)
 )
 
-// activity_template types whose tasks come in SC_20201 (TotalTaskProxy):
-// ACTIVITY_TYPE_TASKS 13, PT_CRUSING 54, PT_HEI5 130, BOSS_RUSH_DAL_COLLAB 132
-// go to TaskProxy; TASK_RYZA 89, HOTSPRING_2 100, NOT_TRACEABLE 121 to
-// ActivityTaskProxy.
-const activityTypeCruise = 54
+// ActivityConst.ACTIVITY_TYPE_* of the activities whose tasks come in
+// SC_20201 (TotalTaskProxy)
+const (
+	activityTypeTasks             = 13
+	activityTypeCruise            = 54 // PT_CRUSING
+	activityTypePtHei5            = 130
+	activityTypeBossRushDalCollab = 132
+	activityTypeTaskRyza          = 89
+	activityTypeHotspring2        = 100
+	activityTypeNotTraceable      = 121
+)
 
-var taskActivityTypes = map[uint32]bool{13: true, 54: true, 130: true, 132: true, 89: true, 100: true, 121: true}
+// taskActivityTypes are the activity_template types whose tasks come in
+// SC_20201: TaskProxy holds those of the first four, ActivityTaskProxy the
+// others'.
+var taskActivityTypes = map[uint32]bool{
+	activityTypeTasks: true, activityTypeCruise: true, activityTypePtHei5: true, activityTypeBossRushDalCollab: true,
+	activityTypeTaskRyza: true, activityTypeHotspring2: true, activityTypeNotTraceable: true,
+}
 
 // TaskEvent is something that happened that tasks count.
 type TaskEvent struct {
@@ -247,7 +255,7 @@ func (tx *Tx) cruisePt() (uint32, error) {
 // initialProgress is where a task accepted now starts, see
 // taskInheritedSubTypes.
 func initialProgress(config taskConfig, counters map[taskCounterKey]uint32) uint32 {
-	if !taskInheritedSubTypes[config.SubType] && !(taskInheritedCountSubTypes[config.SubType] && config.AutoCommit == 0) {
+	if !taskInheritedSubTypes[config.SubType] && !(config.SubType == TaskSubBuild && config.AutoCommit == 0) {
 		return 0
 	}
 	target := config.target

@@ -110,14 +110,14 @@ func buildInfo(build db.Build) *protobuf.BUILDINFO {
 // rate_tip, then one of the pool's ships of that rarity (ship_data_group
 // descriptions linking to the pool).
 func pickBuildShip(pool buildPool) (template uint32, duration uint32, ok bool) {
-	if len(pool.rarities) == 0 {
+	if len(pool.rates) == 0 {
 		return 0, 0, false
 	}
 	roll := rand.Float64() * pool.total
-	rarity := pool.rarities[len(pool.rarities)-1] // if rounding leaves the roll positive
-	for _, r := range pool.rarities {
-		if roll -= pool.rates[r]; roll < 0 {
-			rarity = r
+	rarity := pool.rates[len(pool.rates)-1].rarity // if rounding leaves the roll positive
+	for _, r := range pool.rates {
+		if roll -= r.rate; roll < 0 {
+			rarity = r.rarity
 			break
 		}
 	}

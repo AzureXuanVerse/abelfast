@@ -234,7 +234,8 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 				return err
 			}
 		}
-		// TODO(player area): add reply.PlayerExp to the commander's exp/level
+		// reply.PlayerExp isn't added to the commander: their exp and level
+		// aren't stored
 		if err := tx.grantDrops(reply.DropInfo); err != nil {
 			return err
 		}
@@ -278,8 +279,8 @@ func battleAffinity(flagship, mvp bool) uint32 {
 }
 
 // addShipExp is Ship:addExp: exp is the progress into the current level,
-// ship_level.exp per level, capped at the ship's max_level. UR ships use
-// ship_level.exp_ur, which needs ship_data_statistics.rarity (ships area).
+// ship_level.exp per level, capped at the ship's max_level. UR ships would
+// use ship_level.exp_ur, which isn't read.
 func addShipExp(ship *db.Ship, gained uint32) {
 	if ship.Level >= ship.MaxLevel {
 		return
