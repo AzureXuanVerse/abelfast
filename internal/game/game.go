@@ -31,6 +31,7 @@ func StartCommander(ctx context.Context, queries *db.Queries, commander db.Comma
 		grantShipsStarter,
 		grantPlayerStarter,
 		grantFleetsStarter,
+		grantTasksStarter,
 	} {
 		if err := grant(ctx, queries, commander); err != nil {
 			return err
@@ -44,7 +45,7 @@ func (game *Game) Register() {
 	game.registerPlayer()
 	game.registerShips()
 	game.registerFleets()
-	// tasks area, until its registerTasks lands
+	game.registerTasks()
 	packets.Handle(game.handleGuideIndex)
 	packets.Handle(game.handleStoryRead)
 	packets.Handle(game.handleTracking)
@@ -131,8 +132,11 @@ func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.
 	if err := add(game.fleetsLoginPushes(ctx, commander)); err != nil {
 		return err
 	}
-	// tasks area, until its tasksLoginPushes lands
-	if err := add(taskPushes(), nil); err != nil {
+	if err := add(game.tasksLoginPushes(ctx, commander)); err != nil {
+		return err
+	}
+	handbook, err := game.handbookLoginPush(ctx, commander)
+	if err := add([]proto.Message{handbook}, err); err != nil {
 		return err
 	}
 	for _, id := range loginBurstOrder {

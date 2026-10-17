@@ -249,9 +249,8 @@ var errActivityRefused = errors.New("activity operation refused")
 
 // acceptActivityTasks hands a task list activity's tasks to the tasks area,
 // which must push them (SC_20003) before SC_11203.
-// INTEGRATION(tasks): call the tasks area's accept function here.
 func (game *Game) acceptActivityTasks(ctx context.Context, client *connection.Client, taskIDs []uint32) error {
-	return nil
+	return game.acceptTasksPush(ctx, client, taskIDs...)
 }
 
 // handleActivityOperation answers ActivityOperationCommand (CS_11202). The

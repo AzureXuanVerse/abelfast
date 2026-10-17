@@ -165,8 +165,6 @@ func (game *Game) playerLoginPushes(ctx context.Context, commander db.Commander)
 		protocol.FillRequired(&protobuf.SC_26120{}),
 		// CommanderProxy: no cat commanders, boxes or presets
 		protocol.FillRequired(&protobuf.SC_25001{}),
-		// CommanderManualProxy: no handbook progress
-		&protobuf.SC_22300{},
 		// ShipSkinProxy: no skins owned
 		&protobuf.SC_12201{},
 		technology(),

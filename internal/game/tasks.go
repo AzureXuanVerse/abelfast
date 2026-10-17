@@ -106,15 +106,6 @@ func (game *Game) registerTasks() {
 	game.registerJuus()
 }
 
-// taskPushes is what game.go sent before tasksLoginPushes existed: no tasks.
-// Remove once the login sends tasksLoginPushes instead.
-func taskPushes() []proto.Message {
-	return []proto.Message{
-		&protobuf.SC_20001{},
-		&protobuf.SC_20101{Info: &protobuf.WEEKLY_INFO{Pt: proto.Uint32(0), RewardLv: proto.Uint32(0)}},
-	}
-}
-
 // tasksLoginPushes are TaskProxy's tasks (SC_20001), the weekly missions
 // (SC_20101) and the tasks of task activities (SC_20201), in that order.
 func (game *Game) tasksLoginPushes(ctx context.Context, commander db.Commander) ([]proto.Message, error) {
@@ -796,10 +787,4 @@ func (game *Game) handleSubmitActivityTasks(client *connection.Client, req *prot
 		return err
 	}
 	return client.Send(reply)
-}
-
-// handleMetaPoints answers the META ship points request
-// (MetaPTDataRequestCommand): no META ship progress yet.
-func (game *Game) handleMetaPoints(client *connection.Client, req *protobuf.CS_34001) error {
-	return client.Send(&protobuf.SC_34002{})
 }
