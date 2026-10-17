@@ -122,38 +122,18 @@ func buildInfo(build db.Build) *protobuf.BUILDINFO {
 // rate_tip, then one of the pool's ships of that rarity (ship_data_group
 // descriptions linking to the pool).
 func pickBuildShip(pool buildPool) (template uint32, duration uint32, ok bool) {
-	candidates := map[uint32][]uint32{}
-	for _, group := range pool.Groups {
-		if ship, ok := shipTemplates[group*10+1]; ok {
-			candidates[ship.Rarity] = append(candidates[ship.Rarity], group*10+1)
-		}
-	}
-	// rarities that have ships, in a fixed order
-	var rarities []uint32
-	total := 0.0
-	for name, rate := range pool.Rates {
-		if rarity := rarityByRateName[name]; len(candidates[rarity]) > 0 {
-			rarities = append(rarities, rarity)
-			total += rate
-		}
-	}
-	if len(rarities) == 0 {
+	if len(pool.rarities) == 0 {
 		return 0, 0, false
 	}
-	slices.Sort(rarities)
-	rates := map[uint32]float64{}
-	for name, rate := range pool.Rates {
-		rates[rarityByRateName[name]] = rate
-	}
-	roll := rand.Float64() * total
-	rarity := rarities[len(rarities)-1] // if rounding leaves the roll positive
-	for _, r := range rarities {
-		if roll -= rates[r]; roll < 0 {
+	roll := rand.Float64() * pool.total
+	rarity := pool.rarities[len(pool.rarities)-1] // if rounding leaves the roll positive
+	for _, r := range pool.rarities {
+		if roll -= pool.rates[r]; roll < 0 {
 			rarity = r
 			break
 		}
 	}
-	ships := candidates[rarity]
+	ships := pool.candidates[rarity]
 	template = ships[rand.IntN(len(ships))]
 	if seconds, ok := buildTimes[template]; ok {
 		return template, seconds, true

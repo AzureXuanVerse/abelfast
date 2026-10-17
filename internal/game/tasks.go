@@ -179,16 +179,8 @@ func grantTasksStarter(ctx context.Context, queries *db.Queries, commander db.Co
 			return err
 		}
 	}
-	var unlockTasks []uint32
-	for _, page := range handbookPageConfigs {
-		for _, id := range page.Unlock {
-			if !slices.Contains(unlockTasks, id) {
-				unlockTasks = append(unlockTasks, id)
-			}
-		}
-	}
-	slices.Sort(unlockTasks)
-	if _, err := acceptTasks(ctx, queries, commander.ID, append(unlockTasks, starterTasks...), uint32(commander.RegisteredAt)); err != nil {
+	tasks := append(slices.Clone(handbookUnlockTasks), starterTasks...)
+	if _, err := acceptTasks(ctx, queries, commander.ID, tasks, uint32(commander.RegisteredAt)); err != nil {
 		return err
 	}
 	if _, err := unlockWeeklyTasks(ctx, queries, commander.ID, 1); err != nil {

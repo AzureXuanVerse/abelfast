@@ -3,6 +3,7 @@ package game
 import (
 	"cmp"
 	"encoding/json"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -122,7 +123,21 @@ var (
 	// task_data_template / weekly_task_template ids by sub_type
 	taskIDsBySubType       map[uint32][]uint32
 	weeklyTaskIDsBySubType map[uint32][]uint32
+
+	// handbookTaskPages are the commander manual pages of each task, by page id
+	handbookTaskPages map[uint32][]handbookTaskPage
+	// handbookUnlockTasks are the tasks that unlock pages
+	// (tutorial_handbook_task.unlock), sorted
+	handbookUnlockTasks []uint32
 )
+
+// handbookTaskPage is a commander manual page a task belongs to: as one of
+// its tasks (task_list[i][0]), or as a task to finish to unlock the page or
+// its tasks (unlock, task_list[i][1]).
+type handbookTaskPage struct {
+	page     uint32
+	pageTask bool
+}
 
 // loadTaskData reads the tasks, weekly missions, activities, cruise pass
 // task groups and commander manual pages.
@@ -169,6 +184,7 @@ func loadTaskData() error {
 		}
 	}
 	slices.SortFunc(taskActivities, func(a, b activityConfig) int { return cmp.Compare(a.ID, b.ID) })
+	indexHandbookTasks()
 	for id, group := range battlepassTaskGroups {
 		for _, chain := range group.TaskGroup {
 			group.tasks = append(group.tasks, chain...)
@@ -177,6 +193,45 @@ func loadTaskData() error {
 		battlepassTaskGroups[id] = group
 	}
 	return nil
+}
+
+// indexHandbookTasks builds handbookTaskPages and handbookUnlockTasks.
+func indexHandbookTasks() {
+	pageTasks := map[uint32]map[uint32]bool{} // task -> page -> is a page task
+	add := func(task, page uint32, pageTask bool) {
+		if pageTasks[task] == nil {
+			pageTasks[task] = map[uint32]bool{}
+		}
+		pageTasks[task][page] = pageTasks[task][page] || pageTask
+	}
+	handbookUnlockTasks = nil
+	for id, page := range handbookPageConfigs {
+		for _, task := range page.Unlock {
+			add(task, id, false)
+			if !slices.Contains(handbookUnlockTasks, task) {
+				handbookUnlockTasks = append(handbookUnlockTasks, task)
+			}
+		}
+		for _, entry := range page.TaskList {
+			if len(entry) > 0 {
+				for _, task := range entry[0] {
+					add(task, id, true)
+				}
+			}
+			if len(entry) > 1 {
+				for _, task := range entry[1] {
+					add(task, id, false)
+				}
+			}
+		}
+	}
+	slices.Sort(handbookUnlockTasks)
+	handbookTaskPages = make(map[uint32][]handbookTaskPage, len(pageTasks))
+	for task, pages := range pageTasks {
+		for _, page := range slices.Sorted(maps.Keys(pages)) {
+			handbookTaskPages[task] = append(handbookTaskPages[task], handbookTaskPage{page: page, pageTask: pages[page]})
+		}
+	}
 }
 
 // taskTarget is a task's target_id: "0" / "" / [] for any target, an id, a

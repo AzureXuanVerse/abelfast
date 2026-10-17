@@ -26,19 +26,20 @@ func (game *Game) handbookLoginPush(ctx context.Context, commander db.Commander)
 		return nil, err
 	}
 	msg := &protobuf.SC_22300{}
-	for _, page := range pages {
-		handbook := &protobuf.TUTHANDBOOK{Id: proto.Uint32(page.PageID), Pt: proto.Uint32(page.Pt), Award: proto.Uint32(page.Award)}
-		for _, task := range finished {
-			if task.PageID == page.PageID {
-				handbook.FinishedTaskIds = append(handbook.FinishedTaskIds, task.TaskID)
-			}
-		}
-		msg.Handbooks = append(msg.Handbooks, handbook)
-	}
+	byPage := map[uint32][]uint32{}
+	seen := map[uint32]bool{}
 	for _, task := range finished {
-		if !slices.Contains(msg.FinishedTaskIds, task.TaskID) {
+		byPage[task.PageID] = append(byPage[task.PageID], task.TaskID)
+		if !seen[task.TaskID] {
+			seen[task.TaskID] = true
 			msg.FinishedTaskIds = append(msg.FinishedTaskIds, task.TaskID)
 		}
+	}
+	for _, page := range pages {
+		msg.Handbooks = append(msg.Handbooks, &protobuf.TUTHANDBOOK{
+			Id: proto.Uint32(page.PageID), Pt: proto.Uint32(page.Pt), Award: proto.Uint32(page.Award),
+			FinishedTaskIds: byPage[page.PageID],
+		})
 	}
 	return msg, nil
 }
@@ -50,31 +51,19 @@ func (game *Game) handbookLoginPush(ctx context.Context, commander db.Commander)
 // a page's tasks (unlock, task_list[i][1]) only finishes.
 func handbookTaskClaimed(ctx context.Context, queries *db.Queries, commanderID uint32, taskID uint32) ([]TaskEvent, error) {
 	var events []TaskEvent
-	for _, page := range handbookPageConfigs {
-		isPageTask, isUnlockTask := false, slices.Contains(page.Unlock, taskID)
-		for _, entry := range page.TaskList {
-			if len(entry) > 0 && slices.Contains(entry[0], taskID) {
-				isPageTask = true
-			}
-			if len(entry) > 1 && slices.Contains(entry[1], taskID) {
-				isUnlockTask = true
-			}
-		}
-		if !isPageTask && !isUnlockTask {
-			continue
-		}
-		if err := queries.CreateHandbookPage(ctx, db.CreateHandbookPageParams{CommanderID: commanderID, PageID: page.ID}); err != nil {
+	for _, page := range handbookTaskPages[taskID] {
+		if err := queries.CreateHandbookPage(ctx, db.CreateHandbookPageParams{CommanderID: commanderID, PageID: page.page}); err != nil {
 			return nil, err
 		}
-		added, err := queries.AddHandbookFinished(ctx, db.AddHandbookFinishedParams{CommanderID: commanderID, PageID: page.ID, TaskID: taskID})
+		added, err := queries.AddHandbookFinished(ctx, db.AddHandbookFinishedParams{CommanderID: commanderID, PageID: page.page, TaskID: taskID})
 		if err != nil {
 			return nil, err
 		}
-		if isPageTask && added > 0 {
-			if err := queries.AddHandbookPagePt(ctx, db.AddHandbookPagePtParams{CommanderID: commanderID, PageID: page.ID}); err != nil {
+		if page.pageTask && added > 0 {
+			if err := queries.AddHandbookPagePt(ctx, db.AddHandbookPagePtParams{CommanderID: commanderID, PageID: page.page}); err != nil {
 				return nil, err
 			}
-			events = append(events, TaskEvent{SubType: TaskSubHandbookPhase, Target: page.ID, Count: 1})
+			events = append(events, TaskEvent{SubType: TaskSubHandbookPhase, Target: page.page, Count: 1})
 		}
 	}
 	return events, nil

@@ -50,8 +50,13 @@ type buildPool struct {
 	ExchangeCount uint32   `json:"exchange_count"`
 	RateTip       []string `json:"rate_tip"`
 
-	Rates  map[string]float64 `json:"-"` // rate_tip, by rarity name
-	Groups []uint32           `json:"-"`
+	// the ships it yields (ship_data_group descriptions linking to it) by
+	// rarity, the rarities that have ships in order, their rate_tip rate
+	// and the sum of those rates
+	candidates map[uint32][]uint32
+	rarities   []uint32
+	rates      map[uint32]float64
+	total      float64
 }
 
 // equipUpgrade is an equip_data_template row: what upgrading it costs and
@@ -133,22 +138,37 @@ func loadShipData() error {
 		if !ok {
 			return fmt.Errorf("config table ship_data_create_material in %s: no pool %d", regionDataDir(), id)
 		}
-		pool.Rates = map[string]float64{}
+		var poolGroups []uint32
+		for _, group := range groups {
+			if obtainedFromPool(group.Description, name) {
+				poolGroups = append(poolGroups, group.GroupType)
+			}
+		}
+		slices.Sort(poolGroups)
+		pool.candidates = map[uint32][]uint32{}
+		for _, group := range poolGroups {
+			if ship, ok := shipTemplates[group*10+1]; ok {
+				pool.candidates[ship.Rarity] = append(pool.candidates[ship.Rarity], group*10+1)
+			}
+		}
+		pool.rates = map[uint32]float64{}
 		for _, tip := range pool.RateTip {
 			match := rateTipPattern.FindStringSubmatch(rateTipTags.ReplaceAllString(tip, ""))
 			if match == nil {
 				continue
 			}
-			if rate, err := strconv.ParseFloat(match[2], 64); err == nil {
-				pool.Rates[match[1]] = rate
+			rate, err := strconv.ParseFloat(match[2], 64)
+			if err != nil {
+				continue
+			}
+			rarity := rarityByRateName[match[1]]
+			pool.rates[rarity] = rate
+			if len(pool.candidates[rarity]) > 0 && !slices.Contains(pool.rarities, rarity) {
+				pool.rarities = append(pool.rarities, rarity)
+				pool.total += rate
 			}
 		}
-		for _, group := range groups {
-			if obtainedFromPool(group.Description, name) {
-				pool.Groups = append(pool.Groups, group.GroupType)
-			}
-		}
-		slices.Sort(pool.Groups)
+		slices.Sort(pool.rarities)
 		buildPools[id] = pool
 	}
 
