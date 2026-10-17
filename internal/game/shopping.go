@@ -14,8 +14,9 @@ import (
 )
 
 // shop_template genres (ShopArgs, model/const/shopargs.lua) belfast sells.
-// The others need state belfast doesn't keep yet (skins, Operation Siren,
-// the backyard and academy levels, dorm 3D...) and are refused.
+// The others need state belfast doesn't keep yet (the cruise pass skins,
+// Operation Siren, the backyard and academy levels, dorm 3D...) and are
+// refused.
 const (
 	genreNone           = ""
 	genreGemShop        = "gem_shop"
@@ -24,9 +25,16 @@ const (
 	genreBuyOil         = "buy_oil"
 	genreGiftPackage    = "gift_package"
 	genreNewServerShop  = "new_server_shop"
+	// bought through SkinShoppingCommand
+	genreSkinShop          = "skin_shop"
+	genreSkinShopTimeLimit = "skin_shop_timelimit"
 )
 
-var sellableGenres = []string{genreNone, genreGemShop, genreShoppingStreet, genreArenaShop, genreBuyOil, genreGiftPackage, genreNewServerShop}
+var sellableGenres = []string{genreNone, genreGemShop, genreShoppingStreet, genreArenaShop, genreBuyOil, genreGiftPackage, genreNewServerShop, genreSkinShop, genreSkinShopTimeLimit}
+
+// shopTypeSkin is shop_template type of the skin goods: effect_args[1] is a
+// ship_skin_template id.
+const shopTypeSkin = 6
 
 // the type 0 goods' effect_args belfast stores (ExtendCommand,
 // controller/command/shop/extendcommand.lua)
@@ -71,6 +79,8 @@ type shopConfig struct {
 	GroupType     uint32          `json:"group_type"`
 	GroupLimit    uint32          `json:"group_limit"`
 	GroupBuyCount uint32          `json:"group_buy_count"`
+	// skin_shop_timelimit: the seconds one purchase lasts
+	TimeSecond int64 `json:"time_second"`
 }
 
 // shopGoods is a shop_template row with its value formats read.
@@ -338,6 +348,10 @@ func (tx *Tx) buyGoods(id, count uint32, now time.Time) ([]*protobuf.DROPINFO, e
 		if bought := oilBought(purchases); bought >= buyOilLimit || !goods.countAllows(bought) {
 			return nil, errRefused
 		}
+	case genreSkinShop, genreSkinShopTimeLimit:
+		if err := tx.canBuySkin(goods, count, now); err != nil {
+			return nil, err
+		}
 	}
 	price, ok := goods.price(count, discount, now)
 	amount, okAmount := goods.amount(count, commander.Level)
@@ -354,6 +368,11 @@ func (tx *Tx) buyGoods(id, count uint32, now time.Time) ([]*protobuf.DROPINFO, e
 	case dropTypeResource, dropTypeItem, dropTypeShip, dropTypeVItem:
 		drops = []*protobuf.DROPINFO{dropInfo(goods.Type, goods.target, amount)}
 		err = tx.grantDrops(drops)
+	case shopTypeSkin:
+		// SkinShoppingCommand adds the skin itself and drop_list besides:
+		// a DROP_TYPE_SKIN there would make a time-limited one permanent,
+		// so none is sent
+		err = tx.buySkin(goods, count, now)
 	default:
 		err = errRefused
 	}

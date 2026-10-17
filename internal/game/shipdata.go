@@ -30,6 +30,8 @@ type shipTemplate struct {
 	// 2) or META (Ship:isMetaShip, a ship_meta_breakout id) ship, which
 	// ShipStatus.canDestroyShip never lets retire
 	unretirable bool
+	// its ship_data_statistics skin_id, the skin it wears by default
+	defaultSkin uint32
 }
 
 // equips are what the ship comes with, equip_id_1..3.
@@ -43,6 +45,7 @@ type shipStatisticsConfig struct {
 	Type             uint32    `json:"type"`
 	Rarity           uint32    `json:"rarity"`
 	Nationality      uint32    `json:"nationality"`
+	SkinID           uint32    `json:"skin_id"`
 	Attrs            []float64 `json:"attrs"`
 	AttrsGrowth      []float64 `json:"attrs_growth"`
 	AttrsGrowthExtra []float64 `json:"attrs_growth_extra"`
@@ -118,6 +121,8 @@ type shipGroupConfig struct {
 	GroupType    uint32          `json:"group_type"`
 	HandbookType uint32          `json:"handbook_type"`
 	Description  json.RawMessage `json:"description"`
+	// the other groups whose skins the group can wear (ShipSkin.IsShareSkin)
+	ShareGroupID []uint32 `json:"share_group_id"`
 }
 
 // handbookBlueprint is ship_data_group handbook_type of the research
@@ -288,6 +293,8 @@ var (
 	// ship_data_statistics type, drops by rarity
 	retireGold  map[uint32]uint32
 	retireItems map[uint32][][]uint32
+	// ship_data_group share_group_id by group_type
+	shareGroups map[uint32][]uint32
 	// gameset urpt_chapter_max: [limit counter id, cap] of the Specialized
 	// Core (virtual_type 20)
 	specializedCoreCap [2]uint32
@@ -394,9 +401,13 @@ func loadShipData() error {
 	loadEquipEvasions(equipStats, equips)
 
 	blueprints := map[uint32]bool{}
+	shareGroups = map[uint32][]uint32{}
 	for _, group := range groups {
 		if group.HandbookType == handbookBlueprint {
 			blueprints[group.GroupType] = true
+		}
+		if len(group.ShareGroupID) > 0 {
+			shareGroups[group.GroupType] = group.ShareGroupID
 		}
 	}
 	shipTemplates = map[uint32]shipTemplate{}
@@ -408,6 +419,7 @@ func loadShipData() error {
 		row.Rarity, row.Nationality, row.Type = stat.Rarity, stat.Nationality, stat.Type
 		_, meta := metas[id]
 		row.unretirable = meta || blueprints[id/10]
+		row.defaultSkin = stat.SkinID
 		shipTemplates[id] = row
 	}
 	retireGold = make(map[uint32]uint32, len(shipTypes))

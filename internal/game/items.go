@@ -21,8 +21,9 @@ import (
 
 // item_data_statistics usage (ItemUsage, model/const/itemusage.lua) of the
 // items belfast opens. The others change state belfast doesn't keep yet
-// (skins, ship affection gifts, the backyard level, the guild, commander
-// boxes, remastered chapters) and are refused.
+// (skin selections, random skins, skin trials and discounts, ship affection
+// gifts, the backyard level, the guild, commander boxes, remastered
+// chapters) and are refused.
 const (
 	usageDrop          = "usage_drop"
 	usageDropTemplate  = "usgae_drop_template" // sic
@@ -309,10 +310,10 @@ func readItemUses(items map[uint32]itemConfig, gear []packGear, gametip map[stri
 }
 
 // storableDrop is whether grantDrops keeps a reward of an item's contents:
-// resources, bag items, equipment and ships. display_icon also lists
-// placeholders for what the server draws (the "Mystery" virtual items,
-// random skins) and kinds belfast doesn't store (skins, gear skins,
-// furniture, frames...).
+// resources, bag items, equipment, ships and ship skins. display_icon also
+// lists placeholders for what the server draws (the "Mystery" virtual
+// items) and kinds belfast doesn't store (gear skins, furniture, frames...).
+// The random skin boxes and skin selections have their own usages, refused.
 func storableDrop(kind, id uint32) bool {
 	switch kind {
 	case dropTypeResource:
@@ -324,6 +325,9 @@ func storableDrop(kind, id uint32) bool {
 		return equipIDs[id]
 	case dropTypeShip:
 		_, ok := shipTemplates[id]
+		return ok
+	case dropTypeSkin, dropTypeSkinTimeLimit:
+		_, ok := shipSkins[id]
 		return ok
 	}
 	return false

@@ -75,6 +75,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleCollectBuilds)
 	packets.Handle(game.handleConfirmBuilds)
 	packets.Handle(game.handleShipLock)
+	packets.Handle(game.handleSetShipSkin)
 	packets.Handle(game.handleShipEquip)
 	packets.Handle(game.handleRetireShips)
 	packets.Handle(game.handleLoveLetters)
@@ -198,8 +199,9 @@ var loginBurst = []loginPush{
 		return shipList(l.ctx, l.queries, l.commander.ID, l.ships)
 	},
 	func(game *Game, l *login) (proto.Message, error) { return fleetList(l.ctx, l.queries, l.commander.ID) },
-	// ShipSkinProxy: no skins owned
-	empty[protobuf.SC_12201](),
+	func(game *Game, l *login) (proto.Message, error) {
+		return skinList(l.ctx, l.queries, l.commander.ID, l.now)
+	},
 	// TechnologyProxy: nothing started, no catch-up research
 	empty[protobuf.SC_63000](),
 	// TechnologyProxy blueprints (PR ships): none
@@ -278,11 +280,15 @@ func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.
 	if err != nil {
 		return err
 	}
+	now := time.Now()
+	if err := expireSkins(ctx, game.DB, commander.ID, now); err != nil {
+		return err
+	}
 	ships, err := game.DB.ListShipsByCommander(ctx, commander.ID)
 	if err != nil {
 		return err
 	}
-	l := &login{ctx: ctx, queries: game.DB.Queries, commander: commander, ships: ships, now: time.Now()}
+	l := &login{ctx: ctx, queries: game.DB.Queries, commander: commander, ships: ships, now: now}
 	for _, build := range loginBurst {
 		push, err := build(game, l)
 		if err != nil {

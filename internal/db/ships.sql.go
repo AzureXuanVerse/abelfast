@@ -498,6 +498,21 @@ func (q *Queries) SetShipLocked(ctx context.Context, arg SetShipLockedParams) er
 	return err
 }
 
+const setShipSkin = `-- name: SetShipSkin :exec
+UPDATE ships SET skin_id = ? WHERE id = ? AND commander_id = ?
+`
+
+type SetShipSkinParams struct {
+	SkinID      uint32
+	ID          uint32
+	CommanderID uint32
+}
+
+func (q *Queries) SetShipSkin(ctx context.Context, arg SetShipSkinParams) error {
+	_, err := q.db.ExecContext(ctx, setShipSkin, arg.SkinID, arg.ID, arg.CommanderID)
+	return err
+}
+
 const setTrophy = `-- name: SetTrophy :exec
 INSERT INTO commander_trophies (commander_id, trophy_id, progress, timestamp) VALUES (?, ?, ?, ?)
 ON CONFLICT (commander_id, trophy_id) DO UPDATE SET progress = excluded.progress, timestamp = excluded.timestamp

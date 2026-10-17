@@ -1,6 +1,8 @@
 package game
 
 import (
+	"time"
+
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ggmolly/belfast/internal/db"
@@ -15,15 +17,20 @@ const (
 	dropTypeEquip     = 3 // equip_data_statistics
 	dropTypeShip      = 4 // ship_data_template
 	dropTypeFurniture = 5 // furniture_data_template
+	dropTypeSkin      = 7 // ship_skin_template, for good
 	dropTypeVItem     = 8 // item_virtual_data_statistics
+	// ship_skin_template, number the seconds it lasts
+	dropTypeSkinTimeLimit = 23
 )
 
 // grantDrops stores rewards: resources, bag items, equipment, ships (with
 // their default equipment, skills and archive entry, pushed in SC_12042), and
 // backyard furniture, virtual items (the Specialized Core is stored as its
 // link item, the cruise pass points as their task counter, the rest as
-// virtual item counters), recording the task progress they cause. Skins, gear
-// skins... have no storage yet and are only logged.
+// virtual item counters) and ship skins (for good or for a time, as the
+// client adds them: Drop's DROP_TYPE_SKIN and DROP_TYPE_SKIN_TIMELIMIT
+// cases, model/vo/drop.lua), recording the task progress they cause. Gear
+// skins, frames... have no storage yet and are only logged.
 func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 	for _, entry := range drops {
 		kind, id, count := entry.GetType(), entry.GetId(), entry.GetNumber()
@@ -50,6 +57,14 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 			}
 		case kind == dropTypeFurniture:
 			if err := tx.AddFurniture(tx.ctx, db.AddFurnitureParams{CommanderID: tx.commanderID, FurnitureID: id, Count: count}); err != nil {
+				return err
+			}
+		case kind == dropTypeSkin:
+			if err := tx.AddSkin(id); err != nil {
+				return err
+			}
+		case kind == dropTypeSkinTimeLimit:
+			if err := tx.AddTimedSkin(id, int64(count), time.Now()); err != nil {
 				return err
 			}
 		case kind == dropTypeVItem && id == vitemSpecializedCore:

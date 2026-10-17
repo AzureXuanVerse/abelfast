@@ -175,6 +175,12 @@ type CommanderShopPurchase struct {
 	Count       uint32
 }
 
+type CommanderSkin struct {
+	CommanderID uint32
+	SkinID      uint32
+	EndTime     int64
+}
+
 type CommanderStory struct {
 	CommanderID uint32
 	StoryID     uint32

@@ -60,3 +60,6 @@ SELECT * FROM commander_trophies WHERE commander_id = ?;
 -- name: SetTrophy :exec
 INSERT INTO commander_trophies (commander_id, trophy_id, progress, timestamp) VALUES (?, ?, ?, ?)
 ON CONFLICT (commander_id, trophy_id) DO UPDATE SET progress = excluded.progress, timestamp = excluded.timestamp;
+
+-- name: SetShipSkin :exec
+UPDATE ships SET skin_id = ? WHERE id = ? AND commander_id = ?;
