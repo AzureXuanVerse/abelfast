@@ -5,8 +5,8 @@ CREATE TABLE builds (
 	pool_id      INTEGER NOT NULL, -- ship_data_create_material id
 	template_id  INTEGER NOT NULL, -- the ship it yields, decided at build time
 	duration     INTEGER NOT NULL, -- seconds
-	start_time   INTEGER NOT NULL, -- unix seconds, later than now while queued
-	finish_time  INTEGER NOT NULL  -- unix seconds
+	start_time   BIGINT  NOT NULL, -- unix seconds, later than now while queued
+	finish_time  BIGINT  NOT NULL  -- unix seconds
 );
 
 CREATE INDEX builds_commander_id ON builds (commander_id);

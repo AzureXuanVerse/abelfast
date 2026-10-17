@@ -30,7 +30,7 @@ CREATE TABLE commander_activity_tasks (
 	act_id       INTEGER NOT NULL,
 	task_id      INTEGER NOT NULL,
 	progress     INTEGER NOT NULL,
-	finished     INTEGER NOT NULL DEFAULT 0, -- reward claimed
+	finished     BOOLEAN NOT NULL DEFAULT 0, -- reward claimed
 	PRIMARY KEY (commander_id, act_id, task_id)
 );
 
@@ -44,11 +44,19 @@ CREATE TABLE commander_task_counters (
 	PRIMARY KEY (commander_id, sub_type, target)
 );
 
--- virtual items (drop type 8) earned from tasks: 59012 weekly pt, 59599
--- cruise pass pt, ...
-CREATE TABLE commander_virtual_items (
+-- commander manual pages (SC_22300): tasks finished on each page, pt (one
+-- per finished page task) and how many pt rewards were claimed
+CREATE TABLE commander_handbook_pages (
 	commander_id INTEGER NOT NULL REFERENCES commanders (id),
-	item_id      INTEGER NOT NULL,
-	amount       INTEGER NOT NULL,
-	PRIMARY KEY (commander_id, item_id)
+	page_id      INTEGER NOT NULL, -- tutorial_handbook_task id
+	pt           INTEGER NOT NULL DEFAULT 0,
+	award        INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (commander_id, page_id)
+);
+
+CREATE TABLE commander_handbook_finished (
+	commander_id INTEGER NOT NULL REFERENCES commanders (id),
+	page_id      INTEGER NOT NULL,
+	task_id      INTEGER NOT NULL,
+	PRIMARY KEY (commander_id, page_id, task_id)
 );
