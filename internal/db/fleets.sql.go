@@ -109,18 +109,13 @@ func (q *Queries) GetChapterProgress(ctx context.Context, arg GetChapterProgress
 }
 
 const getChapterState = `-- name: GetChapterState :one
-SELECT commander_id, chapter_id, state, ambushed FROM chapter_states WHERE commander_id = ?
+SELECT commander_id, state, ambushed FROM chapter_states WHERE commander_id = ?
 `
 
 func (q *Queries) GetChapterState(ctx context.Context, commanderID uint32) (ChapterState, error) {
 	row := q.db.QueryRowContext(ctx, getChapterState, commanderID)
 	var i ChapterState
-	err := row.Scan(
-		&i.CommanderID,
-		&i.ChapterID,
-		&i.State,
-		&i.Ambushed,
-	)
+	err := row.Scan(&i.CommanderID, &i.State, &i.Ambushed)
 	return i, err
 }
 
@@ -298,24 +293,18 @@ func (q *Queries) SaveChapterProgress(ctx context.Context, arg SaveChapterProgre
 }
 
 const saveChapterState = `-- name: SaveChapterState :exec
-INSERT INTO chapter_states (commander_id, chapter_id, state, ambushed) VALUES (?, ?, ?, ?)
-ON CONFLICT (commander_id) DO UPDATE SET chapter_id = excluded.chapter_id, state = excluded.state, ambushed = excluded.ambushed
+INSERT INTO chapter_states (commander_id, state, ambushed) VALUES (?, ?, ?)
+ON CONFLICT (commander_id) DO UPDATE SET state = excluded.state, ambushed = excluded.ambushed
 `
 
 type SaveChapterStateParams struct {
 	CommanderID uint32
-	ChapterID   uint32
 	State       []byte
 	Ambushed    string
 }
 
 func (q *Queries) SaveChapterState(ctx context.Context, arg SaveChapterStateParams) error {
-	_, err := q.db.ExecContext(ctx, saveChapterState,
-		arg.CommanderID,
-		arg.ChapterID,
-		arg.State,
-		arg.Ambushed,
-	)
+	_, err := q.db.ExecContext(ctx, saveChapterState, arg.CommanderID, arg.State, arg.Ambushed)
 	return err
 }
 

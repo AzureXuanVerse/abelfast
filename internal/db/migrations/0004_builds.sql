@@ -5,15 +5,16 @@ CREATE TABLE builds (
 	pool_id      INTEGER NOT NULL, -- ship_data_create_material id
 	template_id  INTEGER NOT NULL, -- the ship it yields, decided at build time
 	duration     INTEGER NOT NULL, -- seconds
-	start_time   BIGINT  NOT NULL, -- unix seconds, later than now while queued
-	finish_time  BIGINT  NOT NULL  -- unix seconds
+	-- unix seconds; finish_time - duration is when it started, later than
+	-- now while queued
+	finish_time  BIGINT  NOT NULL
 );
 
 CREATE INDEX builds_commander_id ON builds (commander_id);
 
--- construction counters
+-- build points (ship_data_create_material.exchange_count); the builds ever
+-- started are the TaskSubBuild task counter
 CREATE TABLE commander_build_states (
 	commander_id   INTEGER PRIMARY KEY REFERENCES commanders (id),
-	build_count    INTEGER NOT NULL DEFAULT 0, -- builds ever started
-	exchange_count INTEGER NOT NULL DEFAULT 0  -- build points (ship_data_create_material.exchange_count)
+	exchange_count INTEGER NOT NULL DEFAULT 0
 );

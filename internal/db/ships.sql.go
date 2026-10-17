@@ -9,21 +9,18 @@ import (
 	"context"
 )
 
-const addBuildCounts = `-- name: AddBuildCounts :exec
-INSERT INTO commander_build_states (commander_id, build_count, exchange_count) VALUES (?, ?, ?)
-ON CONFLICT (commander_id) DO UPDATE SET
-	build_count = build_count + excluded.build_count,
-	exchange_count = exchange_count + excluded.exchange_count
+const addBuildPoints = `-- name: AddBuildPoints :exec
+INSERT INTO commander_build_states (commander_id, exchange_count) VALUES (?, ?)
+ON CONFLICT (commander_id) DO UPDATE SET exchange_count = exchange_count + excluded.exchange_count
 `
 
-type AddBuildCountsParams struct {
+type AddBuildPointsParams struct {
 	CommanderID   uint32
-	BuildCount    uint32
 	ExchangeCount uint32
 }
 
-func (q *Queries) AddBuildCounts(ctx context.Context, arg AddBuildCountsParams) error {
-	_, err := q.db.ExecContext(ctx, addBuildCounts, arg.CommanderID, arg.BuildCount, arg.ExchangeCount)
+func (q *Queries) AddBuildPoints(ctx context.Context, arg AddBuildPointsParams) error {
+	_, err := q.db.ExecContext(ctx, addBuildPoints, arg.CommanderID, arg.ExchangeCount)
 	return err
 }
 
@@ -70,9 +67,9 @@ func (q *Queries) CountShipGroups(ctx context.Context, commanderID uint32) (int6
 }
 
 const createBuild = `-- name: CreateBuild :one
-INSERT INTO builds (commander_id, pool_id, template_id, duration, start_time, finish_time)
-VALUES (?, ?, ?, ?, ?, ?)
-RETURNING id, commander_id, pool_id, template_id, duration, start_time, finish_time
+INSERT INTO builds (commander_id, pool_id, template_id, duration, finish_time)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, commander_id, pool_id, template_id, duration, finish_time
 `
 
 type CreateBuildParams struct {
@@ -80,7 +77,6 @@ type CreateBuildParams struct {
 	PoolID      uint32
 	TemplateID  uint32
 	Duration    uint32
-	StartTime   int64
 	FinishTime  int64
 }
 
@@ -90,7 +86,6 @@ func (q *Queries) CreateBuild(ctx context.Context, arg CreateBuildParams) (Build
 		arg.PoolID,
 		arg.TemplateID,
 		arg.Duration,
-		arg.StartTime,
 		arg.FinishTime,
 	)
 	var i Build
@@ -100,7 +95,6 @@ func (q *Queries) CreateBuild(ctx context.Context, arg CreateBuildParams) (Build
 		&i.PoolID,
 		&i.TemplateID,
 		&i.Duration,
-		&i.StartTime,
 		&i.FinishTime,
 	)
 	return i, err
@@ -168,15 +162,15 @@ func (q *Queries) DeleteBuild(ctx context.Context, id uint32) error {
 	return err
 }
 
-const getBuildState = `-- name: GetBuildState :one
-SELECT commander_id, build_count, exchange_count FROM commander_build_states WHERE commander_id = ?
+const getBuildPoints = `-- name: GetBuildPoints :one
+SELECT exchange_count FROM commander_build_states WHERE commander_id = ?
 `
 
-func (q *Queries) GetBuildState(ctx context.Context, commanderID uint32) (CommanderBuildState, error) {
-	row := q.db.QueryRowContext(ctx, getBuildState, commanderID)
-	var i CommanderBuildState
-	err := row.Scan(&i.CommanderID, &i.BuildCount, &i.ExchangeCount)
-	return i, err
+func (q *Queries) GetBuildPoints(ctx context.Context, commanderID uint32) (uint32, error) {
+	row := q.db.QueryRowContext(ctx, getBuildPoints, commanderID)
+	var exchange_count uint32
+	err := row.Scan(&exchange_count)
+	return exchange_count, err
 }
 
 const getShip = `-- name: GetShip :one
@@ -214,7 +208,7 @@ func (q *Queries) GetShip(ctx context.Context, arg GetShipParams) (Ship, error) 
 }
 
 const listBuilds = `-- name: ListBuilds :many
-SELECT id, commander_id, pool_id, template_id, duration, start_time, finish_time FROM builds WHERE commander_id = ? ORDER BY id
+SELECT id, commander_id, pool_id, template_id, duration, finish_time FROM builds WHERE commander_id = ? ORDER BY id
 `
 
 func (q *Queries) ListBuilds(ctx context.Context, commanderID uint32) ([]Build, error) {
@@ -232,7 +226,6 @@ func (q *Queries) ListBuilds(ctx context.Context, commanderID uint32) ([]Build, 
 			&i.PoolID,
 			&i.TemplateID,
 			&i.Duration,
-			&i.StartTime,
 			&i.FinishTime,
 		); err != nil {
 			return nil, err
@@ -315,7 +308,7 @@ func (q *Queries) ListShipEquipmentsByCommander(ctx context.Context, commanderID
 }
 
 const listShipGroups = `-- name: ListShipGroups :many
-SELECT commander_id, group_id, star, intimacy_max, lv_max, marry_flag, heart_flag FROM commander_ship_groups WHERE commander_id = ? ORDER BY rowid
+SELECT commander_id, group_id, intimacy_max, lv_max, marry_flag, heart_flag FROM commander_ship_groups WHERE commander_id = ? ORDER BY rowid
 `
 
 func (q *Queries) ListShipGroups(ctx context.Context, commanderID uint32) ([]CommanderShipGroup, error) {
@@ -330,7 +323,6 @@ func (q *Queries) ListShipGroups(ctx context.Context, commanderID uint32) ([]Com
 		if err := rows.Scan(
 			&i.CommanderID,
 			&i.GroupID,
-			&i.Star,
 			&i.IntimacyMax,
 			&i.LvMax,
 			&i.MarryFlag,
@@ -460,18 +452,17 @@ func (q *Queries) ListTrophies(ctx context.Context, commanderID uint32) ([]Comma
 	return items, nil
 }
 
-const setBuildTimes = `-- name: SetBuildTimes :exec
-UPDATE builds SET start_time = ?, finish_time = ? WHERE id = ?
+const setBuildFinishTime = `-- name: SetBuildFinishTime :exec
+UPDATE builds SET finish_time = ? WHERE id = ?
 `
 
-type SetBuildTimesParams struct {
-	StartTime  int64
+type SetBuildFinishTimeParams struct {
 	FinishTime int64
 	ID         uint32
 }
 
-func (q *Queries) SetBuildTimes(ctx context.Context, arg SetBuildTimesParams) error {
-	_, err := q.db.ExecContext(ctx, setBuildTimes, arg.StartTime, arg.FinishTime, arg.ID)
+func (q *Queries) SetBuildFinishTime(ctx context.Context, arg SetBuildFinishTimeParams) error {
+	_, err := q.db.ExecContext(ctx, setBuildFinishTime, arg.FinishTime, arg.ID)
 	return err
 }
 
@@ -592,9 +583,8 @@ func (q *Queries) SpendResource(ctx context.Context, arg SpendResourceParams) (i
 }
 
 const upsertShipGroup = `-- name: UpsertShipGroup :exec
-INSERT INTO commander_ship_groups (commander_id, group_id, star, intimacy_max, lv_max) VALUES (?, ?, ?, ?, ?)
+INSERT INTO commander_ship_groups (commander_id, group_id, intimacy_max, lv_max) VALUES (?, ?, ?, ?)
 ON CONFLICT (commander_id, group_id) DO UPDATE SET
-	star = MAX(star, excluded.star),
 	intimacy_max = MAX(intimacy_max, excluded.intimacy_max),
 	lv_max = MAX(lv_max, excluded.lv_max)
 `
@@ -602,7 +592,6 @@ ON CONFLICT (commander_id, group_id) DO UPDATE SET
 type UpsertShipGroupParams struct {
 	CommanderID uint32
 	GroupID     uint32
-	Star        uint32
 	IntimacyMax uint32
 	LvMax       uint32
 }
@@ -611,7 +600,6 @@ func (q *Queries) UpsertShipGroup(ctx context.Context, arg UpsertShipGroupParams
 	_, err := q.db.ExecContext(ctx, upsertShipGroup,
 		arg.CommanderID,
 		arg.GroupID,
-		arg.Star,
 		arg.IntimacyMax,
 		arg.LvMax,
 	)

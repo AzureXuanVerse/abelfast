@@ -35,8 +35,8 @@ ON CONFLICT (commander_id, chapter_id) DO UPDATE SET
 SELECT * FROM chapter_states WHERE commander_id = ?;
 
 -- name: SaveChapterState :exec
-INSERT INTO chapter_states (commander_id, chapter_id, state, ambushed) VALUES (?, ?, ?, ?)
-ON CONFLICT (commander_id) DO UPDATE SET chapter_id = excluded.chapter_id, state = excluded.state, ambushed = excluded.ambushed;
+INSERT INTO chapter_states (commander_id, state, ambushed) VALUES (?, ?, ?)
+ON CONFLICT (commander_id) DO UPDATE SET state = excluded.state, ambushed = excluded.ambushed;
 
 -- name: DeleteChapterState :exec
 DELETE FROM chapter_states WHERE commander_id = ?;

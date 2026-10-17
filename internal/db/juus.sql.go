@@ -10,24 +10,18 @@ import (
 )
 
 const activateJuusTopic = `-- name: ActivateJuusTopic :execrows
-INSERT INTO commander_juus_topics (commander_id, topic_id, ship_group, op_time) VALUES (?, ?, ?, ?)
+INSERT INTO commander_juus_topics (commander_id, topic_id, op_time) VALUES (?, ?, ?)
 ON CONFLICT DO NOTHING
 `
 
 type ActivateJuusTopicParams struct {
 	CommanderID uint32
 	TopicID     uint32
-	ShipGroup   uint32
 	OpTime      uint32
 }
 
 func (q *Queries) ActivateJuusTopic(ctx context.Context, arg ActivateJuusTopicParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, activateJuusTopic,
-		arg.CommanderID,
-		arg.TopicID,
-		arg.ShipGroup,
-		arg.OpTime,
-	)
+	result, err := q.db.ExecContext(ctx, activateJuusTopic, arg.CommanderID, arg.TopicID, arg.OpTime)
 	if err != nil {
 		return 0, err
 	}
@@ -201,14 +195,13 @@ func (q *Queries) ListJuusReplies(ctx context.Context, commanderID uint32) ([]Li
 }
 
 const listJuusTopics = `-- name: ListJuusTopics :many
-SELECT topic_id, ship_group, op_time, read_flag FROM commander_juus_topics WHERE commander_id = ? ORDER BY rowid
+SELECT topic_id, op_time, read_flag FROM commander_juus_topics WHERE commander_id = ? ORDER BY rowid
 `
 
 type ListJuusTopicsRow struct {
-	TopicID   uint32
-	ShipGroup uint32
-	OpTime    uint32
-	ReadFlag  bool
+	TopicID  uint32
+	OpTime   uint32
+	ReadFlag bool
 }
 
 func (q *Queries) ListJuusTopics(ctx context.Context, commanderID uint32) ([]ListJuusTopicsRow, error) {
@@ -220,12 +213,7 @@ func (q *Queries) ListJuusTopics(ctx context.Context, commanderID uint32) ([]Lis
 	var items []ListJuusTopicsRow
 	for rows.Next() {
 		var i ListJuusTopicsRow
-		if err := rows.Scan(
-			&i.TopicID,
-			&i.ShipGroup,
-			&i.OpTime,
-			&i.ReadFlag,
-		); err != nil {
+		if err := rows.Scan(&i.TopicID, &i.OpTime, &i.ReadFlag); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -253,6 +253,28 @@ func listTaskCounters(ctx context.Context, queries *db.Queries, commanderID uint
 	return counters, nil
 }
 
+// taskCounter is one of the commander's task counters, 0 when nothing
+// counted for it yet.
+func taskCounter(ctx context.Context, queries *db.Queries, commanderID, subType, target uint32) (uint32, error) {
+	value, err := queries.GetTaskCounter(ctx, db.GetTaskCounterParams{CommanderID: commanderID, SubType: subType, Target: target})
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	return value, err
+}
+
+// cruisePt is the commander's cruise pass points (virtual item 59599),
+// stored as their TaskSubCruisePt counter: the stored value, or the last
+// total tx recorded when it gave some already.
+func (tx *Tx) cruisePt() (uint32, error) {
+	for _, event := range slices.Backward(tx.events) {
+		if event.SubType == TaskSubCruisePt {
+			return event.Count, nil
+		}
+	}
+	return taskCounter(tx.ctx, tx.Queries, tx.commanderID, TaskSubCruisePt, 0)
+}
+
 // initialProgress is where a task accepted now starts, see
 // taskInheritedSubTypes.
 func initialProgress(config taskConfig, counters map[taskCounterKey]uint32) uint32 {

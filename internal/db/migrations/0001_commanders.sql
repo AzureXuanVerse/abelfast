@@ -24,11 +24,7 @@ CREATE TABLE commanders (
 	rank              INTEGER NOT NULL DEFAULT 1,
 	chat_room_id      INTEGER NOT NULL DEFAULT 2,
 	mail_storeroom_lv INTEGER NOT NULL DEFAULT 1,
-	manifesto         TEXT    NOT NULL DEFAULT '',
-	-- display.icon (a ship template), set to the starter ship at creation
-	icon              INTEGER NOT NULL DEFAULT 0,
-	-- the backyard's last collection time (SC_19001.load_time)
-	dorm_load_time    INTEGER NOT NULL DEFAULT 0
+	manifesto         TEXT    NOT NULL DEFAULT ''
 );
 
 -- stories the commander has seen, so they don't replay

@@ -22,8 +22,8 @@ CREATE TABLE commander_equipments (
 	PRIMARY KEY (commander_id, equip_id)
 );
 
--- virtual items (drop type 8) earned from tasks: 59012 weekly pt, 59599
--- cruise pass pt, ...
+-- virtual items (drop type 8) earned from tasks: 59012 weekly pt, ...; the
+-- cruise pass pt (59599) are the TaskSubCruisePt task counter
 CREATE TABLE commander_virtual_items (
 	commander_id INTEGER NOT NULL REFERENCES commanders (id),
 	item_id      INTEGER NOT NULL,

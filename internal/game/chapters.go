@@ -70,13 +70,13 @@ func loadChapter(ctx context.Context, queries *db.Queries, commanderID uint32) (
 	if err != nil {
 		return nil, err
 	}
-	template := chapterTemplates[row.ChapterID]
-	if template == nil {
-		return nil, fmt.Errorf("active chapter %d has no template", row.ChapterID)
-	}
 	info := &protobuf.CURRENTCHAPTERINFO{}
 	if err := proto.Unmarshal(row.State, info); err != nil {
 		return nil, err
+	}
+	template := chapterTemplates[info.GetId()]
+	if template == nil {
+		return nil, fmt.Errorf("active chapter %d has no template", info.GetId())
 	}
 	session := &chapterSession{template: template, info: info}
 	if row.Ambushed != "" {
@@ -92,7 +92,6 @@ func (session *chapterSession) save(ctx context.Context, queries *db.Queries, co
 	}
 	return queries.SaveChapterState(ctx, db.SaveChapterStateParams{
 		CommanderID: commanderID,
-		ChapterID:   session.template.id,
 		State:       state,
 		Ambushed:    strings.Join(session.ambushed, ";"),
 	})

@@ -29,7 +29,6 @@ CREATE TABLE commander_juus_posts (
 CREATE TABLE commander_juus_topics (
 	commander_id INTEGER NOT NULL REFERENCES commanders (id),
 	topic_id     INTEGER NOT NULL,
-	ship_group   INTEGER NOT NULL,
 	op_time      INTEGER NOT NULL, -- unix seconds
 	read_flag    BOOLEAN NOT NULL DEFAULT 0,
 	PRIMARY KEY (commander_id, topic_id)

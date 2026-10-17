@@ -10,7 +10,6 @@ type Build struct {
 	PoolID      uint32
 	TemplateID  uint32
 	Duration    uint32
-	StartTime   int64
 	FinishTime  int64
 }
 
@@ -28,7 +27,6 @@ type ChapterProgress struct {
 
 type ChapterState struct {
 	CommanderID uint32
-	ChapterID   uint32
 	State       []byte
 	Ambushed    string
 }
@@ -50,8 +48,6 @@ type Commander struct {
 	ChatRoomID      uint32
 	MailStoreroomLv uint32
 	Manifesto       string
-	Icon            uint32
-	DormLoadTime    uint32
 }
 
 type CommanderActivity struct {
@@ -74,7 +70,6 @@ type CommanderActivityTask struct {
 
 type CommanderBuildState struct {
 	CommanderID   uint32
-	BuildCount    uint32
 	ExchangeCount uint32
 }
 
@@ -106,8 +101,6 @@ type CommanderHandbookFinished struct {
 type CommanderHandbookPage struct {
 	CommanderID uint32
 	PageID      uint32
-	Pt          uint32
-	Award       uint32
 }
 
 type CommanderItem struct {
@@ -136,7 +129,6 @@ type CommanderJuusReply struct {
 type CommanderJuusTopic struct {
 	CommanderID uint32
 	TopicID     uint32
-	ShipGroup   uint32
 	OpTime      uint32
 	ReadFlag    bool
 }
@@ -157,7 +149,6 @@ type CommanderSecretary struct {
 type CommanderShipGroup struct {
 	CommanderID uint32
 	GroupID     uint32
-	Star        uint32
 	IntimacyMax uint32
 	LvMax       uint32
 	MarryFlag   uint32

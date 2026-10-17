@@ -258,13 +258,18 @@ func (game *Game) juusGroups(ctx context.Context, commanderID uint32) (*protobuf
 	if err != nil {
 		return nil, err
 	}
+	configs, err := juusTopicConfigs.get()
+	if err != nil {
+		return nil, err
+	}
 	msg := &protobuf.SC_11711{}
 	groups := map[uint32]*protobuf.JUUS_GROUP{}
 	for _, topic := range topics {
-		group, ok := groups[topic.ShipGroup]
+		shipGroup := configs[topic.TopicID].ShipGroup
+		group, ok := groups[shipGroup]
 		if !ok {
-			group = &protobuf.JUUS_GROUP{Id: proto.Uint32(topic.ShipGroup)}
-			groups[topic.ShipGroup] = group
+			group = &protobuf.JUUS_GROUP{Id: proto.Uint32(shipGroup)}
+			groups[shipGroup] = group
 			msg.Groups = append(msg.Groups, group)
 		}
 		group.CurChatGroup = proto.Uint32(topic.TopicID)
@@ -295,12 +300,11 @@ func (game *Game) handleJuusActivateTopics(client *connection.Client, req *proto
 	now := uint32(time.Now().Unix())
 	reply := &protobuf.SC_11723{OpTime: proto.Uint32(now)}
 	for _, id := range req.GetChatGroupIdList() {
-		topic, ok := topics[id]
-		if !ok {
+		if _, ok := topics[id]; !ok {
 			reply.ResultList = append(reply.ResultList, *result(errRefused))
 			continue
 		}
-		if _, err := game.DB.ActivateJuusTopic(ctx, db.ActivateJuusTopicParams{CommanderID: client.CommanderID, TopicID: id, ShipGroup: topic.ShipGroup, OpTime: now}); err != nil {
+		if _, err := game.DB.ActivateJuusTopic(ctx, db.ActivateJuusTopicParams{CommanderID: client.CommanderID, TopicID: id, OpTime: now}); err != nil {
 			return err
 		}
 		reply.ResultList = append(reply.ResultList, *result(nil))

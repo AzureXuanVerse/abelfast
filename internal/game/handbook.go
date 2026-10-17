@@ -13,10 +13,15 @@ import (
 )
 
 // handbookLoginPush is SC_22300, CommanderManualProxy's state: the pages the
-// commander got tasks from with their pt / claimed pt rewards, and every
-// commander manual task they finished (the client checks page and unlock
-// tasks against that one list, CommanderManualPage.finishedTaskIds).
+// commander got tasks from with their pt (one per finished page task) and no
+// pt reward claimed, and every commander manual task they finished (the
+// client checks page and unlock tasks against that one list,
+// CommanderManualPage.finishedTaskIds).
 func (game *Game) handbookLoginPush(ctx context.Context, commander db.Commander) (*protobuf.SC_22300, error) {
+	configs, err := handbookPageConfigs.get()
+	if err != nil {
+		return nil, err
+	}
 	pages, err := game.DB.ListHandbookPages(ctx, commander.ID)
 	if err != nil {
 		return nil, err
@@ -26,13 +31,19 @@ func (game *Game) handbookLoginPush(ctx context.Context, commander db.Commander)
 		return nil, err
 	}
 	msg := &protobuf.SC_22300{}
-	for _, page := range pages {
-		handbook := &protobuf.TUTHANDBOOK{Id: proto.Uint32(page.PageID), Pt: proto.Uint32(page.Pt), Award: proto.Uint32(page.Award)}
+	for _, id := range pages {
+		handbook := &protobuf.TUTHANDBOOK{Id: proto.Uint32(id), Award: proto.Uint32(0)}
+		pt := uint32(0)
 		for _, task := range finished {
-			if task.PageID == page.PageID {
-				handbook.FinishedTaskIds = append(handbook.FinishedTaskIds, task.TaskID)
+			if task.PageID != id {
+				continue
+			}
+			handbook.FinishedTaskIds = append(handbook.FinishedTaskIds, task.TaskID)
+			if configs[id].isPageTask(task.TaskID) {
+				pt++
 			}
 		}
+		handbook.Pt = proto.Uint32(pt)
 		msg.Handbooks = append(msg.Handbooks, handbook)
 	}
 	for _, task := range finished {
@@ -43,11 +54,22 @@ func (game *Game) handbookLoginPush(ctx context.Context, commander db.Commander)
 	return msg, nil
 }
 
+// isPageTask tells whether taskID is one of the page's tasks
+// (task_list[i][0]), the ones that earn it a pt.
+func (page handbookPageConfig) isPageTask(taskID uint32) bool {
+	for _, entry := range page.TaskList {
+		if len(entry) > 0 && slices.Contains(entry[0], taskID) {
+			return true
+		}
+	}
+	return false
+}
+
 // handbookTaskClaimed records a claimed task on the commander manual pages
-// it belongs to: a page task (task_list[i][0]) finishes and earns the page a
-// pt (CommanderManualProxy.ShowTaskSubmitCall) and counts for the phase
-// unlock tasks (sub_type 114, target the page); a task that unlocks a page or
-// a page's tasks (unlock, task_list[i][1]) only finishes.
+// it belongs to: a page task finishes and earns the page a pt
+// (CommanderManualProxy.ShowTaskSubmitCall) and counts for the phase unlock
+// tasks (sub_type 114, target the page); a task that unlocks a page or a
+// page's tasks (unlock, task_list[i][1]) only finishes.
 func handbookTaskClaimed(ctx context.Context, queries *db.Queries, commanderID uint32, taskID uint32) ([]TaskEvent, error) {
 	pages, err := handbookPageConfigs.get()
 	if err != nil {
@@ -55,11 +77,8 @@ func handbookTaskClaimed(ctx context.Context, queries *db.Queries, commanderID u
 	}
 	var events []TaskEvent
 	for _, page := range pages {
-		isPageTask, isUnlockTask := false, slices.Contains(page.Unlock, taskID)
+		isPageTask, isUnlockTask := page.isPageTask(taskID), slices.Contains(page.Unlock, taskID)
 		for _, entry := range page.TaskList {
-			if len(entry) > 0 && slices.Contains(entry[0], taskID) {
-				isPageTask = true
-			}
 			if len(entry) > 1 && slices.Contains(entry[1], taskID) {
 				isUnlockTask = true
 			}
@@ -75,9 +94,6 @@ func handbookTaskClaimed(ctx context.Context, queries *db.Queries, commanderID u
 			return nil, err
 		}
 		if isPageTask && added > 0 {
-			if err := queries.AddHandbookPagePt(ctx, db.AddHandbookPagePtParams{CommanderID: commanderID, PageID: page.ID}); err != nil {
-				return nil, err
-			}
 			events = append(events, TaskEvent{SubType: TaskSubHandbookPhase, Target: page.ID, Count: 1})
 		}
 	}

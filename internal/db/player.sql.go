@@ -202,34 +202,6 @@ func (q *Queries) SetChatRoom(ctx context.Context, arg SetChatRoomParams) error 
 	return err
 }
 
-const setCommanderIcon = `-- name: SetCommanderIcon :exec
-UPDATE commanders SET icon = ? WHERE id = ?
-`
-
-type SetCommanderIconParams struct {
-	Icon uint32
-	ID   uint32
-}
-
-func (q *Queries) SetCommanderIcon(ctx context.Context, arg SetCommanderIconParams) error {
-	_, err := q.db.ExecContext(ctx, setCommanderIcon, arg.Icon, arg.ID)
-	return err
-}
-
-const setDormLoadTime = `-- name: SetDormLoadTime :exec
-UPDATE commanders SET dorm_load_time = ? WHERE id = ?
-`
-
-type SetDormLoadTimeParams struct {
-	DormLoadTime uint32
-	ID           uint32
-}
-
-func (q *Queries) SetDormLoadTime(ctx context.Context, arg SetDormLoadTimeParams) error {
-	_, err := q.db.ExecContext(ctx, setDormLoadTime, arg.DormLoadTime, arg.ID)
-	return err
-}
-
 const setSecretary = `-- name: SetSecretary :exec
 INSERT INTO commander_secretaries (commander_id, position, ship_id, phantom_id) VALUES (?, ?, ?, ?)
 ON CONFLICT (commander_id, position) DO UPDATE SET ship_id = excluded.ship_id, phantom_id = excluded.phantom_id

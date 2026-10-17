@@ -49,32 +49,29 @@ UPDATE commander_resources SET amount = amount - sqlc.arg(amount)
 WHERE commander_id = sqlc.arg(commander_id) AND resource_id = sqlc.arg(resource_id) AND amount >= sqlc.arg(amount);
 
 -- name: CreateBuild :one
-INSERT INTO builds (commander_id, pool_id, template_id, duration, start_time, finish_time)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO builds (commander_id, pool_id, template_id, duration, finish_time)
+VALUES (?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: ListBuilds :many
 SELECT * FROM builds WHERE commander_id = ? ORDER BY id;
 
--- name: SetBuildTimes :exec
-UPDATE builds SET start_time = ?, finish_time = ? WHERE id = ?;
+-- name: SetBuildFinishTime :exec
+UPDATE builds SET finish_time = ? WHERE id = ?;
 
 -- name: DeleteBuild :exec
 DELETE FROM builds WHERE id = ?;
 
--- name: GetBuildState :one
-SELECT * FROM commander_build_states WHERE commander_id = ?;
+-- name: GetBuildPoints :one
+SELECT exchange_count FROM commander_build_states WHERE commander_id = ?;
 
--- name: AddBuildCounts :exec
-INSERT INTO commander_build_states (commander_id, build_count, exchange_count) VALUES (?, ?, ?)
-ON CONFLICT (commander_id) DO UPDATE SET
-	build_count = build_count + excluded.build_count,
-	exchange_count = exchange_count + excluded.exchange_count;
+-- name: AddBuildPoints :exec
+INSERT INTO commander_build_states (commander_id, exchange_count) VALUES (?, ?)
+ON CONFLICT (commander_id) DO UPDATE SET exchange_count = exchange_count + excluded.exchange_count;
 
 -- name: UpsertShipGroup :exec
-INSERT INTO commander_ship_groups (commander_id, group_id, star, intimacy_max, lv_max) VALUES (?, ?, ?, ?, ?)
+INSERT INTO commander_ship_groups (commander_id, group_id, intimacy_max, lv_max) VALUES (?, ?, ?, ?)
 ON CONFLICT (commander_id, group_id) DO UPDATE SET
-	star = MAX(star, excluded.star),
 	intimacy_max = MAX(intimacy_max, excluded.intimacy_max),
 	lv_max = MAX(lv_max, excluded.lv_max);
 

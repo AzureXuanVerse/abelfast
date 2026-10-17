@@ -356,7 +356,7 @@ func collectionState(ctx context.Context, queries *db.Queries, commanderID uint3
 		// heart_count is the likes of every player of the server
 		msg.ShipInfoList = append(msg.ShipInfoList, &protobuf.SHIP_STATISTICS_INFO{
 			Id:          proto.Uint32(group.GroupID),
-			Star:        proto.Uint32(group.Star),
+			Star:        proto.Uint32(shipTemplates[group.GroupID*10+1].Star), // the group's base template
 			HeartFlag:   proto.Uint32(group.HeartFlag),
 			HeartCount:  proto.Uint32(0),
 			MarryFlag:   proto.Uint32(group.MarryFlag),
@@ -377,7 +377,6 @@ func recordShipGroup(ctx context.Context, queries *db.Queries, ship db.Ship) (*p
 	err = queries.UpsertShipGroup(ctx, db.UpsertShipGroupParams{
 		CommanderID: ship.CommanderID,
 		GroupID:     ship.TemplateID / 10, // ship_data_template.group_type
-		Star:        shipTemplates[ship.TemplateID].Star,
 		IntimacyMax: ship.Intimacy,
 		LvMax:       ship.Level,
 	})

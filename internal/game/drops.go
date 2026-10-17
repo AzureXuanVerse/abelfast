@@ -18,9 +18,10 @@ const (
 
 // grantDrops stores rewards: resources, bag items, ships (with their default
 // equipment, skills and archive entry, pushed in SC_12042), and virtual items
-// (the Specialized Core is stored as its link item, the rest as virtual item
-// counters), recording the task progress they cause. Gear, furniture,
-// skins... have no storage yet and are only logged.
+// (the Specialized Core is stored as its link item, the cruise pass points
+// as their task counter, the rest as virtual item counters), recording the
+// task progress they cause. Gear, furniture, skins... have no storage yet and
+// are only logged.
 func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 	for _, entry := range drops {
 		kind, id, count := entry.GetType(), entry.GetId(), entry.GetNumber()
@@ -45,15 +46,17 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 			if err := tx.Queries.AddItem(tx.ctx, db.AddItemParams{CommanderID: tx.commanderID, ItemID: itemSpecializedCore, Count: count}); err != nil {
 				return err
 			}
-		case kind == dropTypeVItem:
-			total, err := tx.AddVirtualItem(tx.ctx, db.AddVirtualItemParams{CommanderID: tx.commanderID, ItemID: id, Amount: count})
+		case kind == dropTypeVItem && id == VirtualItemCruisePt:
+			total, err := tx.cruisePt()
 			if err != nil {
 				return err
 			}
-			switch id {
-			case VirtualItemCruisePt:
-				tx.event(TaskEvent{SubType: TaskSubCruisePt, Count: total})
-			case VirtualItemWeeklyPt:
+			tx.event(TaskEvent{SubType: TaskSubCruisePt, Count: total + count})
+		case kind == dropTypeVItem:
+			if err := tx.AddVirtualItem(tx.ctx, db.AddVirtualItemParams{CommanderID: tx.commanderID, ItemID: id, Amount: count}); err != nil {
+				return err
+			}
+			if id == VirtualItemWeeklyPt {
 				tx.event(TaskEvent{SubType: TaskSubWeeklyPt, Count: count})
 			}
 		default:

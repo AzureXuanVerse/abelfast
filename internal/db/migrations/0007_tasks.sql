@@ -44,13 +44,11 @@ CREATE TABLE commander_task_counters (
 	PRIMARY KEY (commander_id, sub_type, target)
 );
 
--- commander manual pages (SC_22300): tasks finished on each page, pt (one
--- per finished page task) and how many pt rewards were claimed
+-- commander manual pages (SC_22300) the commander got tasks from, and the
+-- tasks finished on each (a page's pt is its finished page tasks)
 CREATE TABLE commander_handbook_pages (
 	commander_id INTEGER NOT NULL REFERENCES commanders (id),
 	page_id      INTEGER NOT NULL, -- tutorial_handbook_task id
-	pt           INTEGER NOT NULL DEFAULT 0,
-	award        INTEGER NOT NULL DEFAULT 0,
 	PRIMARY KEY (commander_id, page_id)
 );
 

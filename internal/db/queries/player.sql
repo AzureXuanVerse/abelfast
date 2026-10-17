@@ -1,11 +1,5 @@
--- name: SetCommanderIcon :exec
-UPDATE commanders SET icon = ? WHERE id = ?;
-
 -- name: SetChatRoom :exec
 UPDATE commanders SET chat_room_id = ? WHERE id = ?;
-
--- name: SetDormLoadTime :exec
-UPDATE commanders SET dorm_load_time = ? WHERE id = ?;
 
 -- name: CountCommanders :one
 SELECT COUNT(*) FROM commanders;
