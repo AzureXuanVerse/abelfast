@@ -207,9 +207,6 @@ func (game *Game) activityList(ctx context.Context, commander db.Commander) (*pr
 	return reply, nil
 }
 
-// errActivityRefused makes an operation reply with a non-zero result.
-var errActivityRefused = errors.New("activity operation refused")
-
 // acceptActivityTasks hands a task list activity's tasks to the tasks area,
 // which must push them (SC_20003) before SC_11203.
 func (game *Game) acceptActivityTasks(ctx context.Context, client *connection.Client, taskIDs []uint32) error {
@@ -229,7 +226,7 @@ func (game *Game) acceptActivityTasks(ctx context.Context, client *connection.Cl
 func (game *Game) handleActivityOperation(client *connection.Client, req *protobuf.CS_11202) error {
 	ctx := context.Background()
 	now := time.Now()
-	reply := &protobuf.SC_11203{Result: proto.Uint32(0)}
+	reply := &protobuf.SC_11203{Result: result(nil)}
 	var activity openActivity
 	for _, open := range openActivities {
 		if open.id == req.GetActivityId() {
@@ -261,7 +258,7 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 			last := time.Unix(int64(state.Data2), 0).In(serverZone)
 			today := now.In(serverZone)
 			if int(state.Data1) >= len(days) || (state.Data2 != 0 && last.YearDay() == today.YearDay() && last.Year() == today.Year()) {
-				return errActivityRefused
+				return errRefused
 			}
 			reply.AwardList = configDrops(days[state.Data1 : state.Data1+1])
 			if err := tx.grantDrops(reply.AwardList); err != nil {
@@ -282,7 +279,7 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 			days := splitList(state.Data1List)
 			today := uint32(now.In(serverZone).Day())
 			if slices.Contains(days, today) || len(days) >= len(monthSignDrops[0]) {
-				return errActivityRefused
+				return errRefused
 			}
 			reply.AwardList = configDrops([][]uint32{monthSignDrops[state.Data2-1][len(days)]})
 			if err := tx.grantDrops(reply.AwardList); err != nil {
@@ -297,10 +294,10 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 			err = game.acceptActivityTasks(ctx, client, taskIDs)
 		}
 	default:
-		err = errActivityRefused
+		err = errRefused
 	}
-	if errors.Is(err, errActivityRefused) {
-		return client.Send(&protobuf.SC_11203{Result: proto.Uint32(1)})
+	if refused(err) {
+		return client.Send(&protobuf.SC_11203{Result: result(errRefused)})
 	}
 	if err != nil {
 		return err

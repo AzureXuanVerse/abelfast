@@ -29,15 +29,6 @@ const (
 	starterGiftShip = 106011
 )
 
-// errRefused rejects a request the client shouldn't have sent (unknown id,
-// someone else's ship...): the reply carries a non-zero result.
-var errRefused = errors.New("refused")
-
-// refused tells whether err only means the request is turned down.
-func refused(err error) bool {
-	return errors.Is(err, ErrNotEnough) || errors.Is(err, errRefused)
-}
-
 func (game *Game) registerShips() {
 	packets.Handle(game.handleBuildShip)
 	packets.Handle(game.handleBuildQuickFinish)
@@ -270,7 +261,7 @@ func (game *Game) handleShipLock(client *connection.Client, req *protobuf.CS_120
 	if err != nil {
 		return err
 	}
-	return client.Send(&protobuf.SC_12023{Result: proto.Uint32(0)})
+	return client.Send(&protobuf.SC_12023{Result: result(nil)})
 }
 
 // handleShipEquip puts equipment from the depot in a ship slot, or empties
@@ -305,7 +296,7 @@ func (game *Game) handleShipEquip(client *connection.Client, req *protobuf.CS_12
 	if err != nil && !refused(err) {
 		return err
 	}
-	return client.Send(&protobuf.SC_12007{Result: result(err == nil)})
+	return client.Send(&protobuf.SC_12007{Result: result(err)})
 }
 
 // handleLoveLetters answers GetAllLoveLetterLevelDataCommand (CS_12406):

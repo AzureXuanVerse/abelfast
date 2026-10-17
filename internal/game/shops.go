@@ -30,7 +30,7 @@ var medalShopGoods = [][2]uint32{
 // month.
 func (game *Game) handleMedalShop(client *connection.Client, req *protobuf.CS_16106) error {
 	reply := &protobuf.SC_16107{
-		Result:        proto.Uint32(0),
+		Result:        result(nil),
 		ItemFlashTime: proto.Uint32(uint32(nextMonth(time.Now()).Unix())),
 	}
 	for _, goods := range medalShopGoods {

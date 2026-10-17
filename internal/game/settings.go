@@ -30,12 +30,12 @@ func (game *Game) handleSecondaryPassword(client *connection.Client, req *protob
 func (game *Game) handleChangeChatRoom(client *connection.Client, req *protobuf.CS_11401) error {
 	room := req.GetRoomId()
 	if room < 1 || room > maxChatRoom {
-		return client.Send(&protobuf.SC_11402{Result: proto.Uint32(1), RoomId: proto.Uint32(room)})
+		return client.Send(&protobuf.SC_11402{Result: result(errRefused), RoomId: proto.Uint32(room)})
 	}
 	if err := game.DB.SetChatRoom(context.Background(), db.SetChatRoomParams{ChatRoomID: room, ID: client.CommanderID}); err != nil {
 		return err
 	}
-	return client.Send(&protobuf.SC_11402{Result: proto.Uint32(0), RoomId: proto.Uint32(room)})
+	return client.Send(&protobuf.SC_11402{Result: result(nil), RoomId: proto.Uint32(room)})
 }
 
 // handleClientReport takes CS_12299, sent by the C# side of the client after

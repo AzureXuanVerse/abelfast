@@ -48,5 +48,5 @@ func (game *Game) handleGuildUserInfo(client *connection.Client, req *protobuf.C
 // handleGuildShop answers GetGuildShopCommand: outside a guild the shop is
 // empty and never refreshes.
 func (game *Game) handleGuildShop(client *connection.Client, req *protobuf.CS_60033) error {
-	return client.Send(&protobuf.SC_60034{Result: proto.Uint32(0)})
+	return client.Send(&protobuf.SC_60034{Result: result(nil)})
 }

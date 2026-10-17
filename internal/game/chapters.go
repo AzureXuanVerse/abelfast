@@ -278,7 +278,7 @@ func (game *Game) handleTracking13101(client *connection.Client, req *protobuf.C
 	template := chapterTemplates[req.GetId()]
 	teams := req.GetFleet().GetMainTeam()
 	if template == nil || len(teams) == 0 {
-		return client.Send(&protobuf.SC_13102{Result: proto.Uint32(1)})
+		return client.Send(&protobuf.SC_13102{Result: result(errRefused)})
 	}
 	ships, err := game.DB.ListShipsByCommander(ctx, client.CommanderID)
 	if err != nil {
@@ -291,7 +291,7 @@ func (game *Game) handleTracking13101(client *connection.Client, req *protobuf.C
 	for _, team := range teams {
 		for _, id := range team.GetShipList() {
 			if !owned[id] {
-				return client.Send(&protobuf.SC_13102{Result: proto.Uint32(1)})
+				return client.Send(&protobuf.SC_13102{Result: result(errRefused)})
 			}
 		}
 	}
@@ -302,19 +302,19 @@ func (game *Game) handleTracking13101(client *connection.Client, req *protobuf.C
 		}
 		return session.save(ctx, tx.Queries, client.CommanderID)
 	})
-	if errors.Is(err, ErrNotEnough) {
-		return client.Send(&protobuf.SC_13102{Result: proto.Uint32(1)})
+	if refused(err) {
+		return client.Send(&protobuf.SC_13102{Result: result(errRefused)})
 	}
 	if err != nil {
 		return err
 	}
-	return client.Send(&protobuf.SC_13102{Result: proto.Uint32(0), CurrentChapter: session.info})
+	return client.Send(&protobuf.SC_13102{Result: result(nil), CurrentChapter: session.info})
 }
 
 // opReply is the SC_13104 every op gets: the capture always sets
 // auto_battle_time_update (0, no auto battle).
-func opReply(result uint32) *protobuf.SC_13104 {
-	return &protobuf.SC_13104{Result: proto.Uint32(result), AutoBattleTimeUpdate: proto.Uint32(0)}
+func opReply(err error) *protobuf.SC_13104 {
+	return &protobuf.SC_13104{Result: result(err), AutoBattleTimeUpdate: proto.Uint32(0)}
 }
 
 // handleChapterOp runs a map action (ChapterOpCommand, CS_13103). act is a
@@ -327,9 +327,9 @@ func (game *Game) handleChapterOp(client *connection.Client, req *protobuf.CS_13
 		return err
 	}
 	if session == nil {
-		return client.Send(opReply(1))
+		return client.Send(opReply(errRefused))
 	}
-	reply := opReply(0)
+	reply := opReply(nil)
 	switch req.GetAct() {
 	case opRetreat:
 		return game.retreat(ctx, client, session, req.GetGroupId())
@@ -367,7 +367,7 @@ func (game *Game) retreat(ctx context.Context, client *connection.Client, sessio
 		if err := session.save(ctx, game.DB.Queries, client.CommanderID); err != nil {
 			return err
 		}
-		return client.Send(opReply(0))
+		return client.Send(opReply(nil))
 	}
 	err := game.tx(ctx, client, func(tx *Tx) error {
 		queries := tx.Queries
@@ -394,7 +394,7 @@ func (game *Game) retreat(ctx context.Context, client *connection.Client, sessio
 	if err != nil {
 		return err
 	}
-	return client.Send(opReply(0))
+	return client.Send(opReply(nil))
 }
 
 // move walks a fleet to (row, column) (OpMove). The path goes around enemies
@@ -403,13 +403,13 @@ func (game *Game) retreat(ctx context.Context, client *connection.Client, sessio
 func (session *chapterSession) move(groupID, row, column uint32) *protobuf.SC_13104 {
 	group := session.group(groupID)
 	if group == nil {
-		return opReply(1)
+		return opReply(errRefused)
 	}
 	path := session.findPath(group.GetPos().GetRow(), group.GetPos().GetColumn(), row, column)
 	if path == nil {
-		return opReply(1)
+		return opReply(errRefused)
 	}
-	reply := opReply(0)
+	reply := opReply(nil)
 	for _, step := range path {
 		reply.MovePath = append(reply.MovePath, cellPos(step[0], step[1]))
 		if cell := session.springAmbush(step[0], step[1]); cell != nil {
@@ -515,19 +515,19 @@ func (session *chapterSession) scriptedAmbush(row, column uint32) bool {
 func (session *chapterSession) answerAmbush(groupID, evade uint32) *protobuf.SC_13104 {
 	group := session.group(groupID)
 	if group == nil {
-		return opReply(1)
+		return opReply(errRefused)
 	}
 	row, column := group.GetPos().GetRow(), group.GetPos().GetColumn()
 	cell := session.cell(row, column)
 	if cell == nil || cell.GetItemType() != attachAmbush || cell.GetItemFlag() != cellFlagAmbush {
-		return opReply(1)
+		return opReply(errRefused)
 	}
 	if evade == 1 && session.scriptedAmbush(row, column) {
 		setCell(cell, attachNone, 0, 0)
 	} else {
 		cell.ItemFlag = proto.Uint32(cellFlagActive)
 	}
-	reply := opReply(0)
+	reply := opReply(nil)
 	reply.MapUpdate = []*protobuf.CHAPTERCELLINFO_P13{cloneCell(cell)}
 	return reply
 }
@@ -535,7 +535,7 @@ func (session *chapterSession) answerAmbush(groupID, evade uint32) *protobuf.SC_
 // resync is OpRequest, sent after a failed op: the fleet's position and the
 // whole map again.
 func (session *chapterSession) resync(groupID uint32) *protobuf.SC_13104 {
-	reply := opReply(0)
+	reply := opReply(nil)
 	if group := session.group(groupID); group != nil {
 		reply.MovePath = []*protobuf.CHAPTERCELLPOS_P13{cellPos(group.GetPos().GetRow(), group.GetPos().GetColumn())}
 		reply.ShipUpdate = group.ShipList

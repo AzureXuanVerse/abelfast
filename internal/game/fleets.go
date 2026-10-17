@@ -153,7 +153,7 @@ func (game *Game) handleUpdateFleet(client *connection.Client, req *protobuf.CS_
 	}
 	for _, id := range req.GetShipList() {
 		if !owned[id] {
-			return client.Send(&protobuf.SC_12103{Result: proto.Uint32(1)})
+			return client.Send(&protobuf.SC_12103{Result: result(errRefused)})
 		}
 	}
 	err = game.DB.InTx(ctx, func(queries *db.Queries) error {
@@ -165,5 +165,5 @@ func (game *Game) handleUpdateFleet(client *connection.Client, req *protobuf.CS_
 	if err != nil {
 		return err
 	}
-	return client.Send(&protobuf.SC_12103{Result: proto.Uint32(0)})
+	return client.Send(&protobuf.SC_12103{Result: result(nil)})
 }

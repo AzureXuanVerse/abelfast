@@ -54,7 +54,7 @@ func (game *Game) handleEducate(client *connection.Client, req *protobuf.CS_2700
 		}
 		child.Shop = append(child.Shop, data)
 	}
-	return client.Send(&protobuf.SC_27001{Result: proto.Uint32(0), Child: child})
+	return client.Send(&protobuf.SC_27001{Result: result(nil), Child: child})
 }
 
 // newEducateStarts are each TB character's (child2_data) starting state on
@@ -99,7 +99,7 @@ func (game *Game) handleNewEducate(client *connection.Client, req *protobuf.CS_2
 		tb.Benefit = &protobuf.TBBENEFIT{Actives: []*protobuf.TBBF{{Id: proto.Uint32(start.benefit), Round: proto.Uint32(1)}}}
 	}
 	return client.Send(&protobuf.SC_29002{
-		Result:    proto.Uint32(0),
+		Result:    result(nil),
 		Tb:        tb,
 		Permanent: &protobuf.TBPERMANENT{NgPlusCount: proto.Uint32(1)},
 	})

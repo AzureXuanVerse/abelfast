@@ -87,10 +87,6 @@ const activityTypeCruise = 54
 
 var taskActivityTypes = map[uint32]bool{13: true, 54: true, 130: true, 132: true, 89: true, 100: true, 121: true}
 
-// Results for requests that can't be honoured (the client shows
-// ERROR_MESSAGE[result]); 1 is the generic failure.
-const resultFailed = 1
-
 // TaskEvent is something that happened that tasks count.
 type TaskEvent struct {
 	SubType uint32 // task_data_template.sub_type, see TaskSub*
@@ -638,16 +634,16 @@ func (game *Game) handleSubmitTask(client *connection.Client, req *protobuf.CS_2
 		return err
 	}
 	if err != nil || !ok || task.SubmitTime != 0 || task.Progress < config.TargetNum {
-		return client.Send(&protobuf.SC_20006{Result: proto.Uint32(resultFailed)})
+		return client.Send(&protobuf.SC_20006{Result: result(errRefused)})
 	}
 	drops := config.AwardDisplay
 	if len(req.GetChoiceAward()) > 0 {
 		if drops = awardChoice(config, req.GetChoiceAward()); drops == nil {
-			return client.Send(&protobuf.SC_20006{Result: proto.Uint32(resultFailed)})
+			return client.Send(&protobuf.SC_20006{Result: result(errRefused)})
 		}
 	}
 	now := uint32(time.Now().Unix())
-	reply := &protobuf.SC_20006{Result: proto.Uint32(0)}
+	reply := &protobuf.SC_20006{Result: result(nil)}
 	var next *protobuf.SC_20003
 	err = game.tx(ctx, client, func(tx *Tx) error {
 		if _, err := tx.SubmitTask(ctx, db.SubmitTaskParams{SubmitTime: now, CommanderID: client.CommanderID, TaskID: task.TaskID}); err != nil {
@@ -687,7 +683,7 @@ func (game *Game) handleClientTaskEvent(client *connection.Client, req *protobuf
 	if err != nil {
 		return err
 	}
-	return client.Send(&protobuf.SC_20017{Result: proto.Uint32(0)})
+	return client.Send(&protobuf.SC_20017{Result: result(nil)})
 }
 
 // handleSubmitActivityTasks claims finished activity tasks
@@ -716,14 +712,14 @@ func (game *Game) handleSubmitActivityTasks(client *connection.Client, req *prot
 		}
 	}
 	if len(claimed) != len(req.GetTaskIds()) {
-		return client.Send(&protobuf.SC_20206{Result: proto.Uint32(resultFailed)})
+		return client.Send(&protobuf.SC_20206{Result: result(errRefused)})
 	}
 	for _, task := range claimed {
 		if config, ok := configs[task.taskID]; !ok || task.finished || task.progress < config.TargetNum {
-			return client.Send(&protobuf.SC_20206{Result: proto.Uint32(resultFailed)})
+			return client.Send(&protobuf.SC_20206{Result: result(errRefused)})
 		}
 	}
-	reply := &protobuf.SC_20206{Result: proto.Uint32(0)}
+	reply := &protobuf.SC_20206{Result: result(nil)}
 	removed := &protobuf.ACT_TASK_LIST{ActId: proto.Uint32(req.GetActId())}
 	err = game.tx(ctx, client, func(tx *Tx) error {
 		for _, task := range claimed {

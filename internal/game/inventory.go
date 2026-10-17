@@ -2,7 +2,6 @@ package game
 
 import (
 	"context"
-	"errors"
 
 	"google.golang.org/protobuf/proto"
 
@@ -24,9 +23,6 @@ const (
 	ItemOxyCola       = 50001
 	ItemSecretCoolant = 50002
 )
-
-// ErrNotEnough is returned when a commander can't pay for something.
-var ErrNotEnough = errors.New("not enough")
 
 // starterItems is the bag of a new commander (SC_15001 of the capture).
 var starterItems = []struct{ id, count uint32 }{
@@ -154,14 +150,6 @@ func equipmentDepot(ctx context.Context, queries *db.Queries, commanderID uint32
 	return msg, nil
 }
 
-// result is the common { result } reply value: 0 ok, 1 refused.
-func result(ok bool) *uint32 {
-	if ok {
-		return proto.Uint32(0)
-	}
-	return proto.Uint32(1)
-}
-
 // handleUpgradeShipEquipment upgrades the equipment in a ship slot by lv
 // levels (UpGradeEquipmentCommands, CS_14002). Each level costs the current
 // equip_data_template's trans_use_gold and trans_use_item and moves to its
@@ -199,7 +187,7 @@ func (game *Game) handleUpgradeShipEquipment(client *connection.Client, req *pro
 	if err != nil && !refused(err) {
 		return err
 	}
-	return client.Send(&protobuf.SC_14003{Result: result(err == nil)})
+	return client.Send(&protobuf.SC_14003{Result: result(err)})
 }
 
 // handleComposeEquipment crafts equipment from blueprints
@@ -225,7 +213,7 @@ func (game *Game) handleComposeEquipment(client *connection.Client, req *protobu
 	if err != nil && !refused(err) {
 		return err
 	}
-	return client.Send(&protobuf.SC_14007{Result: result(err == nil)})
+	return client.Send(&protobuf.SC_14007{Result: result(err)})
 }
 
 // handleSellItems sells bag items for their item_data_statistics price
@@ -252,7 +240,7 @@ func (game *Game) handleSellItems(client *connection.Client, req *protobuf.CS_15
 	if err != nil && !refused(err) {
 		return err
 	}
-	return client.Send(&protobuf.SC_15009{Result: result(err == nil)})
+	return client.Send(&protobuf.SC_15009{Result: result(err)})
 }
 
 // handleTracking takes the client's analytics events (CS_10991), no reply.

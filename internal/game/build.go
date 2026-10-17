@@ -245,7 +245,7 @@ func (game *Game) handleBuildShip(client *connection.Client, req *protobuf.CS_12
 	if err != nil && !refused(err) {
 		return err
 	}
-	reply := &protobuf.SC_12003{Result: result(err == nil)}
+	reply := &protobuf.SC_12003{Result: result(err)}
 	if err == nil {
 		for _, build := range started {
 			reply.BuildInfo = append(reply.BuildInfo, buildInfo(build))
@@ -303,7 +303,7 @@ func (game *Game) handleBuildQuickFinish(client *connection.Client, req *protobu
 	if err != nil && !refused(err) {
 		return err
 	}
-	return client.Send(&protobuf.SC_12009{Result: result(err == nil), PosList: finished})
+	return client.Send(&protobuf.SC_12009{Result: result(err), PosList: finished})
 }
 
 // rescheduleBuilds saves builds after some finished early: the ones not
@@ -374,12 +374,12 @@ func (game *Game) handleCollectBuilds(client *connection.Client, req *protobuf.C
 	if err != nil && !refused(err) {
 		return err
 	}
-	return client.Send(&protobuf.SC_12026{Result: result(err == nil), ShipList: ships})
+	return client.Send(&protobuf.SC_12026{Result: result(err), ShipList: ships})
 }
 
 // handleConfirmBuilds acknowledges the "ships collected while away"
 // notification (GetShipConfirmCommand, CS_12045, SC_11003.taking_ship_list);
 // builds are only ever collected by the player, so there is nothing to clear.
 func (game *Game) handleConfirmBuilds(client *connection.Client, req *protobuf.CS_12045) error {
-	return client.Send(&protobuf.SC_12046{Result: proto.Uint32(0)})
+	return client.Send(&protobuf.SC_12046{Result: result(nil)})
 }

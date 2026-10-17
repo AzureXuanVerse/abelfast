@@ -46,7 +46,7 @@ func (game *Game) handleLimitChallenge(client *connection.Client, req *protobuf.
 	if err != nil {
 		return err
 	}
-	reply := &protobuf.SC_24021{Result: proto.Uint32(0)}
+	reply := &protobuf.SC_24021{Result: result(nil)}
 	for _, stage := range months[uint32(serverNow().Month())].Stage {
 		reply.Awards = append(reply.Awards, &protobuf.KVDATA{Key: proto.Uint32(stage)})
 	}
