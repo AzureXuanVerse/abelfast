@@ -49,9 +49,13 @@ type Client struct {
 	conn   net.Conn
 	server *Server
 
-	// Replies are buffered until the current packet has been handled, then flushed.
+	// Replies are buffered until the current packet has been handled, then
+	// flushed. Pushes wait in pushBuffer for the next Send (or the end of the
+	// packet), the ones meant to follow the reply in trailBuffer.
 	writeMu     sync.Mutex
 	writeBuffer []byte
+	pushBuffer  []byte
+	trailBuffer []byte
 	packetIndex int // index of the packet being handled, echoed in replies
 
 	packetQueue  *queue.Queue
@@ -80,8 +84,28 @@ func newClient(conn net.Conn, server *Server) *Client {
 	return client
 }
 
-// Send buffers a server message, its packet id is taken from the message name (SC_<id>).
+// Send buffers a server message, its packet id is taken from the message
+// name (SC_<id>). The pushes queued so far go out before it.
 func (client *Client) Send(msg proto.Message) error {
+	return client.buffer(msg, &client.writeBuffer)
+}
+
+// Push queues a message caused by the request being handled (task progress,
+// archive updates, new ships...): it goes out ahead of the next Send, the
+// reply, or once the request is handled if there is none.
+func (client *Client) Push(msg proto.Message) error {
+	return client.buffer(msg, &client.pushBuffer)
+}
+
+// PushAfterReply queues a message that goes out after everything the request
+// being handled sends, for the few the client expects behind the reply.
+func (client *Client) PushAfterReply(msg proto.Message) error {
+	return client.buffer(msg, &client.trailBuffer)
+}
+
+// buffer frames msg into dst; a reply (dst is writeBuffer) takes the queued
+// pushes along first.
+func (client *Client) buffer(msg proto.Message, dst *[]byte) error {
 	id, err := protocol.ServerPacketID(msg)
 	if err != nil {
 		return err
@@ -91,7 +115,11 @@ func (client *Client) Send(msg proto.Message) error {
 		return fmt.Errorf("SC_%d: %w", id, err)
 	}
 	client.writeMu.Lock()
-	client.writeBuffer = protocol.AppendFrame(client.writeBuffer, id, client.packetIndex, payload)
+	if dst == &client.writeBuffer {
+		client.writeBuffer = append(client.writeBuffer, client.pushBuffer...)
+		client.pushBuffer = client.pushBuffer[:0]
+	}
+	*dst = protocol.AppendFrame(*dst, id, client.packetIndex, payload)
 	client.writeMu.Unlock()
 	logger.LogEvent("Connection", "Send", fmt.Sprintf("SC_%d - %d bytes buffered", id, len(payload)), logger.LOG_LEVEL_DEBUG)
 	return nil
@@ -104,10 +132,12 @@ func (client *Client) Disconnect(reason uint8) error {
 	})
 }
 
-// flush writes the buffered replies to the socket.
+// flush writes the buffered replies to the socket, then the pushes left.
 func (client *Client) flush() error {
 	client.writeMu.Lock()
 	defer client.writeMu.Unlock()
+	client.writeBuffer = append(append(client.writeBuffer, client.pushBuffer...), client.trailBuffer...)
+	client.pushBuffer, client.trailBuffer = client.pushBuffer[:0], client.trailBuffer[:0]
 	if len(client.writeBuffer) == 0 {
 		return nil
 	}
