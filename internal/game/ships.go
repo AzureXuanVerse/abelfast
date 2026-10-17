@@ -50,7 +50,7 @@ func (game *Game) registerShips() {
 	packets.Handle(game.handleLoveLetters)
 	packets.Handle(game.handleUpgradeShipEquipment)
 	packets.Handle(game.handleComposeEquipment)
-	packets.Handle(game.handleSellItems)
+	packets.HandleLenient(game.handleSellItems)
 }
 
 // NewShip returns the row for a freshly obtained ship: level 1, morale and
