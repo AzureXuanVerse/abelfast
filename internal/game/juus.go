@@ -43,19 +43,28 @@ func loadJuusPosts() error {
 // juusReply is an NPC answer to the commander's comment, posted delay
 // seconds after it.
 type juusReply struct {
-	id    uint32
-	delay uint32
+	ID    uint32 `json:"id"`
+	Delay uint32 `json:"delay"`
 }
 
 // juusOptionReplies are the NPC answers to a comment option (post id ->
-// 1-based option -> answers), server-side data; only the options picked in
-// the capture are known, the others get no answer.
-var juusOptionReplies = map[uint32]map[uint32][]juusReply{
-	673: {1: {{7525, 9}}},
-	20015: {2: {
-		{100509, 56}, {100510, 76}, {100511, 96}, {100512, 116},
-		{100513, 136}, {100514, 156}, {100515, 176}, {100516, 196},
-	}},
+// 1-based option -> answers), as the official server posted them:
+// activity_ins_npc_template has the answers' ids but not which option they
+// answer nor when. They are server content, server/juus_option_replies.json
+// of the data dir ({"<post id>": {"<option>": [{"id": .., "delay": ..}]}});
+// options it doesn't list, or all of them without the file, get no answer.
+var juusOptionReplies map[uint32]map[uint32][]juusReply
+
+func loadJuusOptionReplies() error {
+	juusOptionReplies = nil
+	text, err := gamedata.ServerFile("juus_option_replies.json")
+	if text == nil || err != nil {
+		return err
+	}
+	if err := json.Unmarshal(text, &juusOptionReplies); err != nil {
+		return fmt.Errorf("juus option replies: %w", err)
+	}
+	return nil
 }
 
 // CS_11701 cmd values (ActivityConst.INSTAGRAM_OP_*)
@@ -100,6 +109,7 @@ func loadJuusData() error {
 		gamedata.Load("activity_ins_chat_language", &words),
 		gamedata.Load("activity_ins_redpackage", &packets),
 		loadJuusPosts,
+		loadJuusOptionReplies,
 	)
 	if err != nil {
 		return err
@@ -149,10 +159,10 @@ func juusMessage(row db.CommanderJuusPost) *protobuf.INS_MESSAGE {
 			discuss.TextList = nil
 			discuss.Time = proto.Uint32(row.CommentTime)
 			for _, reply := range juusOptionReplies[row.PostID][row.CommentIndex] {
-				discuss.NpcReply = append(discuss.NpcReply, reply.id)
+				discuss.NpcReply = append(discuss.NpcReply, reply.ID)
 				post.NpcReply = append(post.NpcReply, &protobuf.INS_NPC{
-					Id:   proto.Uint32(reply.id),
-					Time: proto.Uint32(row.CommentTime + reply.delay),
+					Id:   proto.Uint32(reply.ID),
+					Time: proto.Uint32(row.CommentTime + reply.Delay),
 					Text: proto.String(""), // the capture sends none
 				})
 			}
