@@ -41,6 +41,11 @@ type Client struct {
 	Port        int
 	ConnectedAt time.Time
 
+	// Session, set by the game server login (CS_10022). Only touched by
+	// handlers, which run one at a time per client.
+	AccountID   uint32
+	CommanderID uint32 // 0 until the account has a commander
+
 	conn   net.Conn
 	server *Server
 
