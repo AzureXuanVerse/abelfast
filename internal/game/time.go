@@ -13,12 +13,19 @@ const mondayReference = 1606114800
 
 const week = 7 * 24 * time.Hour
 
-// exerciseResetHours are when exercise attempts refill, server time.
-var exerciseResetHours = []int{0, 12, 18}
+// Exercise attempts refill from midnight, server time:
+// ExerciseCountRecoverUpCommand (controller/command/militaryexercise) expects
+// the next refill SeasonInfo.RECOVER_UP_TWELVE_HOUR after one at hour 0,
+// SeasonInfo.RECOVER_UP_SIX_HOUR after any other (model/vo/seasoninfo.lua),
+// so at 0:00, 12:00 and 18:00.
+const (
+	exerciseRefillAfterMidnight = 12 * time.Hour
+	exerciseRefillInterval      = 6 * time.Hour
+)
 
-// exerciseSeasonLength is SeasonInfo.ONE_SEASON_TIME. Seasons start every
-// two weeks from mondayReference (the captured season started 153 seasons
-// after it).
+// exerciseSeasonLength is SeasonInfo.ONE_SEASON_TIME (1209600 s,
+// model/vo/seasoninfo.lua). Seasons start every two weeks from
+// mondayReference (the captured season started 153 seasons after it).
 const exerciseSeasonLength = 2 * week
 
 // serverNow is the current time on the EN servers' clock.
@@ -60,11 +67,13 @@ func periodStart(now time.Time, period time.Duration) time.Time {
 
 // nextExerciseReset returns the first exercise attempt refill after now.
 func nextExerciseReset(now time.Time) time.Time {
-	day := startOfDay(now)
-	for _, hour := range exerciseResetHours {
-		if reset := day.Add(time.Duration(hour) * time.Hour); reset.After(now) {
-			return reset
+	reset := startOfDay(now)
+	for !reset.After(now) {
+		if reset.Equal(startOfDay(reset)) {
+			reset = reset.Add(exerciseRefillAfterMidnight)
+		} else {
+			reset = reset.Add(exerciseRefillInterval)
 		}
 	}
-	return nextDay(now)
+	return reset
 }
