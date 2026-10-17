@@ -238,44 +238,25 @@ type taskTarget struct {
 }
 
 func parseTaskTarget(raw json.RawMessage) taskTarget {
-	var text string
-	if json.Unmarshal(raw, &text) == nil {
-		text = strings.TrimSpace(text)
-		if strings.HasPrefix(text, "[") {
-			return parseTaskTarget(json.RawMessage(text))
-		}
-		id, err := strconv.ParseUint(text, 10, 32)
-		if err != nil || id == 0 {
-			return taskTarget{any: true}
-		}
-		return taskTarget{ids: []uint32{uint32(id)}}
-	}
-	var number uint32
-	if json.Unmarshal(raw, &number) == nil {
-		if number == 0 {
-			return taskTarget{any: true}
-		}
-		return taskTarget{ids: []uint32{number}}
-	}
 	var list []json.RawMessage
-	if json.Unmarshal(raw, &list) != nil || len(list) == 0 {
-		return taskTarget{any: true}
+	if json.Unmarshal(raw, &list) != nil {
+		ids := parseIDList(raw)
+		return taskTarget{any: len(ids) == 0, ids: ids}
 	}
-	if json.Unmarshal(list[0], &text) == nil && len(list) == 2 {
-		if json.Unmarshal(list[1], &number) == nil {
-			return taskTarget{min: &number}
-		}
+	var op string
+	var number uint32
+	if len(list) == 2 && json.Unmarshal(list[0], &op) == nil && json.Unmarshal(list[1], &number) == nil {
+		return taskTarget{min: &number}
 	}
-	target := taskTarget{}
+	// only the list's own ids: nested lists ([[ship type, count], ...] of
+	// the sortie exp tasks) name no target, they count for any
+	var ids []uint32
 	for _, item := range list {
 		if json.Unmarshal(item, &number) == nil {
-			target.ids = append(target.ids, number)
+			ids = append(ids, number)
 		}
 	}
-	if len(target.ids) == 0 {
-		target.any = true
-	}
-	return target
+	return taskTarget{any: len(ids) == 0, ids: ids}
 }
 
 func (target taskTarget) matches(id uint32) bool {
@@ -285,12 +266,7 @@ func (target taskTarget) matches(id uint32) bool {
 	case target.min != nil:
 		return id >= *target.min
 	}
-	for _, want := range target.ids {
-		if want == id {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(target.ids, id)
 }
 
 // parseIDList reads next_task / config_data style fields: "0", "2",

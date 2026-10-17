@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"slices"
 	"strings"
 	"time"
 
@@ -458,10 +459,8 @@ func (session *chapterSession) springAmbush(row, column uint32) *protobuf.CHAPTE
 		return nil
 	}
 	key := cellKey(row, column)
-	for _, done := range session.ambushed {
-		if done == key {
-			return nil
-		}
+	if slices.Contains(session.ambushed, key) {
+		return nil
 	}
 	rate := 500
 	for _, extra := range session.template.ambushRatios {
