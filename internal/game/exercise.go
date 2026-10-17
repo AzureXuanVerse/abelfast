@@ -13,38 +13,9 @@ import (
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
-// serverZone is the EN servers' clock, the one mondayReference is midnight in.
-var serverZone = time.FixedZone("UTC-7", -7*60*60)
-
-// exerciseResetHours are when exercise attempts refill, server time.
-var exerciseResetHours = []int{0, 12, 18}
-
 // exerciseFightCount is SeasonInfo.MAX_FIGHTCOUNT, the attempts a refill
 // tops up to.
 const exerciseFightCount = 10
-
-// exerciseSeasonLength is SeasonInfo.ONE_SEASON_TIME. Seasons start every
-// two weeks from mondayReference (the captured season started 153 seasons
-// after it).
-const exerciseSeasonLength = 14 * 24 * time.Hour
-
-// nextExerciseReset returns the first attempt refill after now.
-func nextExerciseReset(now time.Time) time.Time {
-	local := now.In(serverZone)
-	day := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, serverZone)
-	for _, hour := range exerciseResetHours {
-		if reset := day.Add(time.Duration(hour) * time.Hour); reset.After(now) {
-			return reset
-		}
-	}
-	return day.AddDate(0, 0, 1)
-}
-
-// exerciseSeasonStart returns when the exercise season running at now began.
-func exerciseSeasonStart(now time.Time) time.Time {
-	reference := time.Unix(mondayReference, 0)
-	return reference.Add(now.Sub(reference).Truncate(exerciseSeasonLength))
-}
 
 // handleSeasonInfo answers the exercise (PvP) season (GetSeasonInfoCommand):
 // no points, ranked behind every commander of the server (they all start at

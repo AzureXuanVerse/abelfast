@@ -560,9 +560,8 @@ func activityTaskIDs(config activityConfig, now time.Time) []uint32 {
 	if config.Type != activityTypeCruise {
 		return config.tasks
 	}
-	start := config.window.start
-	weekStart := start.Unix() - (start.Unix()-mondayReference)%(7*86400)
-	weeks := uint32((now.Unix() - weekStart + 7*86400 - 1) / (7 * 86400))
+	elapsed := now.Sub(periodStart(config.window.start, week)).Truncate(time.Second)
+	weeks := uint32((elapsed + week - 1) / week)
 	var tasks []uint32
 	for _, groupID := range config.tasks {
 		group, ok := battlepassTaskGroups[groupID]

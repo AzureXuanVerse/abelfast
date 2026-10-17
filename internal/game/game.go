@@ -15,11 +15,6 @@ import (
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
-// mondayReference is the "monday_0oclock_timestamp" the official EN servers
-// send (SC_11000, SC_11002): Monday 2020-11-23 00:00 in UTC-7. The client
-// derives its weekly resets from it.
-const mondayReference = 1606114800
-
 type Game struct {
 	DB *db.Store
 }

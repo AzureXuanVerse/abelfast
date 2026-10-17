@@ -179,7 +179,7 @@ func (game *Game) activityList(ctx context.Context, commander db.Commander) (*pr
 		}
 		switch activity.id {
 		case activityExerciseSeason:
-			start := exerciseSeasonStart(now)
+			start := periodStart(now, exerciseSeasonLength)
 			info.StopTime = proto.Uint32(uint32(start.Add(exerciseSeasonLength).Unix() - 1))
 			info.Data1 = proto.Uint32(uint32(start.Unix()))
 		case activityMonthSign:
@@ -248,9 +248,7 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 			if err != nil {
 				return err
 			}
-			last := time.Unix(int64(state.Data2), 0).In(serverZone)
-			today := now.In(serverZone)
-			if int(state.Data1) >= len(days) || (state.Data2 != 0 && last.YearDay() == today.YearDay() && last.Year() == today.Year()) {
+			if int(state.Data1) >= len(days) || (state.Data2 != 0 && sameServerDay(time.Unix(int64(state.Data2), 0), now)) {
 				return errRefused
 			}
 			reply.AwardList = configDrops(days[state.Data1 : state.Data1+1])

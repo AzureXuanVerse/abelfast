@@ -2,7 +2,6 @@ package game
 
 import (
 	"context"
-	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -104,24 +103,6 @@ func starterShip(commander db.Commander, ships []db.Ship) (db.Ship, bool) {
 		}
 	}
 	return db.Ship{}, false
-}
-
-// serverNow is the current time on the EN servers' clock.
-func serverNow() time.Time {
-	return time.Now().In(serverZone)
-}
-
-// nextMonth returns the start of the month after now, server time: when the
-// monthly shops refresh.
-func nextMonth(now time.Time) time.Time {
-	local := now.In(serverZone)
-	return time.Date(local.Year(), local.Month()+1, 1, 0, 0, 0, 0, serverZone)
-}
-
-// nextDay returns the next midnight, server time.
-func nextDay(now time.Time) time.Time {
-	local := now.In(serverZone)
-	return time.Date(local.Year(), local.Month(), local.Day()+1, 0, 0, 0, 0, serverZone)
 }
 
 // playerInfo is SC_11003, read by PlayerProxy into a Player (model/vo/player.lua).
