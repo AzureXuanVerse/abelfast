@@ -246,29 +246,59 @@ func newChapter(template *chapterTemplate, teams []*protobuf.TEAM_INFO, now uint
 // handleTracking13101 starts a sortie (TrackingCommand, CS_13101): the
 // fleets from FLEET_INFO.main_team enter the chapter, chapter_template.oil is
 // spent (the client subtracts it too) and the map comes back in SC_13102.
-// Non-zero results make the client show levelScene_tracking_erro.
+// A SelectFleet chapter sends FleetProxy's fleets (Fleet:ChangeToElite, their
+// ids), a CustomFleet one its elite fleets (Chapter.PackEliteFleetInfo: id 0,
+// padded with empty teams), which are checked and saved like CS_13107's and
+// numbered from 1. Non-zero results make the client show
+// levelScene_tracking_erro.
 func (game *Game) handleTracking13101(client *connection.Client, req *protobuf.CS_13101) error {
 	ctx := context.Background()
 	template := chapterTemplates[req.GetId()]
-	teams := req.GetFleet().GetMainTeam()
-	if template == nil || len(teams) == 0 {
+	if template == nil {
 		return client.Send(&protobuf.SC_13102{Result: result(errRefused)})
 	}
-	var ids []uint32
-	for _, team := range teams {
-		ids = append(ids, team.GetShipList()...)
+	var elite *protobuf.FLEET_INFO
+	var teams []*protobuf.TEAM_INFO
+	if template.fleetType == chapterCustomFleet {
+		var err error
+		elite, err = checkEliteFleet(ctx, game.DB.Queries, client.CommanderID, template, req.GetFleet())
+		if refused(err) {
+			return client.Send(&protobuf.SC_13102{Result: result(err)})
+		}
+		if err != nil {
+			return err
+		}
+		for _, team := range elite.GetMainTeam() {
+			if len(team.GetShipList()) > 0 {
+				teams = append(teams, &protobuf.TEAM_INFO{Id: proto.Uint32(uint32(len(teams) + 1)), ShipList: team.GetShipList()})
+			}
+		}
+	} else {
+		teams = req.GetFleet().GetMainTeam()
+		var ids []uint32
+		for _, team := range teams {
+			ids = append(ids, team.GetShipList()...)
+		}
+		owned, err := ownsShips(ctx, game.DB.Queries, client.CommanderID, ids)
+		if err != nil {
+			return err
+		}
+		if !owned || len(slices.Compact(slices.Sorted(slices.Values(ids)))) != len(ids) {
+			return client.Send(&protobuf.SC_13102{Result: result(errRefused)})
+		}
 	}
-	owned, err := ownsShips(ctx, game.DB.Queries, client.CommanderID, ids)
-	if err != nil {
-		return err
-	}
-	if !owned {
+	if len(teams) == 0 {
 		return client.Send(&protobuf.SC_13102{Result: result(errRefused)})
 	}
 	session := &chapterSession{template: template, info: newChapter(template, teams, uint32(time.Now().Unix()))}
-	err = game.tx(ctx, client, func(tx *Tx) error {
+	err := game.tx(ctx, client, func(tx *Tx) error {
 		if err := tx.SpendResource(ResourceOil, template.oil); err != nil {
 			return err
+		}
+		if elite != nil {
+			if err := saveEliteFleet(ctx, tx.Queries, client.CommanderID, elite); err != nil {
+				return err
+			}
 		}
 		return session.save(ctx, tx.Queries, client.CommanderID)
 	})
@@ -651,14 +681,20 @@ func chapterProgress(ctx context.Context, queries *db.Queries, commanderID, chap
 }
 
 // chapterList is SC_13001: the chapters played so far (Chapter.New reads
-// CHAPTERINFO), no remaster tickets, elite fleets or auto battles.
-func chapterList(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobuf.SC_13001, error) {
+// CHAPTERINFO) and the elite fleets by formation, no remaster tickets or
+// auto battles.
+func chapterList(ctx context.Context, queries *db.Queries, commanderID uint32, ships []db.Ship) (*protobuf.SC_13001, error) {
 	rows, err := queries.ListChapterProgress(ctx, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	fleets, err := eliteFleets(ctx, queries, commanderID, ships)
 	if err != nil {
 		return nil, err
 	}
 	msg := &protobuf.SC_13001{
 		ReactChapter: &protobuf.REACTCHAPTER_INFO{},
+		FleetList:    fleets,
 	}
 	for _, row := range rows {
 		msg.ChapterList = append(msg.ChapterList, &protobuf.CHAPTERINFO{

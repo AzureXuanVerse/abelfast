@@ -13,6 +13,12 @@ type Build struct {
 	FinishTime  int64
 }
 
+type ChapterEliteFleet struct {
+	CommanderID uint32
+	Formation   uint32
+	Fleet       []byte
+}
+
 type ChapterProgress struct {
 	CommanderID      uint32
 	ChapterID        uint32

@@ -55,6 +55,33 @@ func (q *Queries) GetChapterState(ctx context.Context, commanderID uint32) (Chap
 	return i, err
 }
 
+const listChapterEliteFleets = `-- name: ListChapterEliteFleets :many
+SELECT commander_id, formation, fleet FROM chapter_elite_fleets WHERE commander_id = ? ORDER BY formation
+`
+
+func (q *Queries) ListChapterEliteFleets(ctx context.Context, commanderID uint32) ([]ChapterEliteFleet, error) {
+	rows, err := q.db.QueryContext(ctx, listChapterEliteFleets, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ChapterEliteFleet
+	for rows.Next() {
+		var i ChapterEliteFleet
+		if err := rows.Scan(&i.CommanderID, &i.Formation, &i.Fleet); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listChapterProgress = `-- name: ListChapterProgress :many
 SELECT commander_id, chapter_id, progress, kill_boss_count, kill_enemy_count, take_box_count, defeat_count, today_defeat_count, pass_count FROM chapter_progress WHERE commander_id = ? ORDER BY chapter_id
 `
@@ -90,6 +117,22 @@ func (q *Queries) ListChapterProgress(ctx context.Context, commanderID uint32) (
 		return nil, err
 	}
 	return items, nil
+}
+
+const saveChapterEliteFleet = `-- name: SaveChapterEliteFleet :exec
+INSERT INTO chapter_elite_fleets (commander_id, formation, fleet) VALUES (?, ?, ?)
+ON CONFLICT (commander_id, formation) DO UPDATE SET fleet = excluded.fleet
+`
+
+type SaveChapterEliteFleetParams struct {
+	CommanderID uint32
+	Formation   uint32
+	Fleet       []byte
+}
+
+func (q *Queries) SaveChapterEliteFleet(ctx context.Context, arg SaveChapterEliteFleetParams) error {
+	_, err := q.db.ExecContext(ctx, saveChapterEliteFleet, arg.CommanderID, arg.Formation, arg.Fleet)
+	return err
 }
 
 const saveChapterProgress = `-- name: SaveChapterProgress :exec

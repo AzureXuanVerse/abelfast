@@ -25,3 +25,10 @@ ON CONFLICT (commander_id) DO UPDATE SET state = excluded.state, ambushed = excl
 
 -- name: DeleteChapterState :exec
 DELETE FROM chapter_states WHERE commander_id = ?;
+
+-- name: ListChapterEliteFleets :many
+SELECT * FROM chapter_elite_fleets WHERE commander_id = ? ORDER BY formation;
+
+-- name: SaveChapterEliteFleet :exec
+INSERT INTO chapter_elite_fleets (commander_id, formation, fleet) VALUES (?, ?, ?)
+ON CONFLICT (commander_id, formation) DO UPDATE SET fleet = excluded.fleet;

@@ -135,6 +135,7 @@ const handbookBlueprint = 2
 // (Ship:calReturnRes; its distory_resource_oil_ratio isn't returned)
 type shipTypeConfig struct {
 	RetireGold uint32 `json:"distory_resource_gold_ratio"`
+	TeamType   string `json:"team_type"` // teamVanguard, teamMain or teamSubmarine
 }
 
 // ship_data_by_star row: what a retired ship of the rarity gives,
@@ -305,6 +306,8 @@ var (
 	// ship_data_statistics type, drops by rarity
 	retireGold  map[uint32]uint32
 	retireItems map[uint32][][]uint32
+	// ship_data_by_type team_type by ship type (Ship:getTeamType)
+	shipTeams map[uint32]string
 	// ship_data_group share_group_id by group_type
 	shareGroups map[uint32][]uint32
 	// gameset urpt_chapter_max: [limit counter id, cap] of the Specialized
@@ -439,8 +442,10 @@ func loadShipData() error {
 		shipTemplates[id] = row
 	}
 	retireGold = make(map[uint32]uint32, len(shipTypes))
+	shipTeams = make(map[uint32]string, len(shipTypes))
 	for id, row := range shipTypes {
 		retireGold[id] = row.RetireGold
+		shipTeams[id] = row.TeamType
 	}
 	retireItems = make(map[uint32][][]uint32, len(shipStars))
 	for id, row := range shipStars {

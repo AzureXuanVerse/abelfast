@@ -92,6 +92,7 @@ func (game *Game) Register() {
 	// fleets, the campaign and battles
 	packets.Handle(game.handleUpdateFleet)
 	packets.Handle(game.handleTracking13101)
+	packets.Handle(game.handleUpdateCustomFleet)
 	packets.Handle(game.handleChapterOp)
 	packets.Handle(game.handleChapterBattleResult)
 	packets.Handle(game.handleRemasterInfo)
@@ -211,7 +212,7 @@ var loginBurst = []loginPush{
 	// TechnologyNationProxy: no fleet tech
 	empty[protobuf.SC_64000](),
 	func(game *Game, l *login) (proto.Message, error) {
-		return chapterList(l.ctx, l.queries, l.commander.ID)
+		return chapterList(l.ctx, l.queries, l.commander.ID, l.ships)
 	},
 	func(game *Game, l *login) (proto.Message, error) {
 		return currentChapter(l.ctx, l.queries, l.commander.ID)

@@ -2,6 +2,7 @@ package game
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/ggmolly/belfast/internal/gamedata"
 )
@@ -56,6 +57,18 @@ type chapterTemplate struct {
 	avoidRatio    uint32 // how hard ambushes are to evade
 	winConditions []chapterWinCondition
 	awards        []uint32 // award virtual items, see dropPools
+
+	// how the fleets are picked (chapter_template.type): chapterSelectFleet
+	// or chapterCustomFleet
+	fleetType uint32
+	// the elite fleet set the chapter shares with the others of its
+	// formation (ChapterProxy.mapEliteFleetCache, SC_13001 fleet_list)
+	formation uint32
+	// per surface fleet, the main then the vanguard slot limits
+	limitation                         [][2][]shipLimit
+	groupNum, submarineNum, supportNum uint32 // group_num, submarine_num, support_group_num
+	// misc_arg submarine_support: the support fleet is submarines, not carriers
+	submarineSupport bool
 }
 
 var chapterTemplates map[uint32]*chapterTemplate
@@ -79,6 +92,15 @@ type chapterConfig struct {
 	// [kind, param], param a cell for the kinds that name one
 	WinCondition [][2]any    `json:"win_condition"`
 	Awards       [][2]uint32 `json:"awards"` // [type, virtual item]
+	Type         uint32      `json:"type"`
+	Formation    uint32      `json:"formation"`
+	// per fleet [main slots, vanguard slots], a slot a ship type, a
+	// ShipType.BundleList name or 0 (any)
+	Limitation      [][2][]any `json:"limitation"`
+	GroupNum        uint32     `json:"group_num"`
+	SubmarineNum    uint32     `json:"submarine_num"`
+	SupportGroupNum uint32     `json:"support_group_num"`
+	MiscArg         [][]any    `json:"misc_arg"` // [key, value]
 }
 
 // expedition_data_template.type
@@ -243,6 +265,26 @@ func loadChapterData() error {
 		}
 		for _, award := range row.Awards {
 			template.awards = append(template.awards, award[1])
+		}
+		template.fleetType, template.formation = row.Type, row.Formation
+		template.groupNum, template.submarineNum, template.supportNum = row.GroupNum, row.SubmarineNum, row.SupportGroupNum
+		for _, fleet := range row.Limitation {
+			var limits [2][]shipLimit
+			for half, slots := range fleet {
+				for _, slot := range slots {
+					limit, err := parseShipLimit(slot)
+					if err != nil {
+						return fmt.Errorf("chapter_template %d limitation: %w", id, err)
+					}
+					limits[half] = append(limits[half], limit)
+				}
+			}
+			template.limitation = append(template.limitation, limits)
+		}
+		for _, arg := range row.MiscArg {
+			if len(arg) == 2 && arg[0] == "submarine_support" {
+				template.submarineSupport = arg[1] != nil // a ship template id
+			}
 		}
 		chapterTemplates[id] = template
 	}
