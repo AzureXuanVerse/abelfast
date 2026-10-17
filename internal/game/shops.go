@@ -1,6 +1,7 @@
 package game
 
 import (
+	"context"
 	"maps"
 	"math/rand/v2"
 	"slices"
@@ -13,10 +14,31 @@ import (
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
-// handleChargeList answers GetChargeListCommand: nothing bought, so every
-// first-purchase bonus is still available.
+// handleChargeList answers GetChargeListCommand: nothing bought with money,
+// so every first-purchase bonus is still available. normal_list is what was
+// bought of the gift packages (ShopsProxy:GetNormalByID, counted against
+// their limit_args "time"), normal_group_list of the shop groups, since they
+// last reset.
 func (game *Game) handleChargeList(client *connection.Client, req *protobuf.CS_16104) error {
-	return client.Send(&protobuf.SC_16105{})
+	ctx, now := context.Background(), time.Now()
+	purchases, err := shopPurchases(ctx, game.DB.Queries, client.CommanderID, now)
+	if err != nil {
+		return err
+	}
+	groups, err := shopGroupPurchases(ctx, game.DB.Queries, client.CommanderID, now)
+	if err != nil {
+		return err
+	}
+	reply := &protobuf.SC_16105{}
+	for _, id := range slices.Sorted(maps.Keys(purchases)) {
+		if genre := shopTemplate[id].Genre; genre == genreGiftPackage || genre == genreNewServerShop {
+			reply.NormalList = append(reply.NormalList, &protobuf.SHOPINFO{ShopId: proto.Uint32(id), PayCount: proto.Uint32(purchases[id])})
+		}
+	}
+	for _, group := range slices.Sorted(maps.Keys(groups)) {
+		reply.NormalGroupList = append(reply.NormalGroupList, &protobuf.SHOPINFO{ShopId: proto.Uint32(group), PayCount: proto.Uint32(groups[group])})
+	}
+	return client.Send(reply)
 }
 
 // honormedal_goods_list row
@@ -102,16 +124,26 @@ var shopStreetGoods = [][2]uint32{
 }
 
 // handleShopStreet answers GetShopStreetCommand, the general shop: level 1,
-// every item in stock once, no manual refresh. It refreshes at the same hours
-// as the exercise attempts (the captured refresh was the 12:00 one).
+// every item in stock once (buy_count is what's left, 0 once bought since
+// the refresh), no manual refresh. It refreshes at the same hours as the
+// exercise attempts (the captured refresh was the 12:00 one).
 func (game *Game) handleShopStreet(client *connection.Client, req *protobuf.CS_22101) error {
+	now := time.Now()
+	purchases, err := shopPurchases(context.Background(), game.DB.Queries, client.CommanderID, now)
+	if err != nil {
+		return err
+	}
 	street := &protobuf.SHOPPINGSTREET{
 		Lv:            proto.Uint32(1),
-		NextFlashTime: proto.Uint32(uint32(nextExerciseReset(time.Now()).Unix())),
+		NextFlashTime: proto.Uint32(uint32(nextExerciseReset(now).Unix())),
 	}
 	for _, goods := range shopStreetGoods {
+		left := uint32(0)
+		if purchases[goods[0]] == 0 {
+			left = 1
+		}
 		street.GoodsList = append(street.GoodsList, &protobuf.STREETGOODS{
-			GoodsId: proto.Uint32(goods[0]), Discount: proto.Uint32(goods[1]), BuyCount: proto.Uint32(1),
+			GoodsId: proto.Uint32(goods[0]), Discount: proto.Uint32(goods[1]), BuyCount: proto.Uint32(left),
 		})
 	}
 	return client.Send(&protobuf.SC_22102{Street: street})

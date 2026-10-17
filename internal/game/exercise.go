@@ -116,15 +116,20 @@ func arenaShopGoods(shop arenaShopConfig, commanderID uint32, day time.Time) []u
 }
 
 // handleMilitaryShop answers GetMilitaryShopCommand, the merit shop: today's
-// goods, nothing bought, no manual refresh; it refreshes at midnight.
+// goods, count the times each was bought today (once at most,
+// Goods.TYPE_MILITARY), no manual refresh; it refreshes at midnight.
 func (game *Game) handleMilitaryShop(client *connection.Client, req *protobuf.CS_18100) error {
 	now := time.Now()
 	next := nextDay(now)
+	purchases, err := shopPurchases(context.Background(), game.DB.Queries, client.CommanderID, now)
+	if err != nil {
+		return err
+	}
 	reply := &protobuf.SC_18101{
 		NextFlashTime: proto.Uint32(uint32(next.Unix())),
 	}
 	for _, id := range arenaShopGoods(arenaShop, client.CommanderID, next) {
-		reply.ArenaShopList = append(reply.ArenaShopList, &protobuf.ARENASHOP{ShopId: proto.Uint32(id)})
+		reply.ArenaShopList = append(reply.ArenaShopList, &protobuf.ARENASHOP{ShopId: proto.Uint32(id), Count: proto.Uint32(purchases[id])})
 	}
 	return client.Send(reply)
 }

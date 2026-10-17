@@ -12,8 +12,10 @@ import (
 
 // player_resource ids
 const (
-	ResourceGold = 1
-	ResourceOil  = 2
+	ResourceGold    = 1
+	ResourceOil     = 2
+	ResourceGem     = 4  // bought gems
+	ResourceFreeGem = 14 // gems earned in game
 )
 
 // item_data_statistics ids
@@ -47,6 +49,30 @@ func (tx *Tx) SpendResource(resourceID, amount uint32) error {
 		tx.event(TaskEvent{SubType: TaskSubSpendOil, Count: amount})
 	}
 	return err
+}
+
+// SpendShopResource pays amount of a price's player_resource. Gems, whichever
+// of the two the price names, come out of the free ones first, then the
+// bought ones, as Player:consume does (model/vo/player.lua).
+func (tx *Tx) SpendShopResource(resourceID, amount uint32) error {
+	if resourceID != ResourceGem && resourceID != ResourceFreeGem {
+		return tx.SpendResource(resourceID, amount)
+	}
+	rows, err := tx.ListResources(tx.ctx, tx.commanderID)
+	if err != nil {
+		return err
+	}
+	free := uint32(0)
+	for _, row := range rows {
+		if row.ResourceID == ResourceFreeGem {
+			free = row.Amount
+		}
+	}
+	fromFree := min(amount, free)
+	if err := tx.SpendResource(ResourceFreeGem, fromFree); err != nil {
+		return err
+	}
+	return tx.SpendResource(ResourceGem, amount-fromFree)
 }
 
 // AddItem puts count of an item in the commander's bag, which counts for

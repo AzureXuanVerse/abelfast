@@ -9,6 +9,20 @@ import (
 	"context"
 )
 
+const addCommanderBagMax = `-- name: AddCommanderBagMax :exec
+UPDATE commanders SET commander_bag_max = commander_bag_max + ? WHERE id = ?
+`
+
+type AddCommanderBagMaxParams struct {
+	CommanderBagMax uint32
+	ID              uint32
+}
+
+func (q *Queries) AddCommanderBagMax(ctx context.Context, arg AddCommanderBagMaxParams) error {
+	_, err := q.db.ExecContext(ctx, addCommanderBagMax, arg.CommanderBagMax, arg.ID)
+	return err
+}
+
 const addCommonFlag = `-- name: AddCommonFlag :exec
 INSERT INTO commander_common_flags (commander_id, flag_id) VALUES (?, ?) ON CONFLICT DO NOTHING
 `
@@ -20,6 +34,20 @@ type AddCommonFlagParams struct {
 
 func (q *Queries) AddCommonFlag(ctx context.Context, arg AddCommonFlagParams) error {
 	_, err := q.db.ExecContext(ctx, addCommonFlag, arg.CommanderID, arg.FlagID)
+	return err
+}
+
+const addEquipBagMax = `-- name: AddEquipBagMax :exec
+UPDATE commanders SET equip_bag_max = equip_bag_max + ? WHERE id = ?
+`
+
+type AddEquipBagMaxParams struct {
+	EquipBagMax uint32
+	ID          uint32
+}
+
+func (q *Queries) AddEquipBagMax(ctx context.Context, arg AddEquipBagMaxParams) error {
+	_, err := q.db.ExecContext(ctx, addEquipBagMax, arg.EquipBagMax, arg.ID)
 	return err
 }
 
@@ -36,6 +64,20 @@ type AddFurnitureParams struct {
 
 func (q *Queries) AddFurniture(ctx context.Context, arg AddFurnitureParams) error {
 	_, err := q.db.ExecContext(ctx, addFurniture, arg.CommanderID, arg.FurnitureID, arg.Count)
+	return err
+}
+
+const addShipBagMax = `-- name: AddShipBagMax :exec
+UPDATE commanders SET ship_bag_max = ship_bag_max + ? WHERE id = ?
+`
+
+type AddShipBagMaxParams struct {
+	ShipBagMax uint32
+	ID         uint32
+}
+
+func (q *Queries) AddShipBagMax(ctx context.Context, arg AddShipBagMaxParams) error {
+	_, err := q.db.ExecContext(ctx, addShipBagMax, arg.ShipBagMax, arg.ID)
 	return err
 }
 

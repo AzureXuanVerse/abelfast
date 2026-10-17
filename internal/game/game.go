@@ -108,6 +108,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleEmojiInfo)
 	packets.Handle(game.handleLimitChallenge)
 	packets.Handle(game.handleChargeList)
+	packets.Handle(game.handleShopping)
 	packets.Handle(game.handleMedalShop)
 	packets.Handle(game.handleShopStreet)
 	packets.Handle(game.handleMiniGameShop)

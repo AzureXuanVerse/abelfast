@@ -160,6 +160,20 @@ type CommanderShipGroup struct {
 	HeartFlag   uint32
 }
 
+type CommanderShopGroupPurchase struct {
+	CommanderID uint32
+	GroupID     uint32
+	ExpiresAt   int64
+	Count       uint32
+}
+
+type CommanderShopPurchase struct {
+	CommanderID uint32
+	ShopID      uint32
+	ExpiresAt   int64
+	Count       uint32
+}
+
 type CommanderStory struct {
 	CommanderID uint32
 	StoryID     uint32

@@ -21,6 +21,15 @@ UPDATE commanders SET new_guide_index = ? WHERE id = ?;
 -- name: SetChatRoom :exec
 UPDATE commanders SET chat_room_id = ? WHERE id = ?;
 
+-- name: AddShipBagMax :exec
+UPDATE commanders SET ship_bag_max = ship_bag_max + ? WHERE id = ?;
+
+-- name: AddEquipBagMax :exec
+UPDATE commanders SET equip_bag_max = equip_bag_max + ? WHERE id = ?;
+
+-- name: AddCommanderBagMax :exec
+UPDATE commanders SET commander_bag_max = commander_bag_max + ? WHERE id = ?;
+
 -- name: AddStory :exec
 INSERT INTO commander_stories (commander_id, story_id) VALUES (?, ?) ON CONFLICT DO NOTHING;
 

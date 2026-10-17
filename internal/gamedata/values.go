@@ -44,8 +44,9 @@ func IDs(raw json.RawMessage) []uint32 {
 }
 
 // Window is a time field like activity_template.time: "always", "stop", or
-// ["timer", [[y,m,d],[h,m,s]], [[y,m,d],[h,m,s]]] in server time. Anything
-// else decodes as never open.
+// ["timer", [[y,m,d],[h,m,s]], [[y,m,d],[h,m,s]]] in server time, the label
+// optional (shop_template.time is [start, end]; TimeMgr:inTime, mgr/timemgr.lua,
+// reads both). Anything else decodes as never open.
 type Window struct {
 	Always     bool
 	Start, End time.Time // zero without a timer
@@ -61,11 +62,18 @@ func (window *Window) UnmarshalJSON(raw []byte) error {
 		return nil
 	}
 	var timer []json.RawMessage
-	if json.Unmarshal(raw, &timer) != nil || len(timer) < 3 {
+	if json.Unmarshal(raw, &timer) != nil {
 		return nil
 	}
-	start, okStart := clock(timer[1])
-	end, okEnd := clock(timer[2])
+	var label string
+	if len(timer) > 0 && json.Unmarshal(timer[0], &label) == nil {
+		timer = timer[1:]
+	}
+	if len(timer) < 2 {
+		return nil
+	}
+	start, okStart := clock(timer[0])
+	end, okEnd := clock(timer[1])
 	if okStart && okEnd {
 		window.Start, window.End = start, end
 	}
