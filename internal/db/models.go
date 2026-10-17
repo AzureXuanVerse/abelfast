@@ -4,6 +4,25 @@
 
 package db
 
+type ChapterProgress struct {
+	CommanderID      uint32
+	ChapterID        uint32
+	Progress         uint32
+	KillBossCount    uint32
+	KillEnemyCount   uint32
+	TakeBoxCount     uint32
+	DefeatCount      uint32
+	TodayDefeatCount uint32
+	PassCount        uint32
+}
+
+type ChapterState struct {
+	CommanderID uint32
+	ChapterID   uint32
+	State       []byte
+	Ambushed    string
+}
+
 type Commander struct {
 	ID            uint32
 	AccountID     uint32
@@ -12,6 +31,13 @@ type Commander struct {
 	RegisteredAt  int64
 	GuideIndex    uint32
 	NewGuideIndex uint32
+}
+
+type CommanderCommission struct {
+	CommanderID  uint32
+	CollectionID uint32
+	FinishTime   uint32
+	OverTime     uint32
 }
 
 type CommanderItem struct {
@@ -29,6 +55,19 @@ type CommanderResource struct {
 type CommanderStory struct {
 	CommanderID uint32
 	StoryID     uint32
+}
+
+type Fleet struct {
+	CommanderID uint32
+	FleetID     uint32
+	Name        string
+}
+
+type FleetShip struct {
+	CommanderID uint32
+	FleetID     uint32
+	Position    uint32
+	ShipID      uint32
 }
 
 type Setting struct {
