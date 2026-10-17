@@ -80,6 +80,11 @@ type CommanderCommission struct {
 	OverTime     uint32
 }
 
+type CommanderCommonFlag struct {
+	CommanderID uint32
+	FlagID      uint32
+}
+
 type CommanderEquipment struct {
 	CommanderID uint32
 	EquipID     uint32

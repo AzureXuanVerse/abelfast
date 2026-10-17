@@ -96,6 +96,10 @@ func (game *Game) playerInfo(ctx context.Context, commander db.Commander, ships 
 	if err != nil {
 		return nil, err
 	}
+	flags, err := game.DB.ListCommonFlags(ctx, commander.ID)
+	if err != nil {
+		return nil, err
+	}
 	resources, err := game.DB.ListResources(ctx, commander.ID)
 	if err != nil {
 		return nil, err
@@ -129,6 +133,7 @@ func (game *Game) playerInfo(ctx context.Context, commander db.Commander, ships 
 		BattleUi:        proto.Uint32(0), // item_data_battleui "Standard"
 		NewGuideIndex:   proto.Uint32(commander.NewGuideIndex),
 		StoryList:       stories,
+		FlagList:        flags,
 	}, nil
 }
 

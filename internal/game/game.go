@@ -50,6 +50,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleDormPopEvents)
 	packets.Handle(game.handleGuideIndex)
 	packets.Handle(game.handleStoryRead)
+	packets.Handle(game.handleCommonFlag)
 	packets.Handle(game.handleSecondaryPassword)
 	packets.Handle(game.handleChangeChatRoom)
 	packets.Handle(game.handleClientReport)

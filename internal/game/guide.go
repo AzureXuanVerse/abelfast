@@ -25,3 +25,13 @@ func (game *Game) handleStoryRead(client *connection.Client, req *protobuf.CS_11
 	}
 	return client.Send(&protobuf.SC_11018{Result: result(nil)})
 }
+
+// handleCommonFlag records a one-time client flag (UpdateCommonFlagCommand),
+// e.g. GAME_RESTOREVIEW_ALREADY once the first Elite or better ship asked for
+// a store review; it comes back in SC_11003.flag_list.
+func (game *Game) handleCommonFlag(client *connection.Client, req *protobuf.CS_11019) error {
+	if err := game.DB.AddCommonFlag(context.Background(), db.AddCommonFlagParams{CommanderID: client.CommanderID, FlagID: req.GetFlagId()}); err != nil {
+		return err
+	}
+	return client.Send(&protobuf.SC_11020{Result: result(nil)})
+}

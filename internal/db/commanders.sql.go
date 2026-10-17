@@ -9,6 +9,20 @@ import (
 	"context"
 )
 
+const addCommonFlag = `-- name: AddCommonFlag :exec
+INSERT INTO commander_common_flags (commander_id, flag_id) VALUES (?, ?) ON CONFLICT DO NOTHING
+`
+
+type AddCommonFlagParams struct {
+	CommanderID uint32
+	FlagID      uint32
+}
+
+func (q *Queries) AddCommonFlag(ctx context.Context, arg AddCommonFlagParams) error {
+	_, err := q.db.ExecContext(ctx, addCommonFlag, arg.CommanderID, arg.FlagID)
+	return err
+}
+
 const addFurniture = `-- name: AddFurniture :exec
 INSERT INTO commander_furniture (commander_id, furniture_id, count) VALUES (?, ?, ?)
 ON CONFLICT (commander_id, furniture_id) DO UPDATE SET count = count + excluded.count
@@ -146,6 +160,33 @@ func (q *Queries) GetCommanderByAccount(ctx context.Context, accountID uint32) (
 		&i.Manifesto,
 	)
 	return i, err
+}
+
+const listCommonFlags = `-- name: ListCommonFlags :many
+SELECT flag_id FROM commander_common_flags WHERE commander_id = ? ORDER BY flag_id
+`
+
+func (q *Queries) ListCommonFlags(ctx context.Context, commanderID uint32) ([]uint32, error) {
+	rows, err := q.db.QueryContext(ctx, listCommonFlags, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uint32
+	for rows.Next() {
+		var flag_id uint32
+		if err := rows.Scan(&flag_id); err != nil {
+			return nil, err
+		}
+		items = append(items, flag_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listFurniture = `-- name: ListFurniture :many

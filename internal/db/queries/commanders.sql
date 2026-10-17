@@ -27,6 +27,12 @@ INSERT INTO commander_stories (commander_id, story_id) VALUES (?, ?) ON CONFLICT
 -- name: ListStories :many
 SELECT story_id FROM commander_stories WHERE commander_id = ? ORDER BY story_id;
 
+-- name: AddCommonFlag :exec
+INSERT INTO commander_common_flags (commander_id, flag_id) VALUES (?, ?) ON CONFLICT DO NOTHING;
+
+-- name: ListCommonFlags :many
+SELECT flag_id FROM commander_common_flags WHERE commander_id = ? ORDER BY flag_id;
+
 -- name: ListSecretaries :many
 SELECT * FROM commander_secretaries WHERE commander_id = ? ORDER BY position;
 
