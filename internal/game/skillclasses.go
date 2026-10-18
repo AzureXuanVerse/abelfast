@@ -208,8 +208,8 @@ func navalAcademy(ctx context.Context, queries *db.Queries, commander db.Command
 		return nil, err
 	}
 	msg := &protobuf.SC_22001{
-		OilWellLevel:       proto.Uint32(1),
-		GoldWellLevel:      proto.Uint32(1),
+		OilWellLevel:       proto.Uint32(commander.OilFieldLevel),
+		GoldWellLevel:      proto.Uint32(commander.GoldFieldLevel),
 		ClassLv:            proto.Uint32(1),
 		SkillClassList:     make([]*protobuf.SKILL_CLASS, len(classes)),
 		SkillClassNum:      proto.Uint32(commander.SkillClassNum),

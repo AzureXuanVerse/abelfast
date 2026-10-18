@@ -109,7 +109,7 @@ func (q *Queries) CountCommanders(ctx context.Context) (int64, error) {
 const createCommander = `-- name: CreateCommander :one
 INSERT INTO commanders (account_id, name, starter_ship, registered_at)
 VALUES (?, ?, ?, ?)
-RETURNING id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, resource_field_at
+RETURNING id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, oil_field_at, gold_field_at, oil_field_level, gold_field_level
 `
 
 type CreateCommanderParams struct {
@@ -148,7 +148,10 @@ func (q *Queries) CreateCommander(ctx context.Context, arg CreateCommanderParams
 		&i.SkillClassNum,
 		&i.QuickFinishDay,
 		&i.QuickFinishes,
-		&i.ResourceFieldAt,
+		&i.OilFieldAt,
+		&i.GoldFieldAt,
+		&i.OilFieldLevel,
+		&i.GoldFieldLevel,
 	)
 	return i, err
 }
@@ -163,7 +166,7 @@ func (q *Queries) DeleteSecretaries(ctx context.Context, commanderID uint32) err
 }
 
 const getCommander = `-- name: GetCommander :one
-SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, resource_field_at FROM commanders WHERE id = ?
+SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, oil_field_at, gold_field_at, oil_field_level, gold_field_level FROM commanders WHERE id = ?
 `
 
 func (q *Queries) GetCommander(ctx context.Context, id uint32) (Commander, error) {
@@ -190,13 +193,16 @@ func (q *Queries) GetCommander(ctx context.Context, id uint32) (Commander, error
 		&i.SkillClassNum,
 		&i.QuickFinishDay,
 		&i.QuickFinishes,
-		&i.ResourceFieldAt,
+		&i.OilFieldAt,
+		&i.GoldFieldAt,
+		&i.OilFieldLevel,
+		&i.GoldFieldLevel,
 	)
 	return i, err
 }
 
 const getCommanderByAccount = `-- name: GetCommanderByAccount :one
-SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, resource_field_at FROM commanders WHERE account_id = ?
+SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, oil_field_at, gold_field_at, oil_field_level, gold_field_level FROM commanders WHERE account_id = ?
 `
 
 func (q *Queries) GetCommanderByAccount(ctx context.Context, accountID uint32) (Commander, error) {
@@ -223,7 +229,10 @@ func (q *Queries) GetCommanderByAccount(ctx context.Context, accountID uint32) (
 		&i.SkillClassNum,
 		&i.QuickFinishDay,
 		&i.QuickFinishes,
-		&i.ResourceFieldAt,
+		&i.OilFieldAt,
+		&i.GoldFieldAt,
+		&i.OilFieldLevel,
+		&i.GoldFieldLevel,
 	)
 	return i, err
 }
@@ -389,6 +398,20 @@ func (q *Queries) SetDormFood(ctx context.Context, arg SetDormFoodParams) error 
 	return err
 }
 
+const setGoldFieldAt = `-- name: SetGoldFieldAt :exec
+UPDATE commanders SET gold_field_at = ? WHERE id = ?
+`
+
+type SetGoldFieldAtParams struct {
+	GoldFieldAt int64
+	ID          uint32
+}
+
+func (q *Queries) SetGoldFieldAt(ctx context.Context, arg SetGoldFieldAtParams) error {
+	_, err := q.db.ExecContext(ctx, setGoldFieldAt, arg.GoldFieldAt, arg.ID)
+	return err
+}
+
 const setGuideIndex = `-- name: SetGuideIndex :exec
 UPDATE commanders SET guide_index = ? WHERE id = ?
 `
@@ -431,17 +454,17 @@ func (q *Queries) SetNewGuideIndex(ctx context.Context, arg SetNewGuideIndexPara
 	return err
 }
 
-const setResourceFieldAt = `-- name: SetResourceFieldAt :exec
-UPDATE commanders SET resource_field_at = ? WHERE id = ?
+const setOilFieldAt = `-- name: SetOilFieldAt :exec
+UPDATE commanders SET oil_field_at = ? WHERE id = ?
 `
 
-type SetResourceFieldAtParams struct {
-	ResourceFieldAt int64
-	ID              uint32
+type SetOilFieldAtParams struct {
+	OilFieldAt int64
+	ID         uint32
 }
 
-func (q *Queries) SetResourceFieldAt(ctx context.Context, arg SetResourceFieldAtParams) error {
-	_, err := q.db.ExecContext(ctx, setResourceFieldAt, arg.ResourceFieldAt, arg.ID)
+func (q *Queries) SetOilFieldAt(ctx context.Context, arg SetOilFieldAtParams) error {
+	_, err := q.db.ExecContext(ctx, setOilFieldAt, arg.OilFieldAt, arg.ID)
 	return err
 }
 

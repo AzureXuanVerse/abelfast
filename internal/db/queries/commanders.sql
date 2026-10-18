@@ -68,5 +68,8 @@ UPDATE commanders SET mail_storeroom_lv = ? WHERE id = ?;
 -- name: SetCommanderExp :exec
 UPDATE commanders SET level = ?, exp = ? WHERE id = ?;
 
--- name: SetResourceFieldAt :exec
-UPDATE commanders SET resource_field_at = ? WHERE id = ?;
+-- name: SetOilFieldAt :exec
+UPDATE commanders SET oil_field_at = ? WHERE id = ?;
+
+-- name: SetGoldFieldAt :exec
+UPDATE commanders SET gold_field_at = ? WHERE id = ?;

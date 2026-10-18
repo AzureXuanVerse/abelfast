@@ -58,7 +58,10 @@ type Commander struct {
 	SkillClassNum   uint32
 	QuickFinishDay  int64
 	QuickFinishes   uint32
-	ResourceFieldAt int64
+	OilFieldAt      int64
+	GoldFieldAt     int64
+	OilFieldLevel   uint32
+	GoldFieldLevel  uint32
 }
 
 type CommanderActivity struct {
