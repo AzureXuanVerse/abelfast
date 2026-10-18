@@ -161,7 +161,7 @@ func bag(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobu
 }
 
 // equipmentDepot is SC_14001, EquipmentProxy's equipment not on a ship
-// (Equipment.New keyed by template id), no augments.
+// (Equipment.New keyed by template id) and augments no ship wears.
 func equipmentDepot(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobuf.SC_14001, error) {
 	rows, err := queries.ListEquipments(ctx, commanderID)
 	if err != nil {
@@ -173,6 +173,9 @@ func equipmentDepot(ctx context.Context, queries *db.Queries, commanderID uint32
 	}
 	for i, row := range rows {
 		msg.EquipList[i] = &protobuf.EQUIPINFO{Id: proto.Uint32(row.EquipID), Count: proto.Uint32(row.Count)}
+	}
+	if msg.SpweaponList, err = bagSpWeapons(ctx, queries, commanderID); err != nil {
+		return nil, err
 	}
 	return msg, nil
 }

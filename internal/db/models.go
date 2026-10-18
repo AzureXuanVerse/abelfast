@@ -865,8 +865,24 @@ type ShipSkill struct {
 	Exp     uint32
 }
 
+type ShipSpweapon struct {
+	ShipID     uint32
+	SpweaponID uint32
+}
+
 type ShipStrength struct {
 	ShipID uint32
 	AttrID uint32
 	Exp    uint32
+}
+
+type Spweapon struct {
+	ID          uint32
+	CommanderID uint32
+	TemplateID  uint32
+	Attr1       uint32
+	Attr2       uint32
+	AttrTemp1   uint32
+	AttrTemp2   uint32
+	Pt          uint32
 }

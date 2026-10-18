@@ -148,7 +148,7 @@ func fullShipInfo(ship db.Ship, equips []db.ShipEquipment, skills []db.ShipSkill
 }
 
 // shipList is SC_12001, BayProxy's ships: the SHIPINFO of each of ships
-// (the commander's, by id) with their slots and skills.
+// (the commander's, by id) with their slots, skills and augments.
 func shipList(ctx context.Context, queries *db.Queries, commanderID uint32, ships []db.Ship) (*protobuf.SC_12001, error) {
 	equips, err := queries.ListShipEquipmentsByCommander(ctx, commanderID)
 	if err != nil {
@@ -178,6 +178,9 @@ func shipList(ctx context.Context, queries *db.Queries, commanderID uint32, ship
 	for i, ship := range ships {
 		msg.Shiplist[i] = fullShipInfo(ship, equipsByShip[ship.ID], skillsByShip[ship.ID])
 		msg.Shiplist[i].StrengthList = strengthInfo(strengthsByShip[ship.ID])
+	}
+	if err := setShipSpWeapons(ctx, queries, commanderID, msg.Shiplist); err != nil {
+		return nil, err
 	}
 	return msg, nil
 }
