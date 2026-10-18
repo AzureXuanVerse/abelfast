@@ -80,3 +80,18 @@ SELECT * FROM meowfficer_presets WHERE commander_id = ? ORDER BY preset_id;
 
 -- name: ListMeowfficerPresetSlots :many
 SELECT preset_id, pos, meowfficer_id FROM meowfficer_preset_slots WHERE commander_id = ? ORDER BY preset_id, pos;
+
+-- name: SetMeowfficerLocked :exec
+UPDATE meowfficers SET locked = ? WHERE commander_id = ? AND id = ?;
+
+-- name: RenameMeowfficer :exec
+UPDATE meowfficers SET name = ?, rename_time = ? WHERE commander_id = ? AND id = ?;
+
+-- name: SetMeowfficerSkill :exec
+UPDATE meowfficers SET skill_id = ?, skill_exp = ? WHERE commander_id = ? AND id = ?;
+
+-- name: DeleteMeowfficer :exec
+DELETE FROM meowfficers WHERE commander_id = ? AND id = ?;
+
+-- name: DeleteMeowfficerFromPresets :exec
+DELETE FROM meowfficer_preset_slots WHERE commander_id = ? AND meowfficer_id = ?;

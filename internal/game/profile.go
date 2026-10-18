@@ -82,7 +82,12 @@ func cooldowns(ctx context.Context, queries *db.Queries, commanderID uint32) ([]
 // validName mirrors what the client checks before sending a commander name:
 // not empty, no spaces (spece_illegal_tip), at most maxNameLength characters.
 func validName(name string) bool {
-	return name != "" && utf8.ValidString(name) && utf8.RuneCountInString(name) <= maxNameLength &&
+	return validNameUpTo(name, maxNameLength)
+}
+
+// validNameUpTo is validName with an upper bound of maxLength characters.
+func validNameUpTo(name string, maxLength int) bool {
+	return name != "" && utf8.ValidString(name) && utf8.RuneCountInString(name) <= maxLength &&
 		!strings.ContainsFunc(name, unicode.IsSpace)
 }
 

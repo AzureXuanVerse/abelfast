@@ -116,6 +116,20 @@ func (q *Queries) CreateMeowfficerState(ctx context.Context, commanderID uint32)
 	return err
 }
 
+const deleteMeowfficer = `-- name: DeleteMeowfficer :exec
+DELETE FROM meowfficers WHERE commander_id = ? AND id = ?
+`
+
+type DeleteMeowfficerParams struct {
+	CommanderID uint32
+	ID          uint32
+}
+
+func (q *Queries) DeleteMeowfficer(ctx context.Context, arg DeleteMeowfficerParams) error {
+	_, err := q.db.ExecContext(ctx, deleteMeowfficer, arg.CommanderID, arg.ID)
+	return err
+}
+
 const deleteMeowfficerBox = `-- name: DeleteMeowfficerBox :exec
 DELETE FROM meowfficer_boxes WHERE commander_id = ? AND box_id = ?
 `
@@ -127,6 +141,20 @@ type DeleteMeowfficerBoxParams struct {
 
 func (q *Queries) DeleteMeowfficerBox(ctx context.Context, arg DeleteMeowfficerBoxParams) error {
 	_, err := q.db.ExecContext(ctx, deleteMeowfficerBox, arg.CommanderID, arg.BoxID)
+	return err
+}
+
+const deleteMeowfficerFromPresets = `-- name: DeleteMeowfficerFromPresets :exec
+DELETE FROM meowfficer_preset_slots WHERE commander_id = ? AND meowfficer_id = ?
+`
+
+type DeleteMeowfficerFromPresetsParams struct {
+	CommanderID  uint32
+	MeowfficerID uint32
+}
+
+func (q *Queries) DeleteMeowfficerFromPresets(ctx context.Context, arg DeleteMeowfficerFromPresetsParams) error {
+	_, err := q.db.ExecContext(ctx, deleteMeowfficerFromPresets, arg.CommanderID, arg.MeowfficerID)
 	return err
 }
 
@@ -393,6 +421,27 @@ func (q *Queries) ListMeowfficers(ctx context.Context, commanderID uint32) ([]Me
 	return items, nil
 }
 
+const renameMeowfficer = `-- name: RenameMeowfficer :exec
+UPDATE meowfficers SET name = ?, rename_time = ? WHERE commander_id = ? AND id = ?
+`
+
+type RenameMeowfficerParams struct {
+	Name        string
+	RenameTime  int64
+	CommanderID uint32
+	ID          uint32
+}
+
+func (q *Queries) RenameMeowfficer(ctx context.Context, arg RenameMeowfficerParams) error {
+	_, err := q.db.ExecContext(ctx, renameMeowfficer,
+		arg.Name,
+		arg.RenameTime,
+		arg.CommanderID,
+		arg.ID,
+	)
+	return err
+}
+
 const saveMeowfficerCattery = `-- name: SaveMeowfficerCattery :exec
 INSERT INTO meowfficer_catteries (commander_id, slot_id, meowfficer_id, style, exp_time, clean_time, feed_time, play_time)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -561,6 +610,21 @@ func (q *Queries) SetMeowfficerLevel(ctx context.Context, arg SetMeowfficerLevel
 	return err
 }
 
+const setMeowfficerLocked = `-- name: SetMeowfficerLocked :exec
+UPDATE meowfficers SET locked = ? WHERE commander_id = ? AND id = ?
+`
+
+type SetMeowfficerLockedParams struct {
+	Locked      bool
+	CommanderID uint32
+	ID          uint32
+}
+
+func (q *Queries) SetMeowfficerLocked(ctx context.Context, arg SetMeowfficerLockedParams) error {
+	_, err := q.db.ExecContext(ctx, setMeowfficerLocked, arg.Locked, arg.CommanderID, arg.ID)
+	return err
+}
+
 const setMeowfficerReserve = `-- name: SetMeowfficerReserve :exec
 UPDATE meowfficer_states SET reserve_count = ?, reserve_day = ?, reserve_total = ?
 WHERE commander_id = ?
@@ -579,6 +643,27 @@ func (q *Queries) SetMeowfficerReserve(ctx context.Context, arg SetMeowfficerRes
 		arg.ReserveDay,
 		arg.ReserveTotal,
 		arg.CommanderID,
+	)
+	return err
+}
+
+const setMeowfficerSkill = `-- name: SetMeowfficerSkill :exec
+UPDATE meowfficers SET skill_id = ?, skill_exp = ? WHERE commander_id = ? AND id = ?
+`
+
+type SetMeowfficerSkillParams struct {
+	SkillID     uint32
+	SkillExp    uint32
+	CommanderID uint32
+	ID          uint32
+}
+
+func (q *Queries) SetMeowfficerSkill(ctx context.Context, arg SetMeowfficerSkillParams) error {
+	_, err := q.db.ExecContext(ctx, setMeowfficerSkill,
+		arg.SkillID,
+		arg.SkillExp,
+		arg.CommanderID,
+		arg.ID,
 	)
 	return err
 }

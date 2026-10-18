@@ -33,5 +33,6 @@ func loadGameData() error {
 		loadMonthShops,
 		loadResourceFields,
 		loadMeowfficerData,
+		loadMeowfficerManageData,
 	)
 }
