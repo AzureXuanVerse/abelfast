@@ -637,36 +637,32 @@ func (game *Game) handleGuildBuySupply(client *connection.Client, req *protobuf.
 	return client.Send(&protobuf.SC_62008{Result: result(err)})
 }
 
-// guildSupplyCount is Guild.getSupplyCnt: the days of supplies the member
-// can collect, from the running purchase and the previous one, since it
-// last collected or joined, at most guild_award_max. Its first branch is
-// read as "never collected during this purchase" (the decompiled
-// expression always takes the second).
+// guildSupplyCount is the days of supplies the member can collect (at most
+// guild_award_max): one per server day a purchase ran, the running one's and
+// the previous one's, from the member's join day, after the day it last
+// collected (benefitTime, that day's midnight). Guild.getSupplyCnt counts
+// the same spans in seconds and, as the client stores the collection day's
+// midnight, offers the day a purchase began twice; counting days doesn't.
 func guildSupplyCount(logistics db.GuildLogistic, member db.GuildMember, benefitTime uint32, now time.Time) uint32 {
-	const day = 86400
-	ceilDays := func(seconds int64) int64 { return (seconds + day - 1) / day }
-	current := now.Unix()
-	end := current
-	if logistics.BenefitFinishTime > 0 {
-		end = min(int64(logistics.BenefitFinishTime), current)
+	today := startOfDay(now).Unix()
+	from := startOfDay(time.Unix(int64(member.JoinTime), 0)).Unix()
+	if benefitTime > 0 {
+		from = max(from, startOfDay(time.Unix(int64(benefitTime), 0)).AddDate(0, 0, 1).Unix())
 	}
-	joinZero := startOfDay(time.Unix(int64(member.JoinTime), 0)).Unix()
-	start := max(int64(logistics.BenefitFinishTime)-int64(guildSupplyDuration)+1, joinZero)
-	benefit := int64(benefitTime)
-	var count int64
-	if benefit == 0 || benefit < start {
-		count = ceilDays(end - start)
-	} else {
-		count = max(0, end-benefit) / day
-	}
-	if last := int64(logistics.LastBenefitFinishTime); last > 0 && benefit < last && joinZero <= last {
-		from := benefit
-		if benefit <= 0 {
-			from = joinZero
+	// days of a purchase that ended at finish (or runs until it)
+	days := func(finish uint32) int64 {
+		if finish == 0 {
+			return 0
 		}
-		count += ceilDays(last - from)
+		first := max(from, startOfDay(time.Unix(int64(finish)-int64(guildSupplyDuration), 0)).Unix())
+		last := min(today, startOfDay(time.Unix(int64(finish)-1, 0)).Unix())
+		if last < first {
+			return 0
+		}
+		return int64(time.Unix(last, 0).Sub(time.Unix(first, 0)).Round(time.Hour)/(24*time.Hour)) + 1
 	}
-	return uint32(min(max(count, 0), int64(guildSupplyMax)))
+	count := days(logistics.BenefitFinishTime) + days(logistics.LastBenefitFinishTime)
+	return uint32(min(count, int64(guildSupplyMax)))
 }
 
 // handleGuildSupplyAward answers GuildGetSupplyAwardCommand (CS_62009): the
