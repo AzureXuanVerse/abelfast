@@ -49,6 +49,7 @@ func loadGuildData() error {
 	for _, load := range []func() error{
 		loadGuildShop,
 		loadGuildTechData,
+		loadGuildAssaultData,
 	} {
 		if err := load(); err != nil {
 			return err

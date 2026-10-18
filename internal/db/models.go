@@ -500,6 +500,14 @@ type Guild struct {
 	CreatedAt       uint32
 }
 
+type GuildAssaultShip struct {
+	CommanderID uint32
+	Pos         uint32
+	ShipID      uint32
+	Recommended bool
+	ChangedAt   uint32
+}
+
 type GuildChat struct {
 	ID          uint32
 	GuildID     uint32

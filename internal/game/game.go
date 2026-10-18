@@ -114,6 +114,11 @@ func (game *Game) Register() {
 	packets.Handle(game.handleGuildShopPurchase)
 	packets.Handle(game.handleGuildSendMsg)
 	packets.Handle(game.handleGuildChatList)
+	packets.Handle(game.handleGuildUpdateAssaultFleet)
+	packets.Handle(game.handleMyGuildAssaultFleet)
+	packets.Handle(game.handleGuildAssaultFleets)
+	packets.Handle(game.handleGuildRecommendAssaultShip)
+	packets.Handle(game.handleGuildRecommendedShips)
 	// ships, builds and inventory
 	packets.Handle(game.handleBuildShip)
 	packets.Handle(game.handleBuildQuickFinish)
