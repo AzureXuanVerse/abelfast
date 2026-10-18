@@ -54,6 +54,9 @@ type shipStatisticsConfig struct {
 	Attrs            []float64 `json:"attrs"`
 	AttrsGrowth      []float64 `json:"attrs_growth"`
 	AttrsGrowthExtra []float64 `json:"attrs_growth_extra"`
+
+	// the usage_favorability gifts it dislikes (giftDislikes)
+	GiftDislike json.RawMessage `json:"gift_dislike"`
 }
 
 // AttributeType.Dodge, and its index in Ship.PROPERTIES (the 9th)
@@ -542,6 +545,7 @@ func loadShipData() error {
 	}
 	readItemUses(items, techPackGear(equips, equipStats), gametip)
 	readLessonBooks(items)
+	readGiftDislikes(stats)
 	equipIDs = make(map[uint32]bool, len(equips))
 	equipReturns = make(map[uint32]equipReturn, len(equips))
 	for id, equip := range equips {

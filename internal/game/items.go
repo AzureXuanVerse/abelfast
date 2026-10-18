@@ -20,8 +20,10 @@ import (
 
 // item_data_statistics usage (ItemUsage, model/const/itemusage.lua) of the
 // items belfast opens. The others change state belfast doesn't keep yet
-// (skin selections, random skins, skin trials and discounts, ship affection
-// gifts, the guild, commander boxes, remastered chapters) and are refused.
+// (skin selections, random skins, skin trials and discounts, the guild,
+// commander boxes, remastered chapters) and are refused. Skill books,
+// augment module stones and combat logistics plans are spent by their own
+// packets, never through CS_15002 (UseItemCommand asserts on them).
 const (
 	usageDrop          = "usage_drop"
 	usageDropTemplate  = "usgae_drop_template" // sic
@@ -29,6 +31,7 @@ const (
 	usageInvitation    = "usage_invitation"
 	usageFood          = "usage_food"
 	usageDormLvUp      = "usage_dorm_lv_up"
+	usageShipGift      = "usage_favorability"
 )
 
 // itemUseConfig is what item_data_statistics says about using an item.
@@ -63,6 +66,8 @@ type itemUse struct {
 	invitations []uint32
 	// usage_food: the food one item adds to the backyard (AddFoodCommand)
 	food uint32
+	// usage_favorability: the affection one gift gives (giveShipGift)
+	affection uint32
 }
 
 var itemUses map[uint32]itemUse
@@ -283,6 +288,8 @@ func readItemUses(items map[uint32]itemConfig, gear []packGear, gametip map[stri
 			if food := gamedata.IDs(row.UsageArg); len(food) > 0 {
 				use.food = food[0]
 			}
+		case usageShipGift:
+			use.affection = readShipGift(row.UsageArg)
 		}
 		itemUses[id] = use
 	}
@@ -403,6 +410,9 @@ func (tx *Tx) useItem(id, count uint32, arg []uint32) ([]*protobuf.DROPINFO, err
 			return nil, err
 		}
 		return nil, tx.expandDorm()
+	case usageShipGift:
+		// arg is the ship given to
+		return nil, tx.giveShipGift(id, count, use.affection, arg)
 	default:
 		return nil, errRefused
 	}
