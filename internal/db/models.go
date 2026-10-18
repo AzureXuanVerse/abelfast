@@ -508,6 +508,23 @@ type GuildAssaultShip struct {
 	ChangedAt   uint32
 }
 
+type GuildBossFleetMeowfficer struct {
+	OperationID  uint32
+	CommanderID  uint32
+	FleetID      uint32
+	Pos          uint32
+	MeowfficerID uint32
+}
+
+type GuildBossFleetShip struct {
+	OperationID uint32
+	CommanderID uint32
+	FleetID     uint32
+	Slot        uint32
+	UserID      uint32
+	ShipID      uint32
+}
+
 type GuildCapitalLog struct {
 	ID          uint32
 	GuildID     uint32
@@ -556,6 +573,71 @@ type GuildMember struct {
 	JoinTime    uint32
 }
 
+type GuildOperation struct {
+	ID          uint32
+	GuildID     uint32
+	OperationID uint32
+	StartTime   uint32
+	EndTime     uint32
+	BossID      uint32
+	BossHp      uint32
+	BossDamage  uint32
+	BossActive  bool
+	Ended       bool
+}
+
+type GuildOperationMember struct {
+	OperationID  uint32
+	CommanderID  uint32
+	JoinedAt     uint32
+	Extra        bool
+	BossDay      uint32
+	BossCount    uint32
+	BossDamage   uint32
+	BossBattleAt uint32
+}
+
+type GuildOperationMission struct {
+	OperationID uint32
+	EventID     uint32
+	Position    uint32
+	StartTime   uint32
+	Work        float64
+	UpdatedAt   uint32
+	Efficiency  uint32
+	FinishedAt  uint32
+	Score       uint32
+}
+
+type GuildOperationNode struct {
+	OperationID uint32
+	EventID     uint32
+	Position    uint32
+	NodeID      uint32
+	Status      uint32
+}
+
+type GuildOperationPerf struct {
+	OperationID uint32
+	CommanderID uint32
+	EventID     uint32
+	Idx         uint32
+}
+
+type GuildOperationShip struct {
+	OperationID  uint32
+	EventID      uint32
+	CommanderID  uint32
+	Fleet        uint32
+	Slot         uint32
+	ShipID       uint32
+	TemplateID   uint32
+	SkinID       uint32
+	Level        uint32
+	Efficiency   uint32
+	DispatchedAt uint32
+}
+
 type GuildRankScore struct {
 	GuildID     uint32
 	CommanderID uint32
@@ -565,6 +647,22 @@ type GuildRankScore struct {
 	MonthStart  uint32
 	Month       uint32
 	Total       uint32
+}
+
+type GuildReport struct {
+	ID          uint32
+	GuildID     uint32
+	OperationID uint32
+	EventID     uint32
+	EventType   uint32
+	Score       uint32
+	Time        uint32
+}
+
+type GuildReportClaim struct {
+	ReportID    uint32
+	CommanderID uint32
+	Status      uint32
 }
 
 type GuildRequest struct {

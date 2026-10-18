@@ -51,6 +51,7 @@ func loadGuildData() error {
 		loadGuildTechData,
 		loadGuildAssaultData,
 		loadGuildLogisticsData,
+		loadGuildEventData,
 	} {
 		if err := load(); err != nil {
 			return err

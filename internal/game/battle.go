@@ -63,6 +63,9 @@ func (game *Game) handleBeginStage(client *connection.Client, req *protobuf.CS_4
 	if req.GetSystem() == systemDuel {
 		return game.beginDuel(client, req)
 	}
+	if req.GetSystem() == systemGuild {
+		return game.beginGuildBoss(client, req)
+	}
 	if req.GetSystem() == systemScenario {
 		session, err := loadChapter(ctx, game.DB.Queries, client.CommanderID)
 		if err != nil {
@@ -139,6 +142,9 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 	ctx := context.Background()
 	if req.GetSystem() == systemDuel {
 		return game.finishDuel(client, req)
+	}
+	if req.GetSystem() == systemGuild {
+		return game.finishGuildBoss(client, req)
 	}
 	if req.GetSystem() == systemRoutine || req.GetSystem() == systemSubRoutine {
 		return game.finishDaily(client, req)

@@ -93,16 +93,23 @@ func guildRecommendedShips(ctx context.Context, queries *db.Queries, guildID uin
 // result 0 the client starts each position's cooldown at its own clock and
 // takes the fleet it sent; a position still cooling down, a ship that isn't
 // the commander's or the same ship at both positions is refused. The client
-// also refuses while the guild's boss battle is on
+// refuses while the commander fights the guild boss, as belfast does
 // (guild_formation_erro_in_boss_battle). Built from the Lua alone.
 func (game *Game) handleGuildUpdateAssaultFleet(client *connection.Client, req *protobuf.CS_61003) error {
 	ctx := context.Background()
 	err := game.tx(ctx, client, func(tx *Tx) error {
-		_, ok, err := guildMembership(ctx, tx.Queries, client.CommanderID)
+		member, ok, err := guildMembership(ctx, tx.Queries, client.CommanderID)
 		if err != nil {
 			return err
 		}
 		if !ok || len(req.GetShipIds()) == 0 {
+			return errRefused
+		}
+		fighting, err := guildBossBattleOngoing(ctx, tx.Queries, member.GuildID, client.CommanderID)
+		if err != nil {
+			return err
+		}
+		if fighting {
 			return errRefused
 		}
 		rows, err := tx.ListGuildAssaultShips(ctx, client.CommanderID)
