@@ -441,6 +441,9 @@ func loadShipData() error {
 		row.defaultSkin = stat.SkinID
 		shipTemplates[id] = row
 	}
+	if err := loadRequisitions(groups); err != nil {
+		return err
+	}
 	retireGold = make(map[uint32]uint32, len(shipTypes))
 	shipTeams = make(map[uint32]string, len(shipTypes))
 	for id, row := range shipTypes {
