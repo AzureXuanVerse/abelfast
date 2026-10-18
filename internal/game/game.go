@@ -177,6 +177,8 @@ func (game *Game) Register() {
 	packets.Handle(game.handleRivalInfo)
 	packets.Handle(game.handleMilitaryShop)
 	packets.Handle(game.handleRefreshMilitaryShop)
+	packets.Handle(game.handleRankPage)
+	packets.Handle(game.handleRankSelf)
 	packets.Handle(game.handleSkinPreviewUsage)
 	packets.Handle(game.handleEducate)
 	packets.Handle(game.handleNewEducate)

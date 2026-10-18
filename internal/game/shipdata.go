@@ -129,6 +129,7 @@ type equipEvasion struct {
 type shipGroupConfig struct {
 	GroupType    uint32          `json:"group_type"`
 	HandbookType uint32          `json:"handbook_type"`
+	Nationality  uint32          `json:"nationality"`
 	Description  json.RawMessage `json:"description"`
 	// the other groups whose skins the group can wear (ShipSkin.IsShareSkin)
 	ShareGroupID []uint32 `json:"share_group_id"`
@@ -326,6 +327,9 @@ var (
 	// (CollectionProxy) build a ShipGroup from that table for every group
 	// SC_17001 lists, so activity NPC ships (no row) stay out of it
 	archiveGroups map[uint32]bool
+	// rankedGroups are the archive groups CollectionProxy:getCollectionCount
+	// counts: not collaborations (nationality above Nation.LINK)
+	rankedGroups map[uint32]bool
 	// ship_data_group share_group_id by group_type
 	shareGroups map[uint32][]uint32
 	// gameset urpt_chapter_max: [limit counter id, cap] of the Specialized
@@ -436,8 +440,10 @@ func loadShipData() error {
 	blueprints := map[uint32]bool{}
 	shareGroups = map[uint32][]uint32{}
 	archiveGroups = map[uint32]bool{}
+	rankedGroups = map[uint32]bool{}
 	for _, group := range groups {
 		archiveGroups[group.GroupType] = true
+		rankedGroups[group.GroupType] = group.Nationality <= nationLink
 		if group.HandbookType == handbookBlueprint {
 			blueprints[group.GroupType] = true
 		}
