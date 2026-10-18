@@ -203,6 +203,11 @@ func (game *Game) Register() {
 	packets.Handle(game.handleHandbookGetTasks)
 	packets.Handle(game.handleHandbookPtAward)
 	packets.Handle(game.handleActivityOperation)
+	packets.Handle(game.handleEditActivityFleet)
+	// challenge mode
+	packets.Handle(game.handleChallengeStart)
+	packets.Handle(game.handleChallengeInfo)
+	packets.Handle(game.handleChallengeReset)
 	// Juus
 	packets.Handle(game.handleJuusPostOp)
 	packets.Handle(game.handleJuusComment)

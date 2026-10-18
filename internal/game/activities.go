@@ -112,6 +112,10 @@ func (game *Game) activityList(ctx context.Context, commander db.Commander) (*pr
 	for _, row := range rows {
 		stored[row.ActivityID] = row
 	}
+	fleets, err := activityFleets(ctx, game.DB.Queries, commander.ID)
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now()
 	reply := &protobuf.SC_11200{}
 	for _, config := range openActivities(now) {
@@ -138,6 +142,7 @@ func (game *Game) activityList(ctx context.Context, commander db.Commander) (*pr
 			Data3:     proto.Uint32(state.Data3),
 			Data4:     proto.Uint32(state.Data4),
 			Data1List: state.Data1List,
+			GroupList: fleets[config.ID],
 		}
 		if config.Type == activityTypeIslandDrawAward {
 			info.Date1KeyValueList = []*protobuf.KEYVALUELIST_P11{{Key: proto.Uint32(1)}}

@@ -4,6 +4,22 @@
 
 package db
 
+type ActivityFleetMeowfficer struct {
+	CommanderID  uint32
+	ActivityID   uint32
+	FleetID      uint32
+	Pos          uint32
+	MeowfficerID uint32
+}
+
+type ActivityFleetShip struct {
+	CommanderID uint32
+	ActivityID  uint32
+	FleetID     uint32
+	Pos         uint32
+	ShipID      uint32
+}
+
 type Blacklist struct {
 	CommanderID uint32
 	BlockedID   uint32
@@ -17,6 +33,43 @@ type Build struct {
 	TemplateID  uint32
 	Duration    uint32
 	FinishTime  int64
+}
+
+type ChallengeMeowfficer struct {
+	CommanderID  uint32
+	ActivityID   uint32
+	Mode         uint32
+	FleetID      uint32
+	Pos          uint32
+	MeowfficerID uint32
+}
+
+type ChallengeRecord struct {
+	CommanderID uint32
+	ActivityID  uint32
+	Season      uint32
+	MaxScore    uint32
+	MaxLevel    uint32
+}
+
+type ChallengeRun struct {
+	CommanderID uint32
+	ActivityID  uint32
+	Mode        uint32
+	Season      uint32
+	Level       uint32
+	Score       uint32
+	Battling    bool
+}
+
+type ChallengeShip struct {
+	CommanderID uint32
+	ActivityID  uint32
+	Mode        uint32
+	FleetID     uint32
+	Pos         uint32
+	ShipID      uint32
+	HpRant      uint32
 }
 
 type ChapterAutoBattle struct {
