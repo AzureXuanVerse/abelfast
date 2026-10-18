@@ -111,6 +111,9 @@ func (game *Game) Register() {
 	packets.Handle(game.handleComposeItem)
 	packets.Handle(game.handleTracking)
 	packets.Handle(game.handleTrack)
+	packets.Handle(game.handleNewTracking)
+	packets.Handle(game.handleMainSceneTracking)
+	packets.Handle(game.handleUrExchangeTracking)
 	// fleets, the campaign and battles
 	packets.Handle(game.handleUpdateFleet)
 	packets.Handle(game.handleTracking13101)

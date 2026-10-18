@@ -359,3 +359,35 @@ func (game *Game) handleTracking(client *connection.Client, req *protobuf.CS_109
 func (game *Game) handleTrack(client *connection.Client, req *protobuf.CS_10993) error {
 	return nil
 }
+
+// handleNewTracking takes the client's tracking events (NewTrackingCommand,
+// controller/command/track/newtrackingcommand.lua, CS_10992): a track_type,
+// an event_id and three free-form string parameters, no reply.
+// Telemetry only: ignored for now; could feed usage stats later.
+//
+//belfast:static
+func (game *Game) handleNewTracking(client *connection.Client, req *protobuf.CS_10992) error {
+	return nil
+}
+
+// handleMainSceneTracking takes the main scene's tracking events
+// (MainSceneTrackingCommand,
+// controller/command/player/mainscenetrackingcommand.lua, CS_11029): a
+// track_typ with three int arguments and a string one, no reply.
+// Telemetry only: ignored for now; could feed usage stats later.
+//
+//belfast:static
+func (game *Game) handleMainSceneTracking(client *connection.Client, req *protobuf.CS_11029) error {
+	return nil
+}
+
+// handleUrExchangeTracking takes the UR ship exchange's tracking events
+// (UrExchangeTrackingCommand,
+// controller/command/player/urexchangetrackingcommand.lua, CS_11212): a
+// track_typ, the ship template viewed and where it was opened from, no reply.
+// Telemetry only: ignored for now; could feed usage stats later.
+//
+//belfast:static
+func (game *Game) handleUrExchangeTracking(client *connection.Client, req *protobuf.CS_11212) error {
+	return nil
+}
