@@ -252,7 +252,8 @@ func (game *Game) handleRenameMeowfficer(client *connection.Client, req *protobu
 // out of the saved pairs too. As the client: refused when both the cat and
 // its skill are at their last level, or a material is the cat itself, a
 // duplicate, locked (CollectIgnoredIdsForPlay), in a fleet
-// (commander_anyone_is_in_fleet, CheckFormation), in the cattery
+// (commander_anyone_is_in_fleet, CheckFormation) or the active sortie
+// (commander_is_in_battle: the client tips it but still sends), in the cattery
 // (cat_sleep_notplay) or of another group once the ones before it (the
 // client's selection order) take the cat to its last level (IsLegalForPlay:
 // commander_select_matiral_erro, commander_exp_limit); at most
@@ -297,11 +298,15 @@ func feedMeowfficers(tx *Tx, targetID uint32, materials []uint32) error {
 	if err != nil {
 		return err
 	}
+	sortie, err := meowfficersInSortie(tx.ctx, tx.Queries, tx.commanderID)
+	if err != nil {
+		return err
+	}
 	group := meowfficerTemplates[target.TemplateID].GroupType
 	exp, skillExp, gold := 0.0, 0.0, 0.0
 	for i, id := range materials {
 		cat, ok := byID[id]
-		if !ok || id == targetID || cat.Locked || slices.Contains(materials[:i], id) ||
+		if !ok || id == targetID || cat.Locked || slices.Contains(materials[:i], id) || sortie[id] ||
 			slices.ContainsFunc(fleets, func(slot db.ListFleetMeowfficersRow) bool { return slot.MeowfficerID == id }) ||
 			slices.ContainsFunc(slots, func(slot db.MeowfficerCattery) bool { return slot.MeowfficerID == id }) {
 			return errRefused
