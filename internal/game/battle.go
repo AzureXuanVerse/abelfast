@@ -70,6 +70,15 @@ func (game *Game) handleBeginStage(client *connection.Client, req *protobuf.CS_4
 			return client.Send(&protobuf.SC_40002{Result: result(errRefused)})
 		}
 	}
+	if req.GetSystem() == systemRoutine || req.GetSystem() == systemSubRoutine {
+		err := checkDailyBegin(ctx, game.DB.Queries, client.CommanderID, req.GetData(), time.Now())
+		if refused(err) {
+			return client.Send(&protobuf.SC_40002{Result: result(err)})
+		}
+		if err != nil {
+			return err
+		}
+	}
 	byID, err := shipsByID(ctx, game.DB.Queries, client.CommanderID, req.GetShipIdList())
 	if err != nil {
 		return err
@@ -118,6 +127,9 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 	ctx := context.Background()
 	if req.GetSystem() == systemDuel {
 		return game.finishDuel(client, req)
+	}
+	if req.GetSystem() == systemRoutine || req.GetSystem() == systemSubRoutine {
+		return game.finishDaily(client, req)
 	}
 	if req.GetSystem() != systemScenario {
 		return client.Send(&protobuf.SC_40004{Result: result(nil)})

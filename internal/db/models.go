@@ -384,6 +384,18 @@ type Compensation struct {
 	IsClaimed   bool
 }
 
+type DailyLevelCount struct {
+	CommanderID uint32
+	DailyID     uint32
+	Count       uint32
+	Period      int64
+}
+
+type DailyQuickStage struct {
+	CommanderID uint32
+	StageID     uint32
+}
+
 type DormFloor struct {
 	CommanderID uint32
 	Floor       uint32

@@ -132,6 +132,8 @@ func (game *Game) Register() {
 	packets.Handle(game.handleRemasterInfo)
 	packets.Handle(game.handleBeginStage)
 	packets.Handle(game.handleFinishStage)
+	packets.Handle(game.handleQuitBattle)
+	packets.Handle(game.handleDailyQuickBattle)
 	packets.Handle(game.handleStartChapterAuto)
 	packets.Handle(game.handleEndChapterAuto)
 	packets.Handle(game.handleAddChapterAutoTime)
@@ -326,8 +328,9 @@ var loginBurst = []loginPush{
 	func(game *Game, l *login) (proto.Message, error) {
 		return commissionList(l.ctx, l.queries, l.commander.ID, l.commander.Level)
 	},
-	// DailyLevelProxy: no daily challenge played
-	empty[protobuf.SC_13201](),
+	func(game *Game, l *login) (proto.Message, error) {
+		return dailyLevelState(l.ctx, l.queries, l.commander.ID, l.now)
+	},
 	// ShopsProxy: the monthly shops
 	func(game *Game, l *login) (proto.Message, error) {
 		return monthShopInfo(l.ctx, l.queries, l.commander.ID, l.now)
