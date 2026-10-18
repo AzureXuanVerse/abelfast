@@ -32,5 +32,6 @@ func loadGameData() error {
 		loadCryptolaliaData,
 		loadMonthShops,
 		loadResourceFields,
+		loadMeowfficerData,
 	)
 }
