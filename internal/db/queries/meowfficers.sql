@@ -95,3 +95,20 @@ DELETE FROM meowfficers WHERE commander_id = ? AND id = ?;
 
 -- name: DeleteMeowfficerFromPresets :exec
 DELETE FROM meowfficer_preset_slots WHERE commander_id = ? AND meowfficer_id = ?;
+-- name: GetMeowfficerPreset :one
+SELECT * FROM meowfficer_presets WHERE commander_id = ? AND preset_id = ?;
+
+-- name: CreateMeowfficerPreset :exec
+INSERT INTO meowfficer_presets (commander_id, preset_id) VALUES (?, ?) ON CONFLICT DO NOTHING;
+
+-- name: RenameMeowfficerPreset :exec
+UPDATE meowfficer_presets SET name = ?, rename_time = ? WHERE commander_id = ? AND preset_id = ?;
+
+-- name: ClearMeowfficerPresetSlots :exec
+DELETE FROM meowfficer_preset_slots WHERE commander_id = ? AND preset_id = ?;
+
+-- name: SetMeowfficerPresetSlot :exec
+INSERT INTO meowfficer_preset_slots (commander_id, preset_id, pos, meowfficer_id) VALUES (?, ?, ?, ?);
+
+-- name: SetMeowfficerHomeClean :exec
+UPDATE meowfficer_states SET home_clean = ?, clean_time = ? WHERE commander_id = ?;

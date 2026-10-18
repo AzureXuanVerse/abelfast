@@ -437,6 +437,7 @@ type MeowfficerPreset struct {
 	CommanderID uint32
 	PresetID    uint32
 	Name        string
+	RenameTime  int64
 }
 
 type MeowfficerPresetSlot struct {
@@ -454,6 +455,7 @@ type MeowfficerState struct {
 	HomeLevel    uint32
 	HomeExp      uint32
 	HomeClean    uint32
+	CleanTime    int64
 }
 
 type Notice struct {

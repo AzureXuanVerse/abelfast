@@ -24,6 +24,20 @@ func (q *Queries) ClearFleetMeowfficer(ctx context.Context, arg ClearFleetMeowff
 	return err
 }
 
+const clearMeowfficerPresetSlots = `-- name: ClearMeowfficerPresetSlots :exec
+DELETE FROM meowfficer_preset_slots WHERE commander_id = ? AND preset_id = ?
+`
+
+type ClearMeowfficerPresetSlotsParams struct {
+	CommanderID uint32
+	PresetID    uint32
+}
+
+func (q *Queries) ClearMeowfficerPresetSlots(ctx context.Context, arg ClearMeowfficerPresetSlotsParams) error {
+	_, err := q.db.ExecContext(ctx, clearMeowfficerPresetSlots, arg.CommanderID, arg.PresetID)
+	return err
+}
+
 const countMeowfficers = `-- name: CountMeowfficers :one
 SELECT COUNT(*) FROM meowfficers WHERE commander_id = ?
 `
@@ -104,6 +118,20 @@ func (q *Queries) CreateMeowfficerBox(ctx context.Context, arg CreateMeowfficerB
 		arg.BeginTime,
 		arg.FinishTime,
 	)
+	return err
+}
+
+const createMeowfficerPreset = `-- name: CreateMeowfficerPreset :exec
+INSERT INTO meowfficer_presets (commander_id, preset_id) VALUES (?, ?) ON CONFLICT DO NOTHING
+`
+
+type CreateMeowfficerPresetParams struct {
+	CommanderID uint32
+	PresetID    uint32
+}
+
+func (q *Queries) CreateMeowfficerPreset(ctx context.Context, arg CreateMeowfficerPresetParams) error {
+	_, err := q.db.ExecContext(ctx, createMeowfficerPreset, arg.CommanderID, arg.PresetID)
 	return err
 }
 
@@ -193,8 +221,29 @@ func (q *Queries) GetMeowfficer(ctx context.Context, arg GetMeowfficerParams) (M
 	return i, err
 }
 
+const getMeowfficerPreset = `-- name: GetMeowfficerPreset :one
+SELECT commander_id, preset_id, name, rename_time FROM meowfficer_presets WHERE commander_id = ? AND preset_id = ?
+`
+
+type GetMeowfficerPresetParams struct {
+	CommanderID uint32
+	PresetID    uint32
+}
+
+func (q *Queries) GetMeowfficerPreset(ctx context.Context, arg GetMeowfficerPresetParams) (MeowfficerPreset, error) {
+	row := q.db.QueryRowContext(ctx, getMeowfficerPreset, arg.CommanderID, arg.PresetID)
+	var i MeowfficerPreset
+	err := row.Scan(
+		&i.CommanderID,
+		&i.PresetID,
+		&i.Name,
+		&i.RenameTime,
+	)
+	return i, err
+}
+
 const getMeowfficerState = `-- name: GetMeowfficerState :one
-SELECT commander_id, reserve_count, reserve_day, reserve_total, home_level, home_exp, home_clean FROM meowfficer_states WHERE commander_id = ?
+SELECT commander_id, reserve_count, reserve_day, reserve_total, home_level, home_exp, home_clean, clean_time FROM meowfficer_states WHERE commander_id = ?
 `
 
 func (q *Queries) GetMeowfficerState(ctx context.Context, commanderID uint32) (MeowfficerState, error) {
@@ -208,6 +257,7 @@ func (q *Queries) GetMeowfficerState(ctx context.Context, commanderID uint32) (M
 		&i.HomeLevel,
 		&i.HomeExp,
 		&i.HomeClean,
+		&i.CleanTime,
 	)
 	return i, err
 }
@@ -349,7 +399,7 @@ func (q *Queries) ListMeowfficerPresetSlots(ctx context.Context, commanderID uin
 }
 
 const listMeowfficerPresets = `-- name: ListMeowfficerPresets :many
-SELECT commander_id, preset_id, name FROM meowfficer_presets WHERE commander_id = ? ORDER BY preset_id
+SELECT commander_id, preset_id, name, rename_time FROM meowfficer_presets WHERE commander_id = ? ORDER BY preset_id
 `
 
 func (q *Queries) ListMeowfficerPresets(ctx context.Context, commanderID uint32) ([]MeowfficerPreset, error) {
@@ -361,7 +411,12 @@ func (q *Queries) ListMeowfficerPresets(ctx context.Context, commanderID uint32)
 	var items []MeowfficerPreset
 	for rows.Next() {
 		var i MeowfficerPreset
-		if err := rows.Scan(&i.CommanderID, &i.PresetID, &i.Name); err != nil {
+		if err := rows.Scan(
+			&i.CommanderID,
+			&i.PresetID,
+			&i.Name,
+			&i.RenameTime,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -438,6 +493,27 @@ func (q *Queries) RenameMeowfficer(ctx context.Context, arg RenameMeowfficerPara
 		arg.RenameTime,
 		arg.CommanderID,
 		arg.ID,
+	)
+	return err
+}
+
+const renameMeowfficerPreset = `-- name: RenameMeowfficerPreset :exec
+UPDATE meowfficer_presets SET name = ?, rename_time = ? WHERE commander_id = ? AND preset_id = ?
+`
+
+type RenameMeowfficerPresetParams struct {
+	Name        string
+	RenameTime  int64
+	CommanderID uint32
+	PresetID    uint32
+}
+
+func (q *Queries) RenameMeowfficerPreset(ctx context.Context, arg RenameMeowfficerPresetParams) error {
+	_, err := q.db.ExecContext(ctx, renameMeowfficerPreset,
+		arg.Name,
+		arg.RenameTime,
+		arg.CommanderID,
+		arg.PresetID,
 	)
 	return err
 }
@@ -544,6 +620,21 @@ func (q *Queries) SetMeowfficerHome(ctx context.Context, arg SetMeowfficerHomePa
 	return err
 }
 
+const setMeowfficerHomeClean = `-- name: SetMeowfficerHomeClean :exec
+UPDATE meowfficer_states SET home_clean = ?, clean_time = ? WHERE commander_id = ?
+`
+
+type SetMeowfficerHomeCleanParams struct {
+	HomeClean   uint32
+	CleanTime   int64
+	CommanderID uint32
+}
+
+func (q *Queries) SetMeowfficerHomeClean(ctx context.Context, arg SetMeowfficerHomeCleanParams) error {
+	_, err := q.db.ExecContext(ctx, setMeowfficerHomeClean, arg.HomeClean, arg.CleanTime, arg.CommanderID)
+	return err
+}
+
 const setMeowfficerHomeCleanTime = `-- name: SetMeowfficerHomeCleanTime :exec
 UPDATE meowfficers SET home_clean_time = ? WHERE commander_id = ? AND id = ?
 `
@@ -622,6 +713,27 @@ type SetMeowfficerLockedParams struct {
 
 func (q *Queries) SetMeowfficerLocked(ctx context.Context, arg SetMeowfficerLockedParams) error {
 	_, err := q.db.ExecContext(ctx, setMeowfficerLocked, arg.Locked, arg.CommanderID, arg.ID)
+	return err
+}
+
+const setMeowfficerPresetSlot = `-- name: SetMeowfficerPresetSlot :exec
+INSERT INTO meowfficer_preset_slots (commander_id, preset_id, pos, meowfficer_id) VALUES (?, ?, ?, ?)
+`
+
+type SetMeowfficerPresetSlotParams struct {
+	CommanderID  uint32
+	PresetID     uint32
+	Pos          uint32
+	MeowfficerID uint32
+}
+
+func (q *Queries) SetMeowfficerPresetSlot(ctx context.Context, arg SetMeowfficerPresetSlotParams) error {
+	_, err := q.db.ExecContext(ctx, setMeowfficerPresetSlot,
+		arg.CommanderID,
+		arg.PresetID,
+		arg.Pos,
+		arg.MeowfficerID,
+	)
 	return err
 }
 
