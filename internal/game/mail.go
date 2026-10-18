@@ -149,21 +149,31 @@ func mailStorable(kind, id uint32) bool {
 	return storableDrop(kind, id)
 }
 
-// SendMail delivers mail to a commander, arriving at now, and returns its id.
-// Attachments belfast couldn't store when claimed are refused. The client
-// only learns of it from the next SC_30001 (login, a battle's end, or
-// Tx.SendMail's push).
-func SendMail(ctx context.Context, queries *db.Queries, commanderID uint32, mail Mail, now time.Time) (uint32, error) {
+// check is the attachments of a mail as stored, refusing a mail without a
+// title or with attachments belfast couldn't store when claimed.
+func (mail Mail) check() (db.Drops, error) {
 	if mail.Title == "" {
-		return 0, fmt.Errorf("mail without a title")
+		return nil, fmt.Errorf("mail without a title")
 	}
 	var attachments db.Drops
 	for _, drop := range mail.Attachments {
 		kind, id, number := drop.GetType(), drop.GetId(), drop.GetNumber()
 		if number == 0 || !mailStorable(kind, id) {
-			return 0, fmt.Errorf("mail attachment %d:%d:%d can't be stored", kind, id, number)
+			return nil, fmt.Errorf("mail attachment %d:%d:%d can't be stored", kind, id, number)
 		}
 		attachments = append(attachments, [3]uint32{kind, id, number})
+	}
+	return attachments, nil
+}
+
+// SendMail delivers mail to a commander, arriving at now, and returns its id.
+// Attachments belfast couldn't store when claimed are refused. The client
+// only learns of it from the next SC_30001 (login, a battle's end, or
+// Tx.SendMail's push).
+func SendMail(ctx context.Context, queries *db.Queries, commanderID uint32, mail Mail, now time.Time) (uint32, error) {
+	attachments, err := mail.check()
+	if err != nil {
+		return 0, err
 	}
 	return queries.CreateMail(ctx, db.CreateMailParams{
 		CommanderID: commanderID,
@@ -530,8 +540,7 @@ func (game *Game) handleMailOperation(client *connection.Client, req *protobuf.C
 }
 
 // claimMails takes the attachments of mails, refusing the lot when the dock
-// (ship_bag_max) or the gear depot (equip_bag_max) can't hold them
-// (CheckOverflow's "ship" and "equip"). Gold and oil go to the mail storage
+// or the gear depot can't hold them (bagsHold). Gold and oil go to the mail storage
 // (mail_reward_tips), up to its mail_storeroom capacity, the rest is lost
 // (mail_storeroom_max_1); the rest goes through grantDrops. It returns what
 // the client adds: the storage's gold and oil as their own resources
@@ -546,32 +555,8 @@ func (tx *Tx) claimMails(commander db.Commander, mails []db.Mail) ([]*protobuf.D
 	if len(drops) == 0 {
 		return nil, nil
 	}
-	var ships, equipment uint32
-	for _, drop := range drops {
-		switch drop.GetType() {
-		case dropTypeShip:
-			ships += drop.GetNumber()
-		case dropTypeEquip:
-			equipment += drop.GetNumber()
-		}
-	}
-	if ships > 0 {
-		owned, err := tx.ListShipsByCommander(tx.ctx, tx.commanderID)
-		if err != nil {
-			return nil, err
-		}
-		if uint32(len(owned))+ships > commander.ShipBagMax {
-			return nil, errRefused
-		}
-	}
-	if equipment > 0 {
-		owned, err := tx.CountEquipments(tx.ctx, tx.commanderID)
-		if err != nil {
-			return nil, err
-		}
-		if uint32(owned)+equipment > commander.EquipBagMax {
-			return nil, errRefused
-		}
+	if err := tx.bagsHold(commander, drops); err != nil {
+		return nil, err
 	}
 	stored, err := tx.storeResources()
 	if err != nil {
@@ -605,6 +590,39 @@ func (tx *Tx) claimMails(commander db.Commander, mails []db.Mail) ([]*protobuf.D
 		return nil, err
 	}
 	return mergeDrops(granted), nil
+}
+
+// bagsHold refuses drops the dock (ship_bag_max) or the gear depot
+// (equip_bag_max) can't hold (CheckOverflow's "ship" and "equip").
+func (tx *Tx) bagsHold(commander db.Commander, drops []*protobuf.DROPINFO) error {
+	var ships, equipment uint32
+	for _, drop := range drops {
+		switch drop.GetType() {
+		case dropTypeShip:
+			ships += drop.GetNumber()
+		case dropTypeEquip:
+			equipment += drop.GetNumber()
+		}
+	}
+	if ships > 0 {
+		owned, err := tx.ListShipsByCommander(tx.ctx, tx.commanderID)
+		if err != nil {
+			return err
+		}
+		if uint32(len(owned))+ships > commander.ShipBagMax {
+			return errRefused
+		}
+	}
+	if equipment > 0 {
+		owned, err := tx.CountEquipments(tx.ctx, tx.commanderID)
+		if err != nil {
+			return err
+		}
+		if uint32(owned)+equipment > commander.EquipBagMax {
+			return errRefused
+		}
+	}
+	return nil
 }
 
 // storeResources is the gold and oil in the mail storage.
@@ -742,4 +760,26 @@ func (game *Game) handleMailTitles(client *connection.Client, req *protobuf.CS_3
 		reply.MailTitleList = append(reply.MailTitleList, &protobuf.MAIL_TITLE{Id: proto.Uint32(mail.ID), Title: proto.String(mail.Title)})
 	}
 	return client.Send(reply)
+}
+
+// handleLoveLetterMailCheck answers CheckLoveLetterItemMailCommand
+// (CS_30016, ItemInfoLayer's "Scan" on a Valentine Gift: an item listed in
+// gameset loveletter_item_old_year or loveletter_2018_2021, for the ship
+// group groupid): the years of that ship's Valentine mail that are neither in
+// the inbox nor the Archive and can be resent (CS_30018). Belfast never sent
+// a Valentine mail and doesn't know their text (it is server-side), so
+// there is never one to resend: the client shows loveletter_recover_tip7
+// and keeps "Resend" greyed. Built from the Lua alone.
+func (game *Game) handleLoveLetterMailCheck(client *connection.Client, req *protobuf.CS_30016) error {
+	return client.Send(&protobuf.SC_30017{})
+}
+
+// handleLoveLetterMailRepair answers RepairLoveLetterItemMailCommand
+// (CS_30018): resend the Valentine mail of a year to the Archive, using the
+// item. ret 0 (the client takes the item and adds drop_list), 6 Archive
+// full (loveletter_recover_tip5), 7 the mail is already there
+// (loveletter_recover_tip3), 40 bag full. The client only sends it for a
+// year CS_30016 listed, which belfast never does (see above): ret 7.
+func (game *Game) handleLoveLetterMailRepair(client *connection.Client, req *protobuf.CS_30018) error {
+	return client.Send(&protobuf.SC_30019{Ret: proto.Uint32(7)})
 }

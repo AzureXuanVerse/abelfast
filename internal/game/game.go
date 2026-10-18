@@ -217,6 +217,10 @@ func (game *Game) Register() {
 	packets.Handle(game.handleExtendMailStorage)
 	packets.Handle(game.handleMailStorageWithdraw)
 	packets.Handle(game.handleMailTitles)
+	packets.Handle(game.handleLoveLetterMailCheck)
+	packets.Handle(game.handleLoveLetterMailRepair)
+	packets.Handle(game.handleCompensations)
+	packets.Handle(game.handleClaimCompensation)
 	// friends, world chat and reports
 	packets.Handle(game.handleSearchPlayer)
 	packets.Handle(game.handleRecommendPlayers)
@@ -355,8 +359,10 @@ var loginBurst = []loginPush{
 	func(game *Game, l *login) (proto.Message, error) {
 		return mailCounts(l.ctx, l.queries, l.commander.ID)
 	},
-	// CompensateProxy: no compensation mail
-	empty[protobuf.SC_30101](),
+	// CompensateProxy: the compensations left to claim
+	func(game *Game, l *login) (proto.Message, error) {
+		return compensationState(l.ctx, l.queries, l.commander.ID, l.now)
+	},
 	// FriendProxy / NotificationProxy: friends and requests waiting
 	func(game *Game, l *login) (proto.Message, error) {
 		return game.friendList(l.ctx, l.queries, l.commander.ID)

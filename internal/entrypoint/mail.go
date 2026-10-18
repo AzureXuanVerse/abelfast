@@ -18,7 +18,8 @@ import (
 
 // runMail is `belfast mail [flags]`: it stores a mail for a commander in the
 // database, next to a running server or not. The client sees it from the
-// next SC_30001: its next login, or the end of its next battle.
+// next SC_30001: its next login, or the end of its next battle. With
+// -compensate it is a compensation instead (SC_30101, at the next login).
 func runMail(args []string) {
 	flags := flag.NewFlagSet("mail", flag.ExitOnError)
 	dbPath := flags.String("db", ".cache/belfast.db", "SQLite database path")
@@ -27,6 +28,7 @@ func runMail(args []string) {
 	sender := flags.String("sender", "", "sender, empty for the client's default (Headquarters)")
 	body := flags.String("body", "", `mail text, "\n" for a new line`)
 	attach := flags.String("attach", "", "attachments, type:id:count[,type:id:count...] (DROP_TYPE_*: 1 resource, 2 item, 3 equipment, 4 ship, 5 furniture, 7 skin, 8 virtual item, 25 meowfficer)")
+	compensate := flags.Duration("compensate", 0, "send a compensation expiring after this long (e.g. 72h) instead of a mail; the client sees it from its next login")
 	flags.Parse(args)
 
 	attachments, err := parseDrops(*attach)
@@ -55,7 +57,16 @@ func runMail(args []string) {
 		fatal(fmt.Errorf("commander %d: %w", commander, err))
 	}
 	mail := game.Mail{Title: *title, Sender: *sender, Content: *body, Attachments: attachments}
-	id, err := game.SendMail(ctx, store.Queries, commander, mail, time.Now())
+	now := time.Now()
+	if *compensate != 0 {
+		id, err := game.SendCompensation(ctx, store.Queries, commander, mail, now, now.Add(*compensate))
+		if err != nil {
+			fatal(err)
+		}
+		fmt.Fprintf(os.Stdout, "compensation %d sent to commander %d\n", id, commander)
+		return
+	}
+	id, err := game.SendMail(ctx, store.Queries, commander, mail, now)
 	if err != nil {
 		fatal(err)
 	}

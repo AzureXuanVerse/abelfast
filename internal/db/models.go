@@ -372,6 +372,18 @@ type CommanderWeeklyTask struct {
 	Claimed     bool
 }
 
+type Compensation struct {
+	ID          uint32
+	CommanderID uint32
+	Date        int64
+	Expires     int64
+	Title       string
+	Sender      string
+	Content     string
+	Attachments Drops
+	IsClaimed   bool
+}
+
 type DormFloor struct {
 	CommanderID uint32
 	Floor       uint32
