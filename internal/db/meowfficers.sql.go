@@ -779,3 +779,44 @@ func (q *Queries) SetMeowfficerSkill(ctx context.Context, arg SetMeowfficerSkill
 	)
 	return err
 }
+
+const setMeowfficerTalentChoices = `-- name: SetMeowfficerTalentChoices :exec
+UPDATE meowfficers SET talent_choices = ? WHERE commander_id = ? AND id = ?
+`
+
+type SetMeowfficerTalentChoicesParams struct {
+	TalentChoices IDList
+	CommanderID   uint32
+	ID            uint32
+}
+
+func (q *Queries) SetMeowfficerTalentChoices(ctx context.Context, arg SetMeowfficerTalentChoicesParams) error {
+	_, err := q.db.ExecContext(ctx, setMeowfficerTalentChoices, arg.TalentChoices, arg.CommanderID, arg.ID)
+	return err
+}
+
+const setMeowfficerTalents = `-- name: SetMeowfficerTalents :exec
+UPDATE meowfficers SET talents = ?, talent_choices = ?, used_pt = ?, talent_time = ?
+WHERE commander_id = ? AND id = ?
+`
+
+type SetMeowfficerTalentsParams struct {
+	Talents       IDList
+	TalentChoices IDList
+	UsedPt        uint32
+	TalentTime    int64
+	CommanderID   uint32
+	ID            uint32
+}
+
+func (q *Queries) SetMeowfficerTalents(ctx context.Context, arg SetMeowfficerTalentsParams) error {
+	_, err := q.db.ExecContext(ctx, setMeowfficerTalents,
+		arg.Talents,
+		arg.TalentChoices,
+		arg.UsedPt,
+		arg.TalentTime,
+		arg.CommanderID,
+		arg.ID,
+	)
+	return err
+}

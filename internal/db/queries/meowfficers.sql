@@ -112,3 +112,9 @@ INSERT INTO meowfficer_preset_slots (commander_id, preset_id, pos, meowfficer_id
 
 -- name: SetMeowfficerHomeClean :exec
 UPDATE meowfficer_states SET home_clean = ?, clean_time = ? WHERE commander_id = ?;
+-- name: SetMeowfficerTalents :exec
+UPDATE meowfficers SET talents = ?, talent_choices = ?, used_pt = ?, talent_time = ?
+WHERE commander_id = ? AND id = ?;
+
+-- name: SetMeowfficerTalentChoices :exec
+UPDATE meowfficers SET talent_choices = ? WHERE commander_id = ? AND id = ?;
