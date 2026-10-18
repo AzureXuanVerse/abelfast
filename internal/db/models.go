@@ -344,6 +344,13 @@ type Fleet struct {
 	Name        string
 }
 
+type FleetMeowfficer struct {
+	CommanderID  uint32
+	FleetID      uint32
+	Pos          uint32
+	MeowfficerID uint32
+}
+
 type FleetShip struct {
 	CommanderID uint32
 	FleetID     uint32
@@ -363,6 +370,70 @@ type Mail struct {
 	IsClaimed   bool
 	IsImportant bool
 	Archived    bool
+}
+
+type Meowfficer struct {
+	ID            uint32
+	CommanderID   uint32
+	TemplateID    uint32
+	Level         uint32
+	Exp           uint32
+	Locked        bool
+	Name          string
+	RenameTime    int64
+	Talents       IDList
+	TalentOrigins IDList
+	TalentChoices IDList
+	TalentTime    int64
+	UsedPt        uint32
+	SkillID       uint32
+	SkillExp      uint32
+	HomeCleanTime int64
+	HomePlayTime  int64
+	HomeFeedTime  int64
+}
+
+type MeowfficerBox struct {
+	CommanderID uint32
+	BoxID       uint32
+	PoolID      uint32
+	TemplateID  uint32
+	BeginTime   int64
+	FinishTime  int64
+}
+
+type MeowfficerCattery struct {
+	CommanderID  uint32
+	SlotID       uint32
+	MeowfficerID uint32
+	Style        uint32
+	ExpTime      int64
+	CleanTime    int64
+	FeedTime     int64
+	PlayTime     int64
+}
+
+type MeowfficerPreset struct {
+	CommanderID uint32
+	PresetID    uint32
+	Name        string
+}
+
+type MeowfficerPresetSlot struct {
+	CommanderID  uint32
+	PresetID     uint32
+	Pos          uint32
+	MeowfficerID uint32
+}
+
+type MeowfficerState struct {
+	CommanderID  uint32
+	ReserveCount uint32
+	ReserveDay   int64
+	ReserveTotal uint32
+	HomeLevel    uint32
+	HomeExp      uint32
+	HomeClean    uint32
 }
 
 type Notice struct {

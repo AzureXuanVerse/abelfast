@@ -22,3 +22,12 @@ sql:
           - column: mails.attachments
             go_type:
               type: Drops
+          - column: meowfficers.talents
+            go_type:
+              type: IDList
+          - column: meowfficers.talent_origins
+            go_type:
+              type: IDList
+          - column: meowfficers.talent_choices
+            go_type:
+              type: IDList
