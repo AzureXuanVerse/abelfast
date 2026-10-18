@@ -106,6 +106,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleDestroyEquipments)
 	packets.HandleLenient(game.handleSellItems)
 	packets.Handle(game.handleUseItem)
+	packets.Handle(game.handleQuickExchangeBlueprint)
 	packets.Handle(game.handleComposeItem)
 	packets.Handle(game.handleTracking)
 	packets.Handle(game.handleTrack)
