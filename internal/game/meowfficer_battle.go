@@ -299,7 +299,7 @@ type attrBonus struct {
 // / 100 to its rate (the abilities' term, in percent, plus the ratio
 // talents in 1/10000).
 func meowfficerDodge(cats []db.Meowfficer, ship db.Ship) attrBonus {
-	template := shipTemplates[ship.TemplateID]
+	template := ownableShips[ship.TemplateID]
 	var bonus attrBonus
 	for _, cat := range cats {
 		bonus.flat += talentBonus(cat, talentAdditionNumber, talentAttrDodge, template.Nationality, template.Type)
@@ -312,7 +312,7 @@ func meowfficerDodge(cats []db.Meowfficer, ship db.Ship) attrBonus {
 // meowfficerShipExp is a ship's share of a battle's meowfficer EXP: its
 // type's and its config rarity's, plus its stars.
 func meowfficerShipExp(ship db.Ship) float64 {
-	template := shipTemplates[ship.TemplateID]
+	template := ownableShips[ship.TemplateID]
 	return meowfficerBattleExp.shipTypes[template.Type] + meowfficerBattleExp.rarities[template.Rarity] + float64(template.Star)
 }
 
