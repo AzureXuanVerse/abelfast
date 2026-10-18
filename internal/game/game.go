@@ -145,6 +145,8 @@ func (game *Game) Register() {
 	packets.Handle(game.handleRandomFlagship)
 	packets.Handle(game.handleChangeRandomFlagshipMode)
 	packets.Handle(game.handleChangeRandomFlagships)
+	packets.Handle(game.handleChangeName)
+	packets.Handle(game.handleChangeManifesto)
 	packets.Handle(game.handleMedalShop)
 	packets.Handle(game.handleMedalShopPurchase)
 	packets.Handle(game.handleRequisition)

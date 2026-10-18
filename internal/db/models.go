@@ -98,6 +98,12 @@ type CommanderCommonFlag struct {
 	FlagID      uint32
 }
 
+type CommanderCooldown struct {
+	CommanderID uint32
+	Key         uint32
+	Until       int64
+}
+
 type CommanderDorm struct {
 	CommanderID          uint32
 	Level                uint32
