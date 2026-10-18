@@ -613,6 +613,10 @@ func loadShipData() error {
 		equipIDs[id] = true
 		equipReturns[id] = equip.equipReturn
 		equipGroups[id] = equip.Group
+		if equip.Group == 0 {
+			// a +N lists only what differs from its +0 (base)
+			equipGroups[id] = equips[equip.Base].Group
+		}
 	}
 	return nil
 }
