@@ -274,10 +274,11 @@ func activeEquipments(slots []uint32) []uint32 {
 //     ships aren't modeled and add nothing;
 //   - getEquipmentProperties: the flat dodge of the active equipment and the
 //     best dodge property_rate (augments aren't modeled);
-//   - getProperties: floor(floor(base) * (1 + rate)) + flat. Commanders, the
-//     fleet tech nation bonus of max star ships and Operation Siren buffs
-//     aren't modeled and add nothing.
-func shipDodge(ship db.Ship, slots []uint32) float64 {
+//   - getProperties: floor(floor(base) * (1 + rate + the cats' rate)) +
+//     flat + the cats' flat (meowfficerDodge). The fleet tech nation bonus
+//     of max star ships and Operation Siren buffs aren't modeled and add
+//     nothing.
+func shipDodge(ship db.Ship, slots []uint32, cats attrBonus) float64 {
 	growth := shipDodges[ship.TemplateID]
 	dodge := growth.base + (float64(ship.Level)-1)*growth.growth/1000
 	if ship.Level > extraAttrLevelLimit {
@@ -290,7 +291,7 @@ func shipDodge(ship db.Ship, slots []uint32) float64 {
 		flat += evasion.dodge
 		rate = max(rate, evasion.dodgeRate)
 	}
-	return calcFloor(calcFloor(dodge)*(1+rate)) + flat
+	return calcFloor(calcFloor(dodge)*(1+rate+cats.rate)) + flat + cats.flat
 }
 
 // grantShipsStarter gives a new commander the starter ship they chose and

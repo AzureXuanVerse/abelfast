@@ -35,5 +35,6 @@ func loadGameData() error {
 		loadMeowfficerData,
 		loadMeowfficerManageData,
 		loadMeowfficerTalentData,
+		loadMeowfficerBattleData,
 	)
 }

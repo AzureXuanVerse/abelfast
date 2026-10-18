@@ -114,7 +114,8 @@ func bundleLimits(bundle string) []shipLimit {
 // surface teams of up to three main and three vanguard ships fitting the
 // chapter's limitation, submarine_num submarine teams and support_group_num
 // support teams (three carriers, or submarines on submarine_support stages),
-// owned ships each used once, no commanders (belfast has none). Teams past
+// owned ships each used once, the teams' cats as checkTeamMeowfficers (those
+// no longer owned taken out, Chapter:EliteCommanderFilter). Teams past
 // the counts may be sent padded but empty. A SelectFleet chapter is fought
 // with FleetProxy's fleets, its surface and submarine teams are dropped as
 // the filter does. It returns the fleet to keep, under the formation's id.
@@ -131,14 +132,18 @@ func checkEliteFleet(ctx context.Context, queries *db.Queries, commanderID uint3
 	var ids []uint32
 	for _, teams := range [][]*protobuf.TEAM_INFO{kept.MainTeam, kept.SubmarineTeam, kept.SupportTeam} {
 		for _, team := range teams {
-			if team.GetCommanderMain() != 0 || team.GetCommanderSub() != 0 {
-				return nil, errRefused
-			}
 			ids = append(ids, team.GetShipList()...)
 		}
 	}
 	if len(slices.Compact(slices.Sorted(slices.Values(ids)))) != len(ids) {
 		return nil, errRefused
+	}
+	var teams []*protobuf.TEAM_INFO
+	for _, kind := range [][]*protobuf.TEAM_INFO{kept.MainTeam, kept.SubmarineTeam, kept.SupportTeam} {
+		teams = append(teams, kind...)
+	}
+	if err := checkTeamMeowfficers(ctx, queries, commanderID, teams, true); err != nil {
+		return nil, err
 	}
 	ships, err := shipsByID(ctx, queries, commanderID, ids)
 	if err != nil {

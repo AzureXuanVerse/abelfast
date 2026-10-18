@@ -28,9 +28,6 @@ const (
 	// CommanderConst.DESTROY_ATTR_ID: the talent attribute adding to the
 	// EXP a cat gives when fed (getDestoryExpValue, getDestoryExpRetio)
 	meowfficerDestroyAttr = 202
-	// CommanderConst.TALENT_ADDITION_NUMBER, TALENT_ADDITION_RATIO
-	talentAdditionNumber = 1
-	talentAdditionRatio  = 2
 )
 
 // meowfficerFeedValues are the commander_data_template columns feeding

@@ -214,15 +214,16 @@ func newChapter(template *chapterTemplate, teams []*protobuf.TEAM_INFO, now uint
 			pos = cellPos(born[i].GetPos().GetRow(), born[i].GetPos().GetColumn())
 		}
 		group := &protobuf.GROUPINCHAPTER_P13{
-			Id:           proto.Uint32(team.GetId()),
-			Pos:          pos,
-			StepCount:    proto.Uint32(0),
-			Bullet:       proto.Uint32(template.ammoTotal),
-			StartPos:     cellPos(0, 0),
-			MoveStepDown: proto.Uint32(0),
-			KillCount:    proto.Uint32(0),
-			FleetId:      proto.Uint32(team.GetId()),
-			VisionLv:     proto.Uint32(0),
+			Id:            proto.Uint32(team.GetId()),
+			Pos:           pos,
+			StepCount:     proto.Uint32(0),
+			Bullet:        proto.Uint32(template.ammoTotal),
+			StartPos:      cellPos(0, 0),
+			MoveStepDown:  proto.Uint32(0),
+			KillCount:     proto.Uint32(0),
+			FleetId:       proto.Uint32(team.GetId()),
+			VisionLv:      proto.Uint32(0),
+			CommanderList: teamMeowfficers(team),
 		}
 		for _, id := range team.GetShipList() {
 			group.ShipList = append(group.ShipList, &protobuf.SHIPINCHAPTER_P13{Id: proto.Uint32(id), HpRant: proto.Uint32(fullHP)})
@@ -240,8 +241,9 @@ func newChapter(template *chapterTemplate, teams []*protobuf.TEAM_INFO, now uint
 // A SelectFleet chapter sends FleetProxy's fleets (Fleet:ChangeToElite, their
 // ids), a CustomFleet one its elite fleets (Chapter.PackEliteFleetInfo: id 0,
 // padded with empty teams), which are checked and saved like CS_13107's and
-// numbered from 1. Non-zero results make the client show
-// levelScene_tracking_erro.
+// numbered from 1. Each team's commander_main / commander_sub cats go along
+// (GROUPINCHAPTER_P13.commander_list, checkTeamMeowfficers). Non-zero
+// results make the client show levelScene_tracking_erro.
 func (game *Game) handleTracking13101(client *connection.Client, req *protobuf.CS_13101) error {
 	ctx := context.Background()
 	template := chapterTemplates[req.GetId()]
@@ -261,7 +263,10 @@ func (game *Game) handleTracking13101(client *connection.Client, req *protobuf.C
 		}
 		for _, team := range elite.GetMainTeam() {
 			if len(team.GetShipList()) > 0 {
-				teams = append(teams, &protobuf.TEAM_INFO{Id: proto.Uint32(uint32(len(teams) + 1)), ShipList: team.GetShipList()})
+				teams = append(teams, &protobuf.TEAM_INFO{
+					Id: proto.Uint32(uint32(len(teams) + 1)), ShipList: team.GetShipList(),
+					CommanderMain: team.CommanderMain, CommanderSub: team.CommanderSub,
+				})
 			}
 		}
 	} else {
@@ -276,6 +281,13 @@ func (game *Game) handleTracking13101(client *connection.Client, req *protobuf.C
 		}
 		if !owned || len(slices.Compact(slices.Sorted(slices.Values(ids)))) != len(ids) {
 			return client.Send(&protobuf.SC_13102{Result: result(errRefused)})
+		}
+		err = checkTeamMeowfficers(ctx, game.DB.Queries, client.CommanderID, teams, false)
+		if refused(err) {
+			return client.Send(&protobuf.SC_13102{Result: result(err)})
+		}
+		if err != nil {
+			return err
 		}
 	}
 	if len(teams) == 0 {
@@ -509,8 +521,9 @@ type fleetEvasion struct {
 }
 
 // groupEvasion is a chapter fleet's fleetEvasion: getDodgeSums is the sum of
-// the evasion of its ships still standing (hp_rant > 0, getShips(false)) to
-// the power 2/3, getEquipDodgeRateUp the best equip_parameters.avoid_extra
+// the evasion of its ships still standing (hp_rant > 0, getShips(false)),
+// with what the fleet's cats add (getProperties(getCommanders())), to the
+// power 2/3, getEquipDodgeRateUp the best equip_parameters.avoid_extra
 // among the active equipment of all its ships.
 func groupEvasion(ctx context.Context, queries *db.Queries, commanderID uint32, group *protobuf.GROUPINCHAPTER_P13) (fleetEvasion, error) {
 	var ids []uint32
@@ -518,6 +531,10 @@ func groupEvasion(ctx context.Context, queries *db.Queries, commanderID uint32, 
 		ids = append(ids, ship.GetId())
 	}
 	ships, err := shipsByID(ctx, queries, commanderID, ids)
+	if err != nil {
+		return fleetEvasion{}, err
+	}
+	cats, err := groupMeowfficers(ctx, queries, commanderID, group)
 	if err != nil {
 		return fleetEvasion{}, err
 	}
@@ -541,7 +558,7 @@ func groupEvasion(ctx context.Context, queries *db.Queries, commanderID uint32, 
 			avoidExtra = max(avoidExtra, equipEvasions[equip].avoidExtra)
 		}
 		if member.GetHpRant() > 0 {
-			sum += shipDodge(ship, slots)
+			sum += shipDodge(ship, slots, meowfficerDodge(cats, ship))
 		}
 	}
 	return fleetEvasion{dodgeSums: math.Pow(sum, 2.0/3), equipRateUp: avoidExtra / 10000}, nil
