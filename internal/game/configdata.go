@@ -26,5 +26,6 @@ func loadGameData() error {
 		loadMailData,
 		loadDiscussionData,
 		loadCollectionData,
+		loadMetaTacticsData,
 	)
 }

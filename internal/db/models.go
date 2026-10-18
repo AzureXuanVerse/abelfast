@@ -347,6 +347,15 @@ type ShipEquipment struct {
 	SkinID  uint32
 }
 
+type ShipMetaTactic struct {
+	ShipID    uint32
+	SkillID   uint32
+	Day       int64
+	DayExp    uint32
+	DoubleExp uint32
+	Switches  uint32
+}
+
 type ShipSkill struct {
 	ShipID  uint32
 	SkillID uint32
