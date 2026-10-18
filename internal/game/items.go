@@ -19,8 +19,8 @@ import (
 )
 
 // item_data_statistics usage (ItemUsage, model/const/itemusage.lua) of the
-// items belfast opens. The others change state belfast doesn't keep yet
-// (skin selections, random skins, skin trials and discounts, the guild,
+// items belfast opens, with the skin ones of skinitems.go and the ship gifts
+// of gifts.go. The others change state belfast doesn't keep yet (the guild,
 // commander boxes, remastered chapters) and are refused. Skill books,
 // augment module stones and combat logistics plans are spent by their own
 // packets, never through CS_15002 (UseItemCommand asserts on them).
@@ -68,6 +68,8 @@ type itemUse struct {
 	food uint32
 	// usage_favorability: the affection one gift gives (giveShipGift)
 	affection uint32
+	// the skin items' usage_arg (skinitems.go)
+	skin skinUse
 }
 
 var itemUses map[uint32]itemUse
@@ -290,6 +292,8 @@ func readItemUses(items map[uint32]itemConfig, gear []packGear, gametip map[stri
 			}
 		case usageShipGift:
 			use.affection = readShipGift(row.UsageArg)
+		case usageRandomSkin, usageSkinSelect, usageSkinDiscount, usageSkinExp:
+			use.skin = readSkinUse(row, icons, items)
 		}
 		itemUses[id] = use
 	}
@@ -300,7 +304,6 @@ func readItemUses(items map[uint32]itemConfig, gear []packGear, gametip map[stri
 // display_icon also lists placeholders for what the server draws (the
 // "Mystery" virtual items) and kinds belfast doesn't store (gear skins,
 // furniture, frames...).
-// The random skin boxes and skin selections have their own usages, refused.
 func storableDrop(kind, id uint32) bool {
 	switch kind {
 	case dropTypeResource:
@@ -413,6 +416,14 @@ func (tx *Tx) useItem(id, count uint32, arg []uint32) ([]*protobuf.DROPINFO, err
 	case usageShipGift:
 		// arg is the ship given to
 		return nil, tx.giveShipGift(id, count, use.affection, arg)
+	case usageRandomSkin, usageSkinSelect, usageSkinDiscount:
+		skins, err := tx.skinItemDrops(count, arg, use)
+		if err != nil {
+			return nil, err
+		}
+		drops = skins
+	case usageSkinExp:
+		return nil, tx.useSkinTrial(id, count, arg, use)
 	default:
 		return nil, errRefused
 	}
