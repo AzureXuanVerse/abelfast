@@ -172,6 +172,12 @@ func (game *Game) Register() {
 	packets.Handle(game.handleEducate)
 	packets.Handle(game.handleNewEducate)
 	packets.Handle(game.handleEducateEndings)
+	// meowfficers
+	packets.Handle(game.handleBuyMeowfficerBoxes)
+	packets.Handle(game.handleTrainMeowfficerBox)
+	packets.Handle(game.handleQuickFinishMeowfficerBoxes)
+	packets.Handle(game.handleRefreshMeowfficerBoxes)
+	packets.Handle(game.handleOpenMeowfficerBox)
 	// mail
 	packets.Handle(game.handleMailList)
 	packets.Handle(game.handleArchiveList)
@@ -231,8 +237,10 @@ var loginBurst = []loginPush{
 	func(game *Game, l *login) (proto.Message, error) {
 		return gameRoomInfo(l.ctx, l.queries, l.commander.ID)
 	},
-	// CommanderProxy: no cat commanders, boxes or presets
-	empty[protobuf.SC_25001](),
+	// CommanderProxy: the meowfficers, cat boxes and saved pairs
+	func(game *Game, l *login) (proto.Message, error) {
+		return meowfficerList(l.ctx, l.queries, l.commander.ID, l.now)
+	},
 	func(game *Game, l *login) (proto.Message, error) {
 		return collectionState(l.ctx, l.queries, l.commander.ID)
 	},
