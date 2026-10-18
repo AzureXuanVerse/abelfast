@@ -177,8 +177,8 @@ func (session *chapterSession) won() bool {
 }
 
 // newChapter lays the chapter out (chapter_template.grids): the fleets on the
-// born cells, enemy_refresh enemies drawn from expedition_id_weight_list on
-// the enemy cells, the boss cells empty until bossRefresh kills.
+// born cells, the first wave of enemies (spawnWave), the boss cells empty
+// until bossRefresh kills.
 func newChapter(template *chapterTemplate, teams []*protobuf.TEAM_INFO, now uint32) *protobuf.CURRENTCHAPTERINFO {
 	info := &protobuf.CURRENTCHAPTERINFO{
 		Id:                    proto.Uint32(template.id),
@@ -193,7 +193,7 @@ func newChapter(template *chapterTemplate, teams []*protobuf.TEAM_INFO, now uint
 		MoveStepCount:         proto.Uint32(0),
 		StartTime:             proto.Uint32(now),
 	}
-	var born, enemies []*protobuf.CHAPTERCELLINFO_P13
+	var born []*protobuf.CHAPTERCELLINFO_P13
 	for _, grid := range template.grids {
 		cell := &protobuf.CHAPTERCELLINFO_P13{Pos: cellPos(grid.row, grid.column)}
 		setCell(cell, attachNone, 0, 0)
@@ -202,20 +202,11 @@ func newChapter(template *chapterTemplate, teams []*protobuf.TEAM_INFO, now uint
 		switch grid.kind {
 		case gridBorn:
 			born = append(born, cell)
-		case gridEnemy:
-			enemies = append(enemies, cell)
 		case gridBoss:
 			info.CellFlagList = append(info.CellFlagList, &protobuf.CELLFLAG{Pos: cellPos(grid.row, grid.column), FlagList: []uint32{bossSpawnFlag}})
 		}
 	}
-	rand.Shuffle(len(enemies), func(i, j int) { enemies[i], enemies[j] = enemies[j], enemies[i] })
-	for i := 0; i < template.enemyRefresh && i < len(enemies); i++ {
-		expedition := uint32(0)
-		if pick := weightedPick(rand.Uint32N, template.enemies, func(enemy weightedExpedition) uint32 { return enemy.weight }); pick >= 0 {
-			expedition = template.enemies[pick].id
-		}
-		setCell(enemies[i], attachEnemy, expedition, cellFlagActive)
-	}
+	(&chapterSession{template: template, info: info}).spawnWave()
 	shipCount := uint32(0)
 	for i, team := range teams {
 		pos := cellPos(0, 0)
@@ -621,8 +612,11 @@ func (session *chapterSession) resync(groupID uint32) *protobuf.SC_13104 {
 }
 
 // handleChapterBattleResult answers CS_13106 (ChapterBattleResultRequestCommand),
-// sent after every chapter battle: SC_13105 carries what the map does next.
-// Once bossRefresh enemies are down the boss appears on a boss cell.
+// sent after every chapter battle: SC_13105.map_update carries the cells the
+// map gains (ChapterProxy:OnBattleFinished merges them), the next wave of
+// enemies once the last one is down and the boss once bossRefresh enemies
+// are. The defeated cell itself isn't sent: the client disables it
+// (ChapterLevelData:writeBack), and the capture's 1-1 reply only has the boss.
 func (game *Game) handleChapterBattleResult(client *connection.Client, req *protobuf.CS_13106) error {
 	ctx := context.Background()
 	session, err := loadChapter(ctx, game.DB.Queries, client.CommanderID)
@@ -631,8 +625,13 @@ func (game *Game) handleChapterBattleResult(client *connection.Client, req *prot
 	}
 	reply := &protobuf.SC_13105{}
 	if session != nil {
+		for _, cell := range session.spawnWave() {
+			reply.MapUpdate = append(reply.MapUpdate, proto.CloneOf(cell))
+		}
 		if cell := session.spawnBoss(); cell != nil {
 			reply.MapUpdate = append(reply.MapUpdate, proto.CloneOf(cell))
+		}
+		if len(reply.MapUpdate) > 0 {
 			if err := session.save(ctx, game.DB.Queries, client.CommanderID); err != nil {
 				return err
 			}
@@ -641,29 +640,108 @@ func (game *Game) handleChapterBattleResult(client *connection.Client, req *prot
 	return client.Send(reply)
 }
 
+// occupied is whether a fleet stands on (row, column).
+func (session *chapterSession) occupied(row, column uint32) bool {
+	for _, group := range session.info.MainGroupList {
+		if group.GetPos().GetRow() == row && group.GetPos().GetColumn() == column {
+			return true
+		}
+	}
+	return false
+}
+
+// freeCells are the empty cells of a grid kind no fleet stands on, shuffled.
+func (session *chapterSession) freeCells(kind uint32) []*protobuf.CHAPTERCELLINFO_P13 {
+	var free []*protobuf.CHAPTERCELLINFO_P13
+	for _, grid := range session.template.grids {
+		if grid.kind != kind || session.occupied(grid.row, grid.column) {
+			continue
+		}
+		if cell := session.cell(grid.row, grid.column); cell != nil && cell.GetItemType() == attachNone {
+			free = append(free, cell)
+		}
+	}
+	rand.Shuffle(len(free), func(i, j int) { free[i], free[j] = free[j], free[i] })
+	return free
+}
+
+// spawnWave puts the next wave of enemies on the map once none of the
+// previous ones is left standing. Wave n is enemy_refresh[n] enemies drawn
+// from expedition_id_weight_list on the enemy cells plus elite_refresh[n]
+// elites from elite_expedition_list on the elite cells, both AttachEnemy:
+// Chapter:getWaveCount (chapterleveldata.lua) counts the AttachEnemy cells on
+// enemy and elite grids against the running sum of these to tell which wave
+// the map is on. 1-1 has one wave, 1-2 two of one enemy each (boss_refresh 2).
+func (session *chapterSession) spawnWave() []*protobuf.CHAPTERCELLINFO_P13 {
+	spawned := uint32(0)
+	for _, grid := range session.template.grids {
+		if grid.kind != gridEnemy && grid.kind != gridElite {
+			continue
+		}
+		cell := session.cell(grid.row, grid.column)
+		if cell == nil || cell.GetItemType() != attachEnemy {
+			continue
+		}
+		if cell.GetItemFlag() != cellFlagDisabled {
+			return nil // the current wave isn't cleared yet
+		}
+		spawned++
+	}
+	wave, total := 0, uint32(0)
+	for ; wave < len(session.template.enemyRefresh); wave++ {
+		total += uint32(max(session.template.enemyRefresh[wave], 0))
+		if wave < len(session.template.eliteRefresh) {
+			total += uint32(max(session.template.eliteRefresh[wave], 0))
+		}
+		if total > spawned {
+			break
+		}
+	}
+	if wave >= len(session.template.enemyRefresh) {
+		return nil
+	}
+	var cells []*protobuf.CHAPTERCELLINFO_P13
+	for i, cell := range session.freeCells(gridEnemy) {
+		if i >= session.template.enemyRefresh[wave] {
+			break
+		}
+		expedition := uint32(0)
+		if pick := weightedPick(rand.Uint32N, session.template.enemies, func(enemy weightedExpedition) uint32 { return enemy.weight }); pick >= 0 {
+			expedition = session.template.enemies[pick].id
+		}
+		setCell(cell, attachEnemy, expedition, cellFlagActive)
+		cells = append(cells, cell)
+	}
+	if wave < len(session.template.eliteRefresh) && len(session.template.elites) > 0 {
+		for i, cell := range session.freeCells(gridElite) {
+			if i >= session.template.eliteRefresh[wave] {
+				break
+			}
+			setCell(cell, attachEnemy, session.template.elites[rand.IntN(len(session.template.elites))], cellFlagActive)
+			cells = append(cells, cell)
+		}
+	}
+	return cells
+}
+
+// spawnBoss puts the boss on a free boss cell once bossRefresh enemies are
+// down (kill_count, which counts every won battle, ambushes included, as the
+// client's defeatEnemies does).
 func (session *chapterSession) spawnBoss() *protobuf.CHAPTERCELLINFO_P13 {
 	if len(session.template.bosses) == 0 || session.info.GetKillCount() < session.template.bossRefresh {
 		return nil
 	}
-	var free []*protobuf.CHAPTERCELLINFO_P13
-	for _, grid := range session.template.grids {
-		cell := session.cell(grid.row, grid.column)
-		if cell == nil {
-			continue
-		}
+	for _, cell := range session.info.CellList {
 		if cell.GetItemType() == attachBoss {
 			return nil
 		}
-		if grid.kind == gridBoss && cell.GetItemType() == attachNone {
-			free = append(free, cell)
-		}
 	}
+	free := session.freeCells(gridBoss)
 	if len(free) == 0 {
 		return nil
 	}
-	cell := free[rand.IntN(len(free))]
-	setCell(cell, attachBoss, session.template.bosses[rand.IntN(len(session.template.bosses))], cellFlagActive)
-	return cell
+	setCell(free[0], attachBoss, session.template.bosses[rand.IntN(len(session.template.bosses))], cellFlagActive)
+	return free[0]
 }
 
 // handleRemasterInfo answers RemasterInfoRequestCommand (CS_13505): the

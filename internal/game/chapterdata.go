@@ -14,6 +14,7 @@ import (
 // chapter_template.grids cell kinds (the 4th value of a grid)
 const (
 	gridBorn  = 1
+	gridElite = 4 // an elite spawns here (elite_expedition_list)
 	gridEnemy = 6 // an enemy spawns here (expedition_id_weight_list)
 	gridBoss  = 8 // the boss spawns here (boss_expedition_id)
 )
@@ -41,16 +42,20 @@ type ambushRatio struct {
 }
 
 type chapterTemplate struct {
-	id            uint32
-	oil           uint32 // oil spent to sortie
-	time          uint32 // seconds the sortie stays open
-	ammoTotal     uint32
-	progressBoss  uint32 // progress gained per boss kill
-	grids         []chapterGrid
-	enemies       []weightedExpedition // expedition_id_weight_list
-	enemyRefresh  int                  // enemies spawned at start, enemy_refresh[0]
-	bosses        []uint32             // boss_expedition_id
-	bossRefresh   uint32               // kills before the boss appears
+	id           uint32
+	oil          uint32 // oil spent to sortie
+	time         uint32 // seconds the sortie stays open
+	ammoTotal    uint32
+	progressBoss uint32 // progress gained per boss kill
+	grids        []chapterGrid
+	enemies      []weightedExpedition // expedition_id_weight_list
+	// enemies / elites per wave (enemy_refresh, elite_refresh), the first
+	// wave at start, see chapterSession.spawnWave
+	enemyRefresh  []int
+	eliteRefresh  []int
+	elites        []uint32 // elite_expedition_list
+	bosses        []uint32 // boss_expedition_id
+	bossRefresh   uint32   // kills before the boss appears
 	isAmbush      bool
 	ambushes      []uint32 // ambush_expedition_list
 	ambushRatios  []ambushRatio
@@ -83,6 +88,8 @@ type chapterConfig struct {
 	Grids                  [][4]any   `json:"grids"`
 	ExpeditionIDWeightList [][]uint32 `json:"expedition_id_weight_list"`
 	EnemyRefresh           []int      `json:"enemy_refresh"`
+	EliteRefresh           []int      `json:"elite_refresh"`
+	EliteExpeditionList    []uint32   `json:"elite_expedition_list"`
 	BossExpeditionID       []uint32   `json:"boss_expedition_id"`
 	BossRefresh            uint32     `json:"boss_refresh"`
 	IsAmbush               uint32     `json:"is_ambush"`
@@ -247,9 +254,7 @@ func loadChapterData() error {
 				template.enemies = append(template.enemies, weightedExpedition{entry[0], entry[1]})
 			}
 		}
-		if len(row.EnemyRefresh) > 0 {
-			template.enemyRefresh = row.EnemyRefresh[0]
-		}
+		template.enemyRefresh, template.eliteRefresh, template.elites = row.EnemyRefresh, row.EliteRefresh, row.EliteExpeditionList
 		for _, extra := range row.AmbushRatioExtra {
 			switch len(extra) {
 			case 1:
