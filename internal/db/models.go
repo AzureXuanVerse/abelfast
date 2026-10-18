@@ -4,6 +4,12 @@
 
 package db
 
+type Blacklist struct {
+	CommanderID uint32
+	BlockedID   uint32
+	BlockedAt   int64
+}
+
 type Build struct {
 	ID          uint32
 	CommanderID uint32
@@ -68,6 +74,7 @@ type Commander struct {
 	OilFieldUpgradeAt   int64
 	GoldFieldUpgradeAt  int64
 	ClassFieldUpgradeAt int64
+	LastOnline          int64
 }
 
 type CommanderActivity struct {
@@ -356,6 +363,19 @@ type FleetShip struct {
 	FleetID     uint32
 	Position    uint32
 	ShipID      uint32
+}
+
+type Friend struct {
+	CommanderID uint32
+	FriendID    uint32
+	Since       int64
+}
+
+type FriendRequest struct {
+	CommanderID uint32
+	SenderID    uint32
+	Content     string
+	SentAt      int64
 }
 
 type Mail struct {
