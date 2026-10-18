@@ -25,10 +25,6 @@ const (
 	monthShopQuota          = 4 // QuotaShop
 )
 
-// dropTypeCommanderCat is DROP_TYPE_COMMANDER_CAT (const.lua): the quota
-// shop sells cat boxes, which belfast doesn't store yet.
-const dropTypeCommanderCat = 25
-
 // monthShop is a month_shop_template row, id the month (1-12) the stock is
 // on sale (MonthlyShop:isOpen).
 type monthShop struct {
@@ -154,7 +150,7 @@ func (game *Game) handleMonthShopping(client *connection.Client, req *protobuf.C
 // counts the purchase. It returns the drops given.
 func (tx *Tx) buyMonthShopGoods(shopType, id, count uint32, now time.Time) ([]*protobuf.DROPINFO, error) {
 	goods, ok := activityShop[id]
-	if !ok || count == 0 || goods.CommodityType == dropTypeCommanderCat {
+	if !ok || count == 0 {
 		return nil, errRefused
 	}
 	shop := monthShops[uint32(now.In(gamedata.Zone).Month())]
@@ -241,7 +237,8 @@ func (tx *Tx) monthShopGoodsLeft(shopType, id uint32, goods activityGoods, month
 
 // ownedCount is Drop:getOwnedCount (model/vo/drop.lua) for the quota shop's
 // commodities: equipment counts its whole group (every enhancement level), in
-// the depot and on ships; furniture the pieces owned.
+// the depot and on ships; furniture the pieces owned; meowfficers the cats of
+// the template (CommanderProxy:GetSameConfigIdCommanderCount).
 func (tx *Tx) ownedCount(kind, id uint32) (uint32, error) {
 	total := uint32(0)
 	switch kind {
@@ -273,6 +270,16 @@ func (tx *Tx) ownedCount(kind, id uint32) (uint32, error) {
 		for _, row := range rows {
 			if row.FurnitureID == id {
 				total += row.Count
+			}
+		}
+	case dropTypeMeowfficer:
+		cats, err := tx.ListMeowfficers(tx.ctx, tx.commanderID)
+		if err != nil {
+			return 0, err
+		}
+		for _, cat := range cats {
+			if cat.TemplateID == id {
+				total++
 			}
 		}
 	}
