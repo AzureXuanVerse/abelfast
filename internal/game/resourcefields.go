@@ -505,11 +505,12 @@ func (game *Game) handleHarvestResource(client *connection.Client, req *protobuf
 		if err := tx.AddResource(resource, take); err != nil {
 			return err
 		}
-		owned[field] -= take
-		owned[resource] += take
-		for _, id := range []uint32{ResourceGold, ResourceOil, ResourceOilField, ResourceGoldField} {
-			resources = append(resources, &protobuf.RESOURCE{Type: proto.Uint32(id), Num: proto.Uint32(owned[id])})
+		// SC_11004 replaces every resource (Player:updateResources zeroes
+		// the ones it doesn't list), as captured: all of them
+		if rows, err = tx.ListResources(tx.ctx, tx.commanderID); err != nil {
+			return err
 		}
+		resources = resourceList(rows)
 		return nil
 	})
 	if err != nil && !refused(err) {
