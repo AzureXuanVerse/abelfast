@@ -313,7 +313,68 @@ func (game *Game) handleCollectBuilds(client *connection.Client, req *protobuf.C
 	if err != nil && !refused(err) {
 		return err
 	}
-	return client.Send(&protobuf.SC_12026{Result: result(err), ShipList: ships})
+	if err := client.Send(&protobuf.SC_12026{Result: result(err), ShipList: ships}); err != nil {
+		return err
+	}
+	return game.announceBuilds(ctx, client, ships)
+}
+
+const (
+	// adConstruct is gametip ad_1, "<player> constructs <ship>", the ad_id
+	// of the SC_50103 announcing a build
+	adConstruct = 1
+	// PublicArg.TypePlayerName, TypeShipId (model/vo/publicarg.lua)
+	publicArgPlayerName = 1
+	publicArgShipID     = 2
+	// ShipRarity.Gold, Super Rare
+	shipRarityGold = 5
+)
+
+// announceBuilds tells the chat room of the commander that collected builds
+// about the Super Rare and Ultra Rare ships among them (SC_50103, ad_1: a
+// PublicArg player name then ship id), which ChatProxy adds to the public
+// channel. As captured: every one of the 39 announcements of the official
+// captures is a rarity 5 or 6 ship (ShipRarity.Gold, .SSR) and the
+// commander's own Rare build was not announced; ad_1 says "constructs".
+// When the official server sends it is not in the captures (only other
+// players' builds were announced): here on collection (CS_12025), when the
+// ship joins the dock, not when the build timer runs out. Who gets it is
+// not either: as world chat (handleWorldChat), the commanders online in the
+// builder's chat room, the builder included.
+func (game *Game) announceBuilds(ctx context.Context, client *connection.Client, ships []*protobuf.SHIPINFO) error {
+	var announced []uint32
+	for _, ship := range ships {
+		if shipTemplates[ship.GetTemplateId()].Rarity >= shipRarityGold {
+			announced = append(announced, ship.GetTemplateId())
+		}
+	}
+	if len(announced) == 0 {
+		return nil
+	}
+	builder, err := game.DB.GetCommander(ctx, client.CommanderID)
+	if err != nil {
+		return err
+	}
+	var msgs []proto.Message
+	for _, template := range announced {
+		msgs = append(msgs, &protobuf.SC_50103{
+			AdId: proto.Uint32(adConstruct),
+			ArgList: []*protobuf.AD_ARG{
+				{Type: proto.Uint32(publicArgPlayerName), String_: proto.String(builder.Name)},
+				{Type: proto.Uint32(publicArgShipID), Int: proto.Uint32(template)},
+			},
+		})
+	}
+	for _, id := range game.onlineCommanders() {
+		reader, err := game.DB.GetCommander(ctx, id)
+		if err != nil {
+			return err
+		}
+		if reader.ChatRoomID == builder.ChatRoomID {
+			game.deliver(client, id, msgs...)
+		}
+	}
+	return nil
 }
 
 // handleConfirmBuilds acknowledges the "ships collected while away"
