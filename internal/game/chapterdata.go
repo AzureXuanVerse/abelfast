@@ -43,6 +43,7 @@ type ambushRatio struct {
 
 type chapterTemplate struct {
 	id           uint32
+	mapID        uint32 // expedition_data_by_map
 	oil          uint32 // oil spent to sortie
 	time         uint32 // seconds the sortie stays open
 	ammoTotal    uint32
@@ -80,6 +81,7 @@ var chapterTemplates map[uint32]*chapterTemplate
 
 // chapter_template row
 type chapterConfig struct {
+	Map          uint32 `json:"map"`
 	Oil          uint32 `json:"oil"`
 	Time         uint32 `json:"time"`
 	AmmoTotal    uint32 `json:"ammo_total"`
@@ -230,6 +232,7 @@ func loadChapterData() error {
 	for id, row := range chapters {
 		template := &chapterTemplate{
 			id:           id,
+			mapID:        row.Map,
 			oil:          row.Oil,
 			time:         row.Time,
 			ammoTotal:    row.AmmoTotal,

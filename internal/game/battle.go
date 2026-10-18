@@ -104,9 +104,10 @@ func (session *chapterSession) battleCell(id uint32) *protobuf.CHAPTERCELLINFO_P
 // CS_40003). On a campaign map a win (score above C) disables the enemy's
 // cell (an ambush's is cleared), the fleet spends one ammo and keeps its hp.
 // The reply's ship_exp_list is exp gained (the client levels ships itself),
-// intimacy is 10000 + affinity gained, energy extra morale spent; drop_info is
-// added by the client through PlayerConst.addTranDrop, new ships come in
-// SC_12042 right after, then the mailbox counts (SC_30001).
+// intimacy is 10000 + affinity gained, energy extra morale spent;
+// commander_exp the EXP of the fleet's meowfficers (grantBattleMeowfficerExp);
+// drop_info is added by the client through PlayerConst.addTranDrop, new
+// ships come in SC_12042 right after, then the mailbox counts (SC_30001).
 func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_40003) error {
 	ctx := context.Background()
 	if req.GetSystem() != systemScenario {
@@ -254,6 +255,12 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 		}
 		if err := addCommanderExp(tx, reply.GetPlayerExp()); err != nil {
 			return err
+		}
+		if win {
+			var err error
+			if reply.CommanderExp, err = tx.grantBattleMeowfficerExp(session.template, expedition, group, updated); err != nil {
+				return err
+			}
 		}
 		if err := tx.grantDrops(reply.DropInfo); err != nil {
 			return err

@@ -16,9 +16,9 @@ import (
 )
 
 // Meowfficers in battle: the cats a sortie's fleets take along
-// (GROUPINCHAPTER_P13.commander_list, read by ChapterFleet:updateCommanders)
-// and what their talents change in the rolls the server makes (ambush
-// evasion).
+// (GROUPINCHAPTER_P13.commander_list, read by ChapterFleet:updateCommanders),
+// the EXP they earn in campaign battles (SC_40004 commander_exp) and what
+// their talents change in the rolls the server makes (ambush evasion).
 
 // commander_ability_template add entries: [kind, nations, ship types, attr,
 // value] (CommanderTalent:getAttrsAddition)
@@ -28,6 +28,10 @@ const (
 	// attr of a talent: the index of AttributeType.Dodge in
 	// CommanderConst.PROPERTIES
 	talentAttrDodge = 9
+	// attr of Rising Star (5061, "gains 10.0% more EXP from battles"), next
+	// to CommanderConst.DESTROY_ATTR_ID 202 (more EXP as material); the
+	// battle one is applied by the server only
+	talentAttrBattleExp = 201
 )
 
 // talentAddition is one commander_ability_template add entry.
@@ -37,8 +41,26 @@ type talentAddition struct {
 	value              float64
 }
 
+// mapChapter is what expedition_data_by_map says of a map: its type
+// (Map.SCENARIO 1, Map.ELITE 2...) and the chapter number of its title.
+type mapChapter struct {
+	kind, chapter uint32
+}
+
+// meowfficerExpRates are server/meowfficer_battle_exp.json's (wiki-derived,
+// see its _source fields): a ship's share by type and rarity, the rate by
+// enemy, and the map's bonus by map type as [first chapter, bonus] steps.
+type meowfficerExpRates struct {
+	shipTypes, rarities map[uint32]float64
+	normal, boss        float64
+	maps                map[uint32][][2]uint32
+	loaded              bool
+}
+
 var (
 	meowfficerTalentAdds map[uint32][]talentAddition // by talent id
+	mapChapters          map[uint32]mapChapter       // by map id
+	meowfficerBattleExp  meowfficerExpRates
 	// meowfficerDodgeAbility is Commander:getAbilitysAddition's evasion
 	// term, in percent: commander_attribute_template has no rate_dodge,
 	// so it is (commander_form_a - commander_form_b / commander_form_c) x
@@ -50,10 +72,16 @@ func loadMeowfficerBattleData() error {
 	var talents map[uint32]struct {
 		Add [][]json.RawMessage `json:"add"`
 	}
+	var maps map[uint32]struct {
+		Type  uint32          `json:"type"`
+		Title json.RawMessage `json:"title"`
+	}
 	var attributes map[uint32]map[string]any
 	err := gamedata.LoadAll(
 		gamedata.Load("commander_ability_template", &talents),
+		gamedata.Load("expedition_data_by_map", &maps),
 		gamedata.Load("commander_attribute_template", &attributes),
+		loadMeowfficerBattleExp,
 	)
 	if err != nil {
 		return err
@@ -72,6 +100,14 @@ func loadMeowfficerBattleData() error {
 			meowfficerTalentAdds[id] = append(meowfficerTalentAdds[id], add)
 		}
 	}
+	mapChapters = make(map[uint32]mapChapter, len(maps))
+	for id, row := range maps {
+		chapter := mapChapter{kind: row.Type}
+		if title := gamedata.IDs(row.Title); len(title) == 1 {
+			chapter.chapter = title[0]
+		}
+		mapChapters[id] = chapter
+	}
 	for id, row := range attributes {
 		if rate, _ := row["rate_dodge"].(float64); rate != 0 {
 			logger.WithFields("Meowfficer", logger.FieldValue("attribute", id)).Warn("commander_attribute_template has a rate_dodge, the ambush evasion leaves it out")
@@ -86,6 +122,50 @@ func loadMeowfficerBattleData() error {
 	}
 	ability := float64(gameset["commander_form_a"]) - float64(gameset["commander_form_b"])/float64(gameset["commander_form_c"])
 	meowfficerDodgeAbility = math.Round(ability*float64(gameset["commander_form_n"])*1000) / 1000
+	return nil
+}
+
+func loadMeowfficerBattleExp() error {
+	meowfficerBattleExp = meowfficerExpRates{}
+	raw, err := gamedata.ServerFile("meowfficer_battle_exp.json")
+	if err != nil {
+		return err
+	}
+	if raw == nil {
+		logger.WithFields("Meowfficer").Warn("no server/meowfficer_battle_exp.json: meowfficers get no battle EXP")
+		return nil
+	}
+	var file struct {
+		ShipTypes  map[string]any `json:"ship_types"`
+		Rarities   map[string]any `json:"rarities"`
+		EnemyRates struct {
+			Normal float64 `json:"normal"`
+			Boss   float64 `json:"boss"`
+		} `json:"enemy_rates"`
+		Maps map[string]json.RawMessage `json:"maps"`
+	}
+	if err := json.Unmarshal(raw, &file); err != nil {
+		return fmt.Errorf("meowfficer_battle_exp.json: %w", err)
+	}
+	meowfficerBattleExp = meowfficerExpRates{
+		shipTypes: rateTable(file.ShipTypes, numberKey),
+		rarities:  rateTable(file.Rarities, numberKey),
+		normal:    file.EnemyRates.Normal,
+		boss:      file.EnemyRates.Boss,
+		maps:      map[uint32][][2]uint32{},
+		loaded:    true,
+	}
+	for key, value := range file.Maps {
+		kind, ok := numberKey(key)
+		if !ok {
+			continue
+		}
+		var steps [][2]uint32
+		if err := json.Unmarshal(value, &steps); err != nil {
+			return fmt.Errorf("meowfficer_battle_exp.json maps %s: %w", key, err)
+		}
+		meowfficerBattleExp.maps[kind] = steps
+	}
 	return nil
 }
 
@@ -227,4 +307,66 @@ func meowfficerDodge(cats []db.Meowfficer, ship db.Ship) attrBonus {
 		bonus.rate += (meowfficerDodgeAbility + ratio/100) / 100
 	}
 	return bonus
+}
+
+// meowfficerShipExp is a ship's share of a battle's meowfficer EXP: its
+// type's and its config rarity's, plus its stars.
+func meowfficerShipExp(ship db.Ship) float64 {
+	template := shipTemplates[ship.TemplateID]
+	return meowfficerBattleExp.shipTypes[template.Type] + meowfficerBattleExp.rarities[template.Rarity] + float64(template.Star)
+}
+
+// meowfficerMapBonus is the bonus of a chapter's map: the last step its
+// chapter number reached for its map type, none for the other maps.
+func meowfficerMapBonus(template *chapterTemplate) uint32 {
+	chapter := mapChapters[template.mapID]
+	bonus := uint32(0)
+	for _, step := range meowfficerBattleExp.maps[chapter.kind] {
+		if chapter.chapter >= step[0] {
+			bonus = step[1]
+		}
+	}
+	return bonus
+}
+
+// grantBattleMeowfficerExp gives the cats of the fleet that won a campaign
+// battle their EXP and returns SC_40004.commander_exp: floor(the ships'
+// shares x the enemy's rate) + the map's bonus, the same for both cats,
+// plus each cat's Rising Star talents. The client adds it to the cats of
+// the chapter fleet (FinishStageCommand.GenerateCommanderExp, an entry per
+// cat, 0 when missing) with Commander:addExp, nothing at the last level;
+// so does the server (addMeowfficerExp). A lost battle gives none: the
+// formula has no rank term and no source says a loss earns EXP. Built from
+// the Lua and the wiki: no capture has a meowfficer in a battle.
+func (tx *Tx) grantBattleMeowfficerExp(template *chapterTemplate, expedition expeditionTemplate, group *protobuf.GROUPINCHAPTER_P13, ships []db.Ship) ([]*protobuf.COMMANDER_EXP, error) {
+	if !meowfficerBattleExp.loaded {
+		return nil, nil
+	}
+	cats, err := groupMeowfficers(tx.ctx, tx.Queries, tx.commanderID, group)
+	if err != nil || len(cats) == 0 {
+		return nil, err
+	}
+	shares := 0.0
+	for _, ship := range ships {
+		shares += meowfficerShipExp(ship)
+	}
+	rate := meowfficerBattleExp.normal
+	if expedition.isBoss() {
+		rate = meowfficerBattleExp.boss
+	}
+	base := uint32(calcFloor(shares*rate)) + meowfficerMapBonus(template)
+	var list []*protobuf.COMMANDER_EXP
+	for _, cat := range cats {
+		ratio := talentBonus(cat, talentAdditionRatio, talentAttrBattleExp, 0, 0)
+		exp := uint32(calcFloor(float64(base) * (1 + ratio/10000)))
+		list = append(list, &protobuf.COMMANDER_EXP{CommanderId: proto.Uint32(cat.ID), Exp: proto.Uint32(exp)})
+		level, rest := addMeowfficerExp(cat, exp)
+		if level == cat.Level && rest == cat.Exp {
+			continue
+		}
+		if err := tx.SetMeowfficerLevel(tx.ctx, db.SetMeowfficerLevelParams{Level: level, Exp: rest, CommanderID: tx.commanderID, ID: cat.ID}); err != nil {
+			return nil, err
+		}
+	}
+	return list, nil
 }
