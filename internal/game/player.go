@@ -8,7 +8,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/gamedata"
 	"github.com/ggmolly/belfast/internal/protobuf"
@@ -153,34 +152,4 @@ func navalAcademy() *protobuf.SC_22001 {
 		ClassLv:       proto.Uint32(1),
 		SkillClassNum: proto.Uint32(2),
 	}
-}
-
-// dorm is SC_19001, the backyard (DormProxy): level 1 (dorm_data_template 1),
-// one floor, two training slots, the owned furniture and food, no ships.
-func (game *Game) dorm(ctx context.Context, commander db.Commander) (*protobuf.SC_19001, error) {
-	furniture, err := game.DB.ListFurniture(ctx, commander.ID)
-	if err != nil {
-		return nil, err
-	}
-	list := make([]*protobuf.FURNITUREINFO, len(furniture))
-	for i, row := range furniture {
-		list[i] = &protobuf.FURNITUREINFO{Id: proto.Uint32(row.FurnitureID), Count: proto.Uint32(row.Count)}
-	}
-	return &protobuf.SC_19001{
-		Lv:              proto.Uint32(1),
-		Food:            proto.Uint32(commander.DormFood),
-		FurnitureIdList: list,
-		FloorNum:        proto.Uint32(1),
-		ExpPos:          proto.Uint32(2),
-		// nothing is ever collected yet: the backyard was last loaded when
-		// the commander was created
-		LoadTime: proto.Uint32(uint32(commander.RegisteredAt)),
-	}, nil
-}
-
-// handleDormPopEvents answers BackYardRequestPopEventCommand (CS_19009): the
-// affection and coins waiting above the ships resting in the backyard. No
-// ship rests there yet.
-func (game *Game) handleDormPopEvents(client *connection.Client, req *protobuf.CS_19009) error {
-	return client.Send(&protobuf.SC_19010{})
 }

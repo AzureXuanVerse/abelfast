@@ -14,7 +14,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ggmolly/belfast/internal/connection"
-	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/gamedata"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
@@ -22,14 +21,14 @@ import (
 // item_data_statistics usage (ItemUsage, model/const/itemusage.lua) of the
 // items belfast opens. The others change state belfast doesn't keep yet
 // (skin selections, random skins, skin trials and discounts, ship affection
-// gifts, the backyard level, the guild, commander boxes, remastered
-// chapters) and are refused.
+// gifts, the guild, commander boxes, remastered chapters) and are refused.
 const (
 	usageDrop          = "usage_drop"
 	usageDropTemplate  = "usgae_drop_template" // sic
 	usageDropAppointed = "usage_drop_appointed"
 	usageInvitation    = "usage_invitation"
 	usageFood          = "usage_food"
+	usageDormLvUp      = "usage_dorm_lv_up"
 )
 
 // itemUseConfig is what item_data_statistics says about using an item.
@@ -77,31 +76,11 @@ type invitationConfig struct {
 
 var invitations map[uint32]invitationConfig
 
-// dormFoodCapacity is dorm_data_template[1].capacity, the food the level 1
-// backyard holds (no food_max_increase extension is sold yet).
-var dormFoodCapacity uint32
-
-// dorm_data_template row
-type dormConfig struct {
-	Capacity uint32 `json:"capacity"`
-}
-
 func loadItemData() error {
-	var dorms map[uint32]dormConfig
-	err := gamedata.LoadAll(
+	return gamedata.LoadAll(
 		gamedata.Load("item_usage_invitation", &invitations),
-		gamedata.Load("dorm_data_template", &dorms),
 		loadDropPacks,
 	)
-	if err != nil {
-		return err
-	}
-	dorm, ok := dorms[1]
-	if !ok {
-		return gamedata.Missing("dorm_data_template", "level 1")
-	}
-	dormFoodCapacity = dorm.Capacity
-	return nil
 }
 
 // itemTypeEquipBox is Item.EQUIPMENT_BOX_TYPE_5 (model/vo/item.lua), the
@@ -411,6 +390,15 @@ func (tx *Tx) useItem(id, count uint32, arg []uint32) ([]*protobuf.DROPINFO, err
 			return nil, err
 		}
 		return nil, tx.addDormFood(use.food * count)
+	case usageDormLvUp:
+		// ExtendBackYardAreaCommand: one level per use
+		if count != 1 {
+			return nil, errRefused
+		}
+		if err := tx.SpendItem(id, count); err != nil {
+			return nil, err
+		}
+		return nil, tx.expandDorm()
 	default:
 		return nil, errRefused
 	}
@@ -452,14 +440,4 @@ func resolveContent(drops []*protobuf.DROPINFO, kind, id, number uint32) []*prot
 		return drops
 	}
 	return mergeDrop(drops, kind, id, number)
-}
-
-// addDormFood fills the backyard with food, what doesn't fit is lost
-// (AddFoodCommand).
-func (tx *Tx) addDormFood(food uint32) error {
-	commander, err := tx.GetCommander(tx.ctx, tx.commanderID)
-	if err != nil {
-		return err
-	}
-	return tx.SetDormFood(tx.ctx, db.SetDormFoodParams{DormFood: uint32(min(uint64(commander.DormFood)+uint64(food), uint64(dormFoodCapacity))), ID: tx.commanderID})
 }

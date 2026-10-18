@@ -23,6 +23,7 @@ func loadGameData() error {
 		loadEducateData,
 		loadNewCommander,
 		loadStarterFurniture,
+		loadDormData,
 		loadMailData,
 		loadDiscussionData,
 		loadCollectionData,

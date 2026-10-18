@@ -98,6 +98,18 @@ type CommanderCommonFlag struct {
 	FlagID      uint32
 }
 
+type CommanderDorm struct {
+	CommanderID          uint32
+	Level                uint32
+	FloorNum             uint32
+	ExpPos               uint32
+	FoodMaxIncrease      uint32
+	FoodMaxIncreaseCount uint32
+	Name                 string
+	LoadTime             int64
+	NextTimestamp        int64
+}
+
 type CommanderEquipment struct {
 	CommanderID uint32
 	EquipID     uint32
@@ -249,6 +261,27 @@ type CommanderWeeklyTask struct {
 	TaskID      uint32
 	Progress    uint32
 	Claimed     bool
+}
+
+type DormFloor struct {
+	CommanderID uint32
+	Floor       uint32
+	Layout      []byte
+}
+
+type DormShip struct {
+	ShipID      uint32
+	CommanderID uint32
+	Floor       uint32
+	PopIcon     uint32
+	PopIntimacy uint32
+	PopAt       int64
+}
+
+type DormTheme struct {
+	CommanderID uint32
+	Pos         uint32
+	Theme       []byte
 }
 
 type Fleet struct {

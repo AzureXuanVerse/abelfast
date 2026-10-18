@@ -25,12 +25,15 @@ const (
 	genreBuyOil         = "buy_oil"
 	genreGiftPackage    = "gift_package"
 	genreNewServerShop  = "new_server_shop"
+	// the backyard's Expansion License and food capacity
+	genreBackyardUpgrade    = "backyard_upgrade"
+	genreBackyardFoodExtend = "backyard_food_extend"
 	// bought through SkinShoppingCommand
 	genreSkinShop          = "skin_shop"
 	genreSkinShopTimeLimit = "skin_shop_timelimit"
 )
 
-var sellableGenres = []string{genreNone, genreGemShop, genreShoppingStreet, genreArenaShop, genreBuyOil, genreGiftPackage, genreNewServerShop, genreSkinShop, genreSkinShopTimeLimit}
+var sellableGenres = []string{genreNone, genreGemShop, genreShoppingStreet, genreArenaShop, genreBuyOil, genreGiftPackage, genreNewServerShop, genreSkinShop, genreSkinShopTimeLimit, genreBackyardUpgrade, genreBackyardFoodExtend}
 
 // shopTypeSkin is shop_template type of the skin goods: effect_args[1] is a
 // ship_skin_template id.
@@ -42,6 +45,9 @@ const (
 	effectShipBagSize      = "ship_bag_size"
 	effectEquipBagSize     = "equip_bag_size"
 	effectCommanderBagSize = "commander_bag_size"
+	effectDormExpPos       = "dorm_exp_pos"
+	effectDormFoodMax      = "dorm_food_max"
+	effectDormFloor        = "dorm_floor"
 )
 
 // Player.MAX_SHIP_BAG, MAX_EQUIP_BAG and MAX_COMMANDER_BAG (model/vo/player.lua)
@@ -166,7 +172,7 @@ func (goods *shopGoods) readLimits() {
 			goods.level = args[0]
 		case name == "time":
 			goods.times = args[0]
-		case name == "count" && len(args) >= 2:
+		case (name == "count" || name == "number") && len(args) >= 2:
 			goods.hasCount, goods.countMin, goods.countMax = true, args[0], args[1]
 		}
 	}
@@ -392,6 +398,9 @@ func (tx *Tx) buyGoods(id, count uint32, now time.Time) ([]*protobuf.DROPINFO, e
 // extend applies a type 0 purchase, a capacity extension of amount; the
 // count limit is the capacity it extends from.
 func (tx *Tx) extend(goods shopGoods, commander db.Commander, amount uint32) error {
+	if ok, err := tx.extendDorm(goods, amount); ok {
+		return err
+	}
 	switch goods.effect {
 	case effectShipBagSize:
 		if !goods.countAllows(commander.ShipBagMax) || commander.ShipBagMax+amount > maxShipBag {

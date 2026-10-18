@@ -53,7 +53,20 @@ func (game *Game) Register() {
 	}
 	// the player, settings and guild
 	packets.Handle(game.handleLoadPlayerData)
+	// the backyard
 	packets.Handle(game.handleDormPopEvents)
+	packets.Handle(game.handleBackyardVisitor)
+	packets.Handle(game.handleDormShipExp)
+	packets.Handle(game.handleDormAddShip)
+	packets.Handle(game.handleDormShipExit)
+	packets.Handle(game.handleDormIntimacy)
+	packets.Handle(game.handleDormMoney)
+	packets.Handle(game.handlePutFurniture)
+	packets.Handle(game.handleDormRename)
+	packets.Handle(game.handleBuyFurniture)
+	packets.Handle(game.handleThemeTemplates)
+	packets.Handle(game.handleSaveThemeTemplate)
+	packets.Handle(game.handleDeleteThemeTemplate)
 	packets.Handle(game.handleGuideIndex)
 	packets.Handle(game.handleStoryRead)
 	packets.Handle(game.handleCommonFlag)
@@ -249,7 +262,9 @@ var loginBurst = []loginPush{
 	func(game *Game, l *login) (proto.Message, error) {
 		return game.activityTasksList(l.ctx, l.queries, l.commander.ID, l.now)
 	},
-	func(game *Game, l *login) (proto.Message, error) { return game.dorm(l.ctx, l.commander) },
+	func(game *Game, l *login) (proto.Message, error) {
+		return game.dorm(l.ctx, l.queries, l.commander, l.ships)
+	},
 	func(game *Game, l *login) (proto.Message, error) { return energyTick(l.commander, l.now.Unix()), nil },
 	// ApartmentProxy / Dorm3dInsProxy: no dorm 3D
 	empty[protobuf.SC_28000](),
