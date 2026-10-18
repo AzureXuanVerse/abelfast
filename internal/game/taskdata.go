@@ -63,11 +63,14 @@ type battlepassTaskGroup struct {
 }
 
 // tutorial_handbook_task row: a commander manual page; task_list holds
-// {tasks, tasks to finish before they are given} pairs
+// {tasks, tasks to finish before they are given} pairs, target the pt each
+// pt reward needs and drop_client what each one gives
 type handbookPageConfig struct {
-	ID       uint32       `json:"id"`
-	TaskList [][][]uint32 `json:"task_list"`
-	Unlock   []uint32     `json:"unlock"`
+	ID         uint32       `json:"id"`
+	TaskList   [][][]uint32 `json:"task_list"`
+	Unlock     []uint32     `json:"unlock"`
+	Target     []uint32     `json:"target"`
+	DropClient [][][]uint32 `json:"drop_client"`
 }
 
 var (

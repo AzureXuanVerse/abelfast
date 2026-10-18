@@ -157,6 +157,7 @@ type CommanderHandbookFinished struct {
 type CommanderHandbookPage struct {
 	CommanderID uint32
 	PageID      uint32
+	Award       uint32
 }
 
 type CommanderItem struct {

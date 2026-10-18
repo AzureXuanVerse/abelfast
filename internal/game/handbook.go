@@ -2,6 +2,8 @@ package game
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"slices"
 	"time"
 
@@ -13,8 +15,8 @@ import (
 )
 
 // handbookLoginPush is SC_22300, CommanderManualProxy's state: the pages the
-// commander got tasks from with their pt (one per finished page task) and no
-// pt reward claimed, and every commander manual task they finished (the
+// commander got tasks from with their pt (one per finished page task) and
+// the pt rewards claimed, and every commander manual task they finished (the
 // client checks page and unlock tasks against that one list,
 // CommanderManualPage.finishedTaskIds).
 func (game *Game) handbookLoginPush(ctx context.Context, commander db.Commander) (*protobuf.SC_22300, error) {
@@ -36,18 +38,23 @@ func (game *Game) handbookLoginPush(ctx context.Context, commander db.Commander)
 			msg.FinishedTaskIds = append(msg.FinishedTaskIds, task.TaskID)
 		}
 	}
-	// pt is the page's finished page tasks (task_list[i][0]); awards are never
-	// claimed yet
-	for _, id := range pages {
-		pt := uint32(0)
-		for _, task := range byPage[id] {
-			if handbookPageConfigs[id].isPageTask(task) {
-				pt++
-			}
-		}
-		msg.Handbooks = append(msg.Handbooks, &protobuf.TUTHANDBOOK{Id: proto.Uint32(id), Pt: proto.Uint32(pt), FinishedTaskIds: byPage[id]})
+	for _, page := range pages {
+		id := page.PageID
+		pt := handbookPageConfigs[id].pt(byPage[id])
+		msg.Handbooks = append(msg.Handbooks, &protobuf.TUTHANDBOOK{Id: proto.Uint32(id), Pt: proto.Uint32(pt), Award: proto.Uint32(page.Award), FinishedTaskIds: byPage[id]})
 	}
 	return msg, nil
+}
+
+// pt is the page's pt: its finished page tasks (task_list[i][0]).
+func (page handbookPageConfig) pt(finished []uint32) uint32 {
+	pt := uint32(0)
+	for _, task := range finished {
+		if page.isPageTask(task) {
+			pt++
+		}
+	}
+	return pt
 }
 
 // isPageTask tells whether taskID is one of the page's tasks
@@ -114,4 +121,54 @@ func (game *Game) handleHandbookGetTasks(client *connection.Client, req *protobu
 		}
 	}
 	return client.Send(&protobuf.SC_22303{Result: result(nil)})
+}
+
+// handleHandbookPtAward claims the next pt reward of a commander manual page
+// (CommanderManualCommand GET_PT_AWARD, id the tutorial_handbook_task page):
+// with award rewards claimed, the next one needs target[award] pt and gives
+// drop_client[award] (CommanderManualPage.GetCurrentPtTarget /
+// GetCurrentPtAward, the get_btn of CommanderManualLayer.SetPtPanel). The
+// client then counts it (AddPageAward) and shows drop_list. No capture has
+// it: built from the Lua alone.
+func (game *Game) handleHandbookPtAward(client *connection.Client, req *protobuf.CS_22304) error {
+	var awards []*protobuf.DROPINFO
+	err := game.tx(context.Background(), client, func(tx *Tx) error {
+		page, ok := handbookPageConfigs[req.GetId()]
+		if !ok {
+			return errRefused
+		}
+		award, err := tx.GetHandbookPageAward(tx.ctx, db.GetHandbookPageAwardParams{CommanderID: tx.commanderID, PageID: page.ID})
+		if errors.Is(err, sql.ErrNoRows) {
+			return errRefused
+		}
+		if err != nil {
+			return err
+		}
+		if int(award) >= len(page.Target) || int(award) >= len(page.DropClient) {
+			return errRefused
+		}
+		finished, err := tx.ListHandbookPageFinished(tx.ctx, db.ListHandbookPageFinishedParams{CommanderID: tx.commanderID, PageID: page.ID})
+		if err != nil {
+			return err
+		}
+		if page.pt(finished) < page.Target[award] {
+			return errRefused
+		}
+		claimed, err := tx.ClaimHandbookPageAward(tx.ctx, db.ClaimHandbookPageAwardParams{CommanderID: tx.commanderID, PageID: page.ID, Award: award})
+		if err != nil {
+			return err
+		}
+		if claimed == 0 {
+			return errRefused
+		}
+		awards = configDrops(page.DropClient[award])
+		return tx.grantDrops(awards)
+	})
+	if err != nil && !refused(err) {
+		return err
+	}
+	if err != nil {
+		awards = nil
+	}
+	return client.Send(&protobuf.SC_22305{Result: result(err), DropList: awards})
 }

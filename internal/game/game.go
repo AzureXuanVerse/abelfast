@@ -134,6 +134,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleClientTaskEvent)
 	packets.Handle(game.handleSubmitActivityTasks)
 	packets.Handle(game.handleHandbookGetTasks)
+	packets.Handle(game.handleHandbookPtAward)
 	packets.Handle(game.handleActivityOperation)
 	// Juus
 	packets.Handle(game.handleJuusPostOp)
