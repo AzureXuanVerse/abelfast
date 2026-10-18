@@ -218,6 +218,12 @@ type CommanderGuildShopPurchase struct {
 	Count       uint32
 }
 
+type CommanderGuildTechnology struct {
+	CommanderID uint32
+	GroupID     uint32
+	TechID      uint32
+}
+
 type CommanderHandbookFinished struct {
 	CommanderID uint32
 	PageID      uint32
@@ -525,6 +531,15 @@ type GuildRequest struct {
 	CommanderID uint32
 	Content     string
 	Time        uint32
+}
+
+type GuildTechnology struct {
+	GuildID   uint32
+	GroupID   uint32
+	TechID    uint32
+	Progress  uint32
+	Active    bool
+	StartedAt int64
 }
 
 type GuildWaitTime struct {

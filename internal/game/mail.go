@@ -593,7 +593,8 @@ func (tx *Tx) claimMails(commander db.Commander, mails []db.Mail) ([]*protobuf.D
 }
 
 // bagsHold refuses drops the dock (ship_bag_max) or the gear depot
-// (equip_bag_max) can't hold (CheckOverflow's "ship" and "equip").
+// (equip_bag_max, plus guild technologies' slots) can't hold
+// (CheckOverflow's "ship" and "equip").
 func (tx *Tx) bagsHold(commander db.Commander, drops []*protobuf.DROPINFO) error {
 	var ships, equipment uint32
 	for _, drop := range drops {
@@ -615,7 +616,11 @@ func (tx *Tx) bagsHold(commander db.Commander, drops []*protobuf.DROPINFO) error
 		if err != nil {
 			return err
 		}
-		if uint32(owned)+equipment > commander.EquipBagMax {
+		bonus, err := tx.guildTechBonus(guildTechEquipBag)
+		if err != nil {
+			return err
+		}
+		if uint32(owned)+equipment > commander.EquipBagMax+bonus {
 			return errRefused
 		}
 	}

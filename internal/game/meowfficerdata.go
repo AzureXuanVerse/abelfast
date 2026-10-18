@@ -306,7 +306,7 @@ func loadCatteryPlayAwards() error {
 
 // meowfficerBoxCost is what the nth cat box bought in a day costs (from 0;
 // CommanderConst.getBoxComsume): the first entry whose count n is below,
-// else the last; the guild's discount is not applied (no guild).
+// else the last, before the guild technologies' discount.
 func meowfficerBoxCost(n uint32) uint32 {
 	for _, entry := range meowfficerBoxCosts {
 		if n < entry[2] {

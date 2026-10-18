@@ -399,7 +399,8 @@ func (game *Game) handleQuickFinishMeowfficerBoxes(client *connection.Client, re
 
 // handleBuyMeowfficerBoxes buys cat boxes from Akashi
 // (ReserveCommanderBoxCommand, CS_25018, NG006): type is how many. The nth
-// box of the day costs commander_get_cost's gold (the first is free), at
+// box of the day costs commander_get_cost's gold (the first is free) less
+// the guild technologies' discount (CommanderConst.getBoxComsume), at
 // most MAX_GETBOX_CNT a day; each is a box item drawn with the rates the
 // page shows (commander_build_rate_tip). The client takes the gold off
 // itself, counts the boxes bought and adds the awards. The very first box
@@ -421,9 +422,13 @@ func (game *Game) handleBuyMeowfficerBoxes(client *connection.Client, req *proto
 			if bought+count > meowfficerBoxDailyMax() {
 				return errRefused
 			}
+			discount, err := tx.guildTechBonus(guildTechCatBoxGold)
+			if err != nil {
+				return err
+			}
 			gold := uint32(0)
 			for n := bought; n < bought+count; n++ {
-				gold += meowfficerBoxCost(n)
+				gold += meowfficerBoxCost(n) - min(discount, meowfficerBoxCost(n))
 			}
 			if err := tx.SpendResource(ResourceGold, gold); err != nil {
 				return err

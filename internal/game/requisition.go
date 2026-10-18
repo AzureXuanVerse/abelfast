@@ -182,7 +182,7 @@ func (tx *Tx) requisition(count uint32, now time.Time) ([]*protobuf.SHIPINFO, er
 
 // dockHasRoom is whether count more ships fit in the dock, counted as the
 // client does (BayProxy:getShipCount leaves out unoccupied_ship_nationality
-// ships).
+// ships), with the slots guild technologies add (Player:getMaxShipBag).
 func (tx *Tx) dockHasRoom(count uint32) error {
 	commander, err := tx.GetCommander(tx.ctx, tx.commanderID)
 	if err != nil {
@@ -198,7 +198,11 @@ func (tx *Tx) dockHasRoom(count uint32) error {
 			occupied++
 		}
 	}
-	if occupied+count > commander.ShipBagMax {
+	bonus, err := tx.guildTechBonus(guildTechShipBag)
+	if err != nil {
+		return err
+	}
+	if occupied+count > commander.ShipBagMax+bonus {
 		return errRefused
 	}
 	return nil

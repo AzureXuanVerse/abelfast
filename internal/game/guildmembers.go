@@ -87,7 +87,11 @@ func guildLevelAt(level uint32) guildLevelConfig {
 // guildMaxMembers is how many members a guild holds: its level's
 // member_num, plus the seats its technologies add (Guild.getMaxMember).
 func guildMaxMembers(ctx context.Context, queries *db.Queries, guild db.Guild) (uint32, error) {
-	return guildLevelAt(guild.Level).MemberNum, nil
+	seats, err := guildTechSeats(ctx, queries, guild.ID)
+	if err != nil {
+		return 0, err
+	}
+	return guildLevelAt(guild.Level).MemberNum + seats, nil
 }
 
 // guildWaitTime is when the commander may join a guild again (0 none),

@@ -491,7 +491,7 @@ func (game *Game) fillResourceFields(ctx context.Context, commander db.Commander
 // handleHarvestResource answers HarvestResourceCommand
 // (controller/command/player/harvestresourcecommand.lua): type 1 collects
 // the merchant's gold, 2 the oil field's oil, up to the level's max_gold /
-// max_oil. On result 0 the client moves its own count of the field over,
+// max_oil plus what guild technologies add (Player:getLevelMaxGold). On result 0 the client moves its own count of the field over,
 // as much as fits, from the player it read before asking; the server
 // settles the field first and moves as much. The official server replies
 // only that (captured): it pushes SC_11004 at every tick, so the client's
@@ -506,14 +506,20 @@ func (game *Game) handleHarvestResource(client *connection.Client, req *protobuf
 			return err
 		}
 		var resource, field, limit uint32
+		var effect string
 		switch req.GetType() {
 		case ResourceGold:
-			resource, field, limit = ResourceGold, ResourceGoldField, commanderLevels[commander.Level].MaxGold
+			resource, field, limit, effect = ResourceGold, ResourceGoldField, commanderLevels[commander.Level].MaxGold, guildTechGoldMax
 		case ResourceOil:
-			resource, field, limit = ResourceOil, ResourceOilField, commanderLevels[commander.Level].MaxOil
+			resource, field, limit, effect = ResourceOil, ResourceOilField, commanderLevels[commander.Level].MaxOil, guildTechOilMax
 		default:
 			return errRefused
 		}
+		bonus, err := tx.guildTechBonus(effect)
+		if err != nil {
+			return err
+		}
+		limit += bonus
 		if err := tx.settleResourceFields(commander, time.Now()); err != nil {
 			return err
 		}

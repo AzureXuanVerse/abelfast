@@ -107,6 +107,8 @@ func (game *Game) Register() {
 	packets.Handle(game.handleModifyGuild)
 	packets.Handle(game.handleSearchGuild)
 	packets.Handle(game.handlePublicGuildTech)
+	packets.Handle(game.handleUpgradeGuildTech)
+	packets.Handle(game.handleStartGuildTechGroup)
 	packets.Handle(game.handleGuildUserInfo)
 	packets.Handle(game.handleGuildShop)
 	packets.Handle(game.handleGuildShopPurchase)

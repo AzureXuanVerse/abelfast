@@ -288,23 +288,6 @@ func (game *Game) guildCreated(tx *Tx, guildID uint32) error {
 	return game.guildTechnologiesCreated(tx, guildID)
 }
 
-// publicGuildTechs are the public guild technologies a commander outside a
-// guild sees (GetPublicGuildUserDataCommand), with the progress the official
-// server reports for a new commander (captured).
-var publicGuildTechs = [][2]uint32{{6012, 0}, {5009, 20}, {4009, 20}, {3030, 0}, {2030, 0}}
-
-// handlePublicGuildTech answers GetPublicGuildUserDataCommand: the public
-// guild technologies, none started.
-func (game *Game) handlePublicGuildTech(client *connection.Client, req *protobuf.CS_62100) error {
-	reply := &protobuf.SC_62101{}
-	for _, tech := range publicGuildTechs {
-		reply.Technologys = append(reply.Technologys, &protobuf.GUILD_TECHNOLOGY{
-			Id: proto.Uint32(tech[0]), Progress: proto.Uint32(tech[1]),
-		})
-	}
-	return client.Send(reply)
-}
-
 // handleGuildUserInfo answers GuildGetUserInfoCommand: no donations or
 // benefits yet, today's donation tasks (guild_donate_task ids, captured).
 func (game *Game) handleGuildUserInfo(client *connection.Client, req *protobuf.CS_60102) error {
