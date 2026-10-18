@@ -12,6 +12,10 @@
 // The client's Lua (-lua) gives the commands it can send, the denominator, and
 // names the protocol modules after the controller directories sending them.
 //
+// The card also lists what changed since -since ago: the handlers answering a
+// command they did not answer (or answering it better) at the last commit
+// before then, each attributed to the commit that last introduced its handler.
+//
 //	go run ./cmd/packet_progress -svg progress.svg -png progress.png
 package main
 
@@ -63,6 +67,7 @@ type packet struct {
 	Status  status   `json:"status"`
 	Handler string   `json:"handler,omitempty"`
 	Pos     string   `json:"pos,omitempty"`
+	End     int      `json:"-"`                  // last line of the handler
 	Config  []string `json:"config,omitempty"`   // config tables the handler reads
 	Literal []string `json:"literals,omitempty"` // hard-coded package tables it reads
 	Lua     string   `json:"lua,omitempty"`      // a Lua file sending it
@@ -82,6 +87,7 @@ type report struct {
 	Total     int            `json:"total"`
 	Modules   []*module      `json:"modules"`
 	Packets   []*packet      `json:"packets"`
+	History   *history       `json:"history,omitempty"`
 }
 
 func main() {
@@ -90,15 +96,20 @@ func main() {
 	svgOut := flag.String("svg", ".cache/packet-progress.svg", "SVG card")
 	pngOut := flag.String("png", "", "PNG render of the SVG (needs rsvg-convert)")
 	pngScale := flag.Float64("png-scale", 2, "PNG zoom")
+	since := flag.Duration("since", 24*time.Hour, "list the changes of this period (0 to skip)")
+	rows := flag.Int("changes", 6, "most commits listed in the latest changes")
 	flag.Parse()
 
-	pkgs, err := load()
+	pkgs, err := load(".", true)
 	if err != nil {
 		log.Fatal(err)
 	}
 	handled := analyze(pkgs)
 	sent, luaFiles, luaDirs := scanLua(*luaDir)
 	rep := build(handled, csPackets(pkgs), sent, luaFiles, luaDirs)
+	if *since > 0 {
+		rep.History = changes(rep, *since, *rows)
+	}
 
 	if *jsonOut != "" {
 		data, err := json.MarshalIndent(rep, "", "  ")
@@ -129,10 +140,10 @@ func writeFile(path string, data []byte) {
 	}
 }
 
-// load type-checks the module's packages, except the generated protobuf ones
+// load type-checks the module in dir, except the generated protobuf packages
 // (their types come from export data).
-func load() ([]*packages.Package, error) {
-	listed, err := packages.Load(&packages.Config{Mode: packages.NeedName}, "./...")
+func load(dir string, printErrors bool) ([]*packages.Package, error) {
+	listed, err := packages.Load(&packages.Config{Mode: packages.NeedName, Dir: dir}, "./...")
 	if err != nil {
 		return nil, err
 	}
@@ -143,12 +154,17 @@ func load() ([]*packages.Package, error) {
 		}
 	}
 	mode := packages.NeedName | packages.NeedTypes | packages.NeedSyntax | packages.NeedTypesInfo | packages.NeedImports
-	pkgs, err := packages.Load(&packages.Config{Mode: mode}, patterns...)
+	pkgs, err := packages.Load(&packages.Config{Mode: mode, Dir: dir}, patterns...)
 	if err != nil {
 		return nil, err
 	}
-	if packages.PrintErrors(pkgs) > 0 {
-		return nil, fmt.Errorf("type-checking failed")
+	failed := false
+	packages.Visit(pkgs, nil, func(pkg *packages.Package) { failed = failed || len(pkg.Errors) > 0 })
+	if failed {
+		if printErrors {
+			packages.PrintErrors(pkgs)
+		}
+		return nil, fmt.Errorf("type-checking %s failed", dir)
 	}
 	return pkgs, nil
 }
@@ -239,7 +255,8 @@ func analyze(pkgs []*packages.Package) map[uint32]*packet {
 				if previous := handled[id]; previous != nil {
 					log.Printf("CS_%d registered twice: %s and %s", id, previous.Handler, handler.Name())
 				}
-				handled[id] = &packet{ID: id, Handler: handler.Name(), Pos: a.position(handler)}
+				pos, end := a.position(handler)
+				handled[id] = &packet{ID: id, Handler: handler.Name(), Pos: pos, End: end}
 				if enclosing := enclosingFunc(pkg, file, call); enclosing != nil {
 					startup = append(startup, enclosing)
 					a.owners[enclosing.Pkg()] = true
@@ -266,10 +283,12 @@ func analyze(pkgs []*packages.Package) map[uint32]*packet {
 	return handled
 }
 
-func (a *analyzer) position(fn *types.Func) string {
+// position is where fn is declared (file:line, relative to the working
+// directory) and its last line.
+func (a *analyzer) position(fn *types.Func) (string, int) {
 	decl, ok := a.decls[fn]
 	if !ok {
-		return ""
+		return "", 0
 	}
 	pos := decl.pkg.Fset.Position(decl.decl.Pos())
 	if wd, err := os.Getwd(); err == nil {
@@ -277,7 +296,7 @@ func (a *analyzer) position(fn *types.Func) string {
 			pos.Filename = rel
 		}
 	}
-	return fmt.Sprintf("%s:%d", pos.Filename, pos.Line)
+	return fmt.Sprintf("%s:%d", pos.Filename, pos.Line), decl.pkg.Fset.Position(decl.decl.End()).Line
 }
 
 func (a *analyzer) marked(fn *types.Func, directive string) bool {
@@ -602,9 +621,5 @@ func topKey(counts map[string]int) string {
 }
 
 func revision() string {
-	out, err := exec.Command("git", "rev-parse", "--short", "HEAD").Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
+	return git("rev-parse", "--short", "HEAD")
 }
