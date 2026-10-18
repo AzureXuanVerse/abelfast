@@ -150,11 +150,19 @@ func guildWeek(now time.Time) uint32 {
 }
 
 // drawDonateTasks picks a day's donations: contribution_task_num distinct
-// guild_contribution_template ids at random (the Lua and the tables have no
-// rule on which).
+// guild_contribution_template ids, the gold one always first (the official
+// server gave a new commander [1 gold, 2 oil, 20 merit], and the wiki says
+// gold is always offered), the others at random.
 func drawDonateTasks() db.IDList {
 	ids := slices.Clone(guildContributionIDs)
 	rand.Shuffle(len(ids), func(i, j int) { ids[i], ids[j] = ids[j], ids[i] })
+	gold := slices.IndexFunc(ids, func(id uint32) bool {
+		config := guildContributions[id]
+		return config.Type == dropTypeResource && config.TypeID == ResourceGold
+	})
+	if gold > 0 {
+		ids[0], ids[gold] = ids[gold], ids[0]
+	}
 	return db.IDList(ids[:min(int(guildDonateTaskNum), len(ids))])
 }
 
