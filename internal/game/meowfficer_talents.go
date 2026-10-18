@@ -1,13 +1,20 @@
 package game
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math/rand/v2"
 	"slices"
 	"strconv"
+	"time"
 
+	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/gamedata"
+	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
 // Meowfficer talents (CommanderTalent, commander_ability_template): every
@@ -229,4 +236,199 @@ func meowfficerStartingTalents(templateID uint32, roll func(n int) int) db.IDLis
 		}
 	}
 	return talents
+}
+
+// meowfficerTalentPoints is Commander:getTalentPoint, the points left.
+func meowfficerTalentPoints(cat db.Meowfficer) uint32 {
+	total := cat.Level / meowfficerTalentPointLevel * meowfficerTalentPoint
+	return total - min(cat.UsedPt, total)
+}
+
+// drawMeowfficerTalentChoices draws what a talent point may learn
+// (指挥喵天赋: "使用天赋点时，出现4个可选天赋。优先出现当前可升级天赋，但最多出现2个
+// （若当前可升级天赋数大于2，随机选取2个）。其余可选天赋位置出现随机的新天赋"): the
+// next level of up to commander_learn_ability_own learned talents, then
+// level-1 talents of groups it has none of, commander_learn_ability_total
+// in all. A fixed cat is offered the next talent of its ability_show.
+func drawMeowfficerTalentChoices(cat db.Meowfficer, roll func(n int) int) db.IDList {
+	template := meowfficerTalentCats[cat.TemplateID]
+	if template.AbilityRefreshType == meowfficerFixedTalents {
+		next := len(cat.TalentOrigins) + int(cat.UsedPt)
+		if next >= len(template.AbilityShow) {
+			return db.IDList{}
+		}
+		return db.IDList{template.AbilityShow[next]}
+	}
+	shuffle := func(list []uint32) {
+		for i := len(list) - 1; i > 0; i-- {
+			j := roll(i + 1)
+			list[i], list[j] = list[j], list[i]
+		}
+	}
+	var upgrades []uint32
+	for _, id := range cat.Talents {
+		if next := meowfficerTalents[id].Next; next != 0 && learnableTalent(next, template.Nationality) {
+			upgrades = append(upgrades, next)
+		}
+	}
+	shuffle(upgrades)
+	choices := db.IDList(upgrades[:min(len(upgrades), int(meowfficerTalentUpgradeOffers))])
+	var fresh []uint32
+	for _, group := range meowfficerTalentGroups {
+		if len(group.AbilityList) == 0 {
+			continue
+		}
+		first := group.AbilityList[0]
+		if !learnableTalent(first, template.Nationality) || slices.ContainsFunc(cat.Talents, func(id uint32) bool { return talentGroup(id) == group.ID }) {
+			continue
+		}
+		fresh = append(fresh, first)
+	}
+	slices.Sort(fresh)
+	shuffle(fresh)
+	for _, id := range fresh {
+		if len(choices) >= int(meowfficerTalentOffers) {
+			break
+		}
+		choices = append(choices, id)
+	}
+	return choices
+}
+
+// meowfficerNextReset is Commander:GetNextResetAbilityTime: the next server
+// midnight after the last reset (or that plus the cooldown).
+func meowfficerNextReset(talentTime int64) int64 {
+	if meowfficerResetDaily {
+		return nextDay(time.Unix(talentTime, 0)).Unix()
+	}
+	return talentTime + meowfficerResetCooldown
+}
+
+// sameTalents is Commander:IsSameTalent: the cat holds what it came with.
+func sameTalents(cat db.Meowfficer) bool {
+	return len(cat.TalentOrigins) == len(cat.Talents) && !slices.ContainsFunc(cat.TalentOrigins, func(id uint32) bool {
+		return !slices.Contains(cat.Talents, id)
+	})
+}
+
+// txMeowfficer is the commander's cat id, errRefused when there is none.
+func txMeowfficer(tx *Tx, id uint32) (db.Meowfficer, error) {
+	cat, err := tx.GetMeowfficer(tx.ctx, db.GetMeowfficerParams{CommanderID: tx.commanderID, ID: id})
+	if errors.Is(err, sql.ErrNoRows) {
+		return cat, errRefused
+	}
+	return cat, err
+}
+
+// handleFetchMeowfficerTalents answers FetchCommanderTalentCommand
+// (CS_25010, when the talent page's learn panel opens on a cat with a
+// point and no offer yet): abilityid is what the point may learn, kept
+// until it is learned or the talents reset so that asking again (or
+// relogging) doesn't draw anew. The panel only opens with a point left
+// (CommanderCatTalentPage: commander_skill_point_noengough). No official
+// capture has it: built from the Lua alone.
+func (game *Game) handleFetchMeowfficerTalents(client *connection.Client, req *protobuf.CS_25010) error {
+	var choices db.IDList
+	err := game.tx(context.Background(), client, func(tx *Tx) error {
+		cat, err := txMeowfficer(tx, req.GetCommanderid())
+		if err != nil {
+			return err
+		}
+		if meowfficerTalentPoints(cat) == 0 {
+			return errRefused
+		}
+		if choices = cat.TalentChoices; len(choices) > 0 {
+			return nil
+		}
+		if choices = drawMeowfficerTalentChoices(cat, rand.IntN); len(choices) == 0 {
+			return errRefused
+		}
+		return tx.SetMeowfficerTalentChoices(tx.ctx, db.SetMeowfficerTalentChoicesParams{TalentChoices: choices, CommanderID: tx.commanderID, ID: cat.ID})
+	})
+	if err != nil && !refused(err) {
+		return err
+	}
+	if err != nil {
+		choices = nil
+	}
+	return client.Send(&protobuf.SC_25011{Result: result(err), Abilityid: choices})
+}
+
+// handleLearnMeowfficerTalent spends a talent point (CommanderLearnTalentCommand,
+// CS_25012): targetid must be one of the offers (commander_talent_not_exist),
+// replaceid 0 or a learned talent (commander_replace_talent_not_exist), the
+// talent's cost in gold at hand (common_no_resource). On result 0 the
+// client takes the gold, drops the learned talent of the same group (an
+// upgrade) and replaceid (the replace page's pick when the cat holds
+// commander_ability_limit talents of other groups), adds the talent, counts
+// the point used and forgets the offers; all done the same here. Built from
+// the Lua alone.
+func (game *Game) handleLearnMeowfficerTalent(client *connection.Client, req *protobuf.CS_25012) error {
+	target, replace := req.GetTargetid(), req.GetReplaceid()
+	err := game.tx(context.Background(), client, func(tx *Tx) error {
+		cat, err := txMeowfficer(tx, req.GetCommanderid())
+		if err != nil {
+			return err
+		}
+		talent, ok := meowfficerTalents[target]
+		if !ok || !slices.Contains(cat.TalentChoices, target) || meowfficerTalentPoints(cat) == 0 {
+			return errRefused
+		}
+		if replace != 0 && !slices.Contains(cat.Talents, replace) {
+			return errRefused
+		}
+		upgrade := slices.ContainsFunc(cat.Talents, func(id uint32) bool { return talentGroup(id) == talent.GroupID })
+		if !upgrade && replace == 0 && len(cat.Talents) >= int(meowfficerTalentLimit) {
+			return errRefused
+		}
+		if err := tx.SpendResource(ResourceGold, talent.Cost); err != nil {
+			return err
+		}
+		talents := slices.DeleteFunc(slices.Clone(cat.Talents), func(id uint32) bool {
+			return talentGroup(id) == talent.GroupID || id == replace
+		})
+		return tx.SetMeowfficerTalents(tx.ctx, db.SetMeowfficerTalentsParams{
+			Talents: append(talents, target), TalentChoices: db.IDList{}, UsedPt: cat.UsedPt + 1,
+			TalentTime: cat.TalentTime, CommanderID: tx.commanderID, ID: cat.ID,
+		})
+	})
+	if err != nil && !refused(err) {
+		return err
+	}
+	return client.Send(&protobuf.SC_25013{Result: result(err)})
+}
+
+// handleResetMeowfficerTalents goes back to the talents a cat came with
+// (ResetCommanderTalentsCommand, CS_25014, the talent page's reset of a
+// regular cat; the fixed ones have none): once a server day
+// (commander_reset_talent_time_no_rearch), only when its talents changed
+// (commander_reset_talent_is_not_need), for commander_skill_reset_cost's
+// gold by points used (common_no_resource). On result 0 the client takes
+// the gold, restores the talents, gives the points back, forgets the
+// offers and sets ability_time to now; all done the same here. Built from
+// the Lua alone.
+func (game *Game) handleResetMeowfficerTalents(client *connection.Client, req *protobuf.CS_25014) error {
+	now := time.Now().Unix()
+	err := game.tx(context.Background(), client, func(tx *Tx) error {
+		cat, err := txMeowfficer(tx, req.GetCommanderid())
+		if err != nil {
+			return err
+		}
+		if meowfficerTalentCats[cat.TemplateID].AbilityRefreshType == meowfficerFixedTalents ||
+			now < meowfficerNextReset(cat.TalentTime) || sameTalents(cat) ||
+			cat.UsedPt == 0 || int(cat.UsedPt) > len(meowfficerResetCosts) {
+			return errRefused
+		}
+		if err := tx.SpendResource(ResourceGold, meowfficerResetCosts[cat.UsedPt-1]); err != nil {
+			return err
+		}
+		return tx.SetMeowfficerTalents(tx.ctx, db.SetMeowfficerTalentsParams{
+			Talents: slices.Clone(cat.TalentOrigins), TalentChoices: db.IDList{}, UsedPt: 0,
+			TalentTime: now, CommanderID: tx.commanderID, ID: cat.ID,
+		})
+	})
+	if err != nil && !refused(err) {
+		return err
+	}
+	return client.Send(&protobuf.SC_25015{Result: result(err)})
 }
