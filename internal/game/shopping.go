@@ -366,7 +366,11 @@ func (tx *Tx) buyGoods(id, count uint32, now time.Time) ([]*protobuf.DROPINFO, e
 		}
 	case genreArenaShop:
 		// today's goods, once each (Goods.TYPE_MILITARY)
-		if !slices.Contains(arenaShopGoods(arenaShop, tx.commanderID, nextDay(now)), id) || purchases[id] > 0 {
+		goods, _, err := meritShopGoods(tx.ctx, tx.Queries, tx.commanderID, now)
+		if err != nil {
+			return nil, err
+		}
+		if !slices.Contains(goods, id) || purchases[id] > 0 {
 			return nil, errRefused
 		}
 	case genreBuyOil:

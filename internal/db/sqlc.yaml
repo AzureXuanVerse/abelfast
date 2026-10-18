@@ -31,3 +31,12 @@ sql:
           - column: meowfficers.talent_choices
             go_type:
               type: IDList
+          - column: commander_exercise.vanguard
+            go_type:
+              type: IDList
+          - column: commander_exercise.main
+            go_type:
+              type: IDList
+          - column: commander_exercise.rivals
+            go_type:
+              type: IDList

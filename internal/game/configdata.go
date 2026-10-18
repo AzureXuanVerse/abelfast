@@ -17,6 +17,7 @@ func loadGameData() error {
 		loadJuusData,
 		gamedata.Load("constellation_challenge_month", &limitChallengeMonths),
 		loadArenaShop,
+		loadArenaRanks,
 		loadCommissionData,
 		loadMedalShop,
 		loadShopData,

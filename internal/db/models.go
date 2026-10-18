@@ -179,6 +179,22 @@ type CommanderEquipment struct {
 	Count       uint32
 }
 
+type CommanderExercise struct {
+	CommanderID   uint32
+	Season        int64
+	Score         uint32
+	BestRank      uint32
+	FightCount    uint32
+	RefilledAt    int64
+	FlashCount    uint32
+	FlashDay      int64
+	Vanguard      IDList
+	Main          IDList
+	Rivals        IDList
+	ShopRefreshes uint32
+	ShopDay       int64
+}
+
 type CommanderFurniture struct {
 	CommanderID uint32
 	FurnitureID uint32

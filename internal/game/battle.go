@@ -13,8 +13,11 @@ import (
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
-// const.lua SYSTEM_SCENARIO: a battle on a campaign map
-const systemScenario = 1
+// const.lua SYSTEM_*: what a battle is
+const (
+	systemScenario = 1 // a battle on a campaign map
+	systemDuel     = 3 // an exercise
+)
 
 // ys.Battle.BattleConst.BattleScore: above C is a win (Chapter:writeBack)
 const (
@@ -55,6 +58,9 @@ const (
 // On a campaign map the fleet must stand on the enemy being fought.
 func (game *Game) handleBeginStage(client *connection.Client, req *protobuf.CS_40001) error {
 	ctx := context.Background()
+	if req.GetSystem() == systemDuel {
+		return game.beginDuel(client, req)
+	}
 	if req.GetSystem() == systemScenario {
 		session, err := loadChapter(ctx, game.DB.Queries, client.CommanderID)
 		if err != nil {
@@ -110,6 +116,9 @@ func (session *chapterSession) battleCell(id uint32) *protobuf.CHAPTERCELLINFO_P
 // ships come in SC_12042 right after, then the mailbox counts (SC_30001).
 func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_40003) error {
 	ctx := context.Background()
+	if req.GetSystem() == systemDuel {
+		return game.finishDuel(client, req)
+	}
 	if req.GetSystem() != systemScenario {
 		return client.Send(&protobuf.SC_40004{Result: result(nil)})
 	}
