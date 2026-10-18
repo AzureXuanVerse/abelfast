@@ -413,6 +413,22 @@ type FleetShip struct {
 	ShipID      uint32
 }
 
+type FleetTech struct {
+	CommanderID    uint32
+	GroupID        uint32
+	EffectTechID   uint32
+	StudyTechID    uint32
+	StudyFinishAt  int64
+	RewardedTechID uint32
+}
+
+type FleetTechAttr struct {
+	CommanderID uint32
+	ShipType    uint32
+	AttrType    uint32
+	SetValue    uint32
+}
+
 type Friend struct {
 	CommanderID uint32
 	FriendID    uint32

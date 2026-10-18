@@ -86,6 +86,12 @@ func (game *Game) Register() {
 	packets.Handle(game.handleStartLesson)
 	packets.Handle(game.handleEndLesson)
 	packets.Handle(game.handleQuickFinishLesson)
+	// Fleet Technology
+	packets.Handle(game.handleStartFleetTech)
+	packets.Handle(game.handleFinishFleetTech)
+	packets.Handle(game.handleFleetTechAward)
+	packets.Handle(game.handleFleetTechAwardAll)
+	packets.HandleLenient(game.handleSetFleetTechAttrs)
 	packets.Handle(game.handleGuildInfo)
 	packets.Handle(game.handlePublicGuildTech)
 	packets.Handle(game.handleGuildUserInfo)
@@ -299,8 +305,10 @@ var loginBurst = []loginPush{
 	empty[protobuf.SC_63000](),
 	// TechnologyProxy blueprints (PR ships): none
 	empty[protobuf.SC_63100](),
-	// TechnologyNationProxy: no fleet tech
-	empty[protobuf.SC_64000](),
+	// TechnologyNationProxy: Fleet Technology
+	func(game *Game, l *login) (proto.Message, error) {
+		return fleetTechState(l.ctx, l.queries, l.commander.ID)
+	},
 	func(game *Game, l *login) (proto.Message, error) {
 		msg, err := chapterList(l.ctx, l.queries, l.commander.ID, l.ships)
 		if err != nil {

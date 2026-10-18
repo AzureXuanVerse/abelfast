@@ -10,12 +10,22 @@ import (
 
 // fleetTechShip is a fleet_tech_ship_template row: the Fleet Technology
 // points a ship group gives once owned (pt_get), at its max limit break
-// (pt_upgrage, star >= max_star) and at level 120 (pt_level).
+// (pt_upgrage, star >= max_star) and at level 120 (pt_level), and the
+// attribute bonus it gives the ship types add_get_shiptype once owned
+// (add_get_attr, add_get_value) and add_level_shiptype at level 120
+// (add_level_attr, add_level_value).
 type fleetTechShip struct {
 	MaxStar   uint32 `json:"max_star"`
 	PtGet     uint32 `json:"pt_get"`
 	PtLevel   uint32 `json:"pt_level"`
 	PtUpgrade uint32 `json:"pt_upgrage"`
+
+	GetShipTypes   []uint32 `json:"add_get_shiptype"`
+	GetAttr        uint32   `json:"add_get_attr"`
+	GetValue       uint32   `json:"add_get_value"`
+	LevelShipTypes []uint32 `json:"add_level_shiptype"`
+	LevelAttr      uint32   `json:"add_level_attr"`
+	LevelValue     uint32   `json:"add_level_value"`
 }
 
 // fleet_tech_ship_template, by ship group
@@ -24,14 +34,14 @@ var fleetTechShips map[uint32]fleetTechShip
 // TechnologyConst.SHIP_LEVEL_FOR_BUFF, the level that gives pt_level
 const techShipLevel = 120
 
-// techPoints are the commander's Fleet Technology points by nation, as
-// TechnologyNationProxy.nationPointFilter counts them from CollectionProxy's
-// ship groups: for each group in fleet_tech_ship_template, pt_get, plus
-// pt_level when its maxLV reached 120, plus pt_upgrage when its star reached
-// max_star, under the nationality of its base template. A group's star and
+// techShipGroup is one of the commander's ship groups as CollectionProxy
+// sees it: its best star and maxLV.
+type techShipGroup struct{ star, level uint32 }
+
+// techShipGroups are the commander's ship groups by id. A group's star and
 // maxLV are its SC_17001 star / lv_max, raised by every ship of the group the
 // client sees (CollectionProxy.flushCollection), hence the owned ships here.
-func techPoints(ctx context.Context, queries *db.Queries, commanderID uint32) (map[uint32]uint32, error) {
+func techShipGroups(ctx context.Context, queries *db.Queries, commanderID uint32) (map[uint32]techShipGroup, error) {
 	groups, err := queries.ListShipGroups(ctx, commanderID)
 	if err != nil {
 		return nil, err
@@ -40,10 +50,9 @@ func techPoints(ctx context.Context, queries *db.Queries, commanderID uint32) (m
 	if err != nil {
 		return nil, err
 	}
-	type best struct{ star, level uint32 }
-	owned := make(map[uint32]best, len(groups))
+	owned := make(map[uint32]techShipGroup, len(groups))
 	for _, group := range groups {
-		owned[group.GroupID] = best{star: shipTemplates[group.GroupID*10+1].Star, level: group.LvMax}
+		owned[group.GroupID] = techShipGroup{star: shipTemplates[group.GroupID*10+1].Star, level: group.LvMax}
 	}
 	for _, ship := range ships {
 		group, ok := owned[ship.TemplateID/10]
@@ -55,6 +64,19 @@ func techPoints(ctx context.Context, queries *db.Queries, commanderID uint32) (m
 		}
 		group.level = max(group.level, ship.Level)
 		owned[ship.TemplateID/10] = group
+	}
+	return owned, nil
+}
+
+// techPoints are the commander's Fleet Technology points by nation, as
+// TechnologyNationProxy.nationPointFilter counts them from CollectionProxy's
+// ship groups (techShipGroups): for each group in fleet_tech_ship_template,
+// pt_get, plus pt_level when its maxLV reached 120, plus pt_upgrage when its
+// star reached max_star, under the nationality of its base template.
+func techPoints(ctx context.Context, queries *db.Queries, commanderID uint32) (map[uint32]uint32, error) {
+	owned, err := techShipGroups(ctx, queries, commanderID)
+	if err != nil {
+		return nil, err
 	}
 	points := map[uint32]uint32{}
 	for id, group := range owned {
