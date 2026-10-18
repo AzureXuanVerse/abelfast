@@ -272,6 +272,9 @@ func (game *Game) targetInfo(ctx context.Context, queries *db.Queries, standings
 		info.MainShipList = append(info.MainShipList, full(ship))
 		levels += ship.Level
 	}
+	if err := setShipSpWeapons(ctx, queries, commanderID, slices.Concat(info.VanguardShipList, info.MainShipList)); err != nil {
+		return nil, 0, false, err
+	}
 	return info, levels, true, nil
 }
 
