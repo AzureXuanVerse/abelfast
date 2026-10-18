@@ -150,7 +150,7 @@ func (game *Game) playerInfo(ctx context.Context, commander db.Commander, ships 
 		RegisterTime:    proto.Uint32(uint32(commander.RegisteredAt)),
 		ShipCount:       proto.Uint32(uint32(len(ships))),
 		CommanderBagMax: proto.Uint32(commander.CommanderBagMax),
-		Display:         displayInfo(commander),
+		Display:         game.displayInfo(commander),
 		MailStoreroomLv: proto.Uint32(commander.MailStoreroomLv),
 		BattleUi:        proto.Uint32(0), // item_data_battleui "Standard"
 		NewGuideIndex:   proto.Uint32(commander.NewGuideIndex),

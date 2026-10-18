@@ -26,7 +26,7 @@ func (game *Game) handleWorldChat(client *connection.Client, req *protobuf.CS_50
 		return err
 	}
 	msg := &protobuf.SC_50101{
-		Player:  playerInfoP50(sender),
+		Player:  game.playerInfoP50(sender),
 		Type:    proto.Uint32(req.GetType()),
 		Content: proto.String(req.GetContent()),
 	}

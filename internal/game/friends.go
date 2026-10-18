@@ -12,6 +12,7 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
+	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -46,19 +47,33 @@ var (
 )
 
 // displayInfo is the commander's portrait as other players see it: its
-// starter ship, the icon can't be changed yet.
-func displayInfo(commander db.Commander) *protobuf.DISPLAYINFO {
-	return &protobuf.DISPLAYINFO{Icon: proto.Uint32(commander.StarterShip)}
+// flagship (the first secretary), as captured: icon the ship's template,
+// skin its skin, marry_flag its oath time (PlayerAttire.proposeTime).
+// transform_flag stays 0, retrofits aren't kept. Without a secretary, or
+// when it can't be read, the starter ship (a new account's capture).
+func (game *Game) displayInfo(commander db.Commander) *protobuf.DISPLAYINFO {
+	flagship, err := game.DB.GetFlagshipDisplay(context.Background(), commander.ID)
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			logger.WithFields("Friend", logger.FieldValue("commander", commander.ID)).Warn("flagship unreadable: " + err.Error())
+		}
+		return &protobuf.DISPLAYINFO{Icon: proto.Uint32(commander.StarterShip)}
+	}
+	return &protobuf.DISPLAYINFO{
+		Icon:      proto.Uint32(flagship.TemplateID),
+		Skin:      proto.Uint32(flagship.SkinID),
+		MarryFlag: proto.Uint32(flagship.Propose),
+	}
 }
 
 // playerInfoP50 is a commander as a world chat sender, a friend request or
 // message sender, a blacklisted or suggested player (Player.New).
-func playerInfoP50(commander db.Commander) *protobuf.PLAYER_INFO_P50 {
+func (game *Game) playerInfoP50(commander db.Commander) *protobuf.PLAYER_INFO_P50 {
 	return &protobuf.PLAYER_INFO_P50{
 		Id:      proto.Uint32(commander.ID),
 		Name:    proto.String(commander.Name),
 		Lv:      proto.Uint32(commander.Level),
-		Display: displayInfo(commander),
+		Display: game.displayInfo(commander),
 	}
 }
 
@@ -76,7 +91,7 @@ func (game *Game) friendInfo(commander db.Commander) *protobuf.FRIEND_INFO {
 		Adv:           proto.String(commander.Manifesto),
 		Online:        proto.Uint32(online),
 		PreOnlineTime: proto.Uint32(uint32(commander.LastOnline)),
-		Display:       displayInfo(commander),
+		Display:       game.displayInfo(commander),
 	}
 }
 
@@ -125,7 +140,7 @@ func (game *Game) friendList(ctx context.Context, queries *db.Queries, commander
 	for _, request := range requests {
 		list.RequestList = append(list.RequestList, &protobuf.MSG_INFO_P50{
 			Timestamp: proto.Uint32(uint32(request.SentAt)),
-			Player:    playerInfoP50(request.Commander),
+			Player:    game.playerInfoP50(request.Commander),
 			Content:   proto.String(request.Content),
 		})
 	}
@@ -187,7 +202,7 @@ func (game *Game) handleRecommendPlayers(client *connection.Client, req *protobu
 	}
 	reply := &protobuf.SC_50015{}
 	for _, commander := range commanders {
-		reply.PlayerList = append(reply.PlayerList, playerInfoP50(commander))
+		reply.PlayerList = append(reply.PlayerList, game.playerInfoP50(commander))
 	}
 	return client.Send(reply)
 }
@@ -220,7 +235,7 @@ func (game *Game) handleThemeAuthor(client *connection.Client, req *protobuf.CS_
 	if err != nil {
 		return err
 	}
-	return client.Send(&protobuf.SC_50114{Result: result(nil), Player: playerInfoP50(commander)})
+	return client.Send(&protobuf.SC_50114{Result: result(nil), Player: game.playerInfoP50(commander)})
 }
 
 // handleSendFriendRequest answers SendFriendRequestCommand (CS_50003): the
@@ -268,7 +283,7 @@ func (game *Game) handleSendFriendRequest(client *connection.Client, req *protob
 		// NotificationProxy keeps the first request of a sender it has
 		game.deliver(client, req.GetId(), &protobuf.SC_50005{Msg: &protobuf.MSG_INFO_P50{
 			Timestamp: proto.Uint32(uint32(now.Unix())),
-			Player:    playerInfoP50(sender),
+			Player:    game.playerInfoP50(sender),
 			Content:   proto.String(req.GetContent()),
 		}})
 	}
@@ -395,7 +410,7 @@ func (game *Game) handleSendFriendMessage(client *connection.Client, req *protob
 	}
 	msg := &protobuf.SC_50104{Msg: &protobuf.MSG_INFO_P50{
 		Timestamp: proto.Uint32(uint32(time.Now().Unix())),
-		Player:    playerInfoP50(sender),
+		Player:    game.playerInfoP50(sender),
 		Content:   proto.String(req.GetContent()),
 	}}
 	if !game.deliver(client, req.GetId(), msg) {
@@ -414,7 +429,7 @@ func (game *Game) handleBlacklist(client *connection.Client, req *protobuf.CS_50
 	}
 	reply := &protobuf.SC_50017{}
 	for _, row := range blocked {
-		reply.BlackList = append(reply.BlackList, playerInfoP50(row.Commander))
+		reply.BlackList = append(reply.BlackList, game.playerInfoP50(row.Commander))
 	}
 	return client.Send(reply)
 }

@@ -258,6 +258,25 @@ func (q *Queries) GetCommanderByAccount(ctx context.Context, accountID uint32) (
 	return i, err
 }
 
+const getFlagshipDisplay = `-- name: GetFlagshipDisplay :one
+SELECT s.template_id, s.skin_id, s.propose FROM commander_secretaries cs
+JOIN ships s ON s.id = cs.ship_id AND s.commander_id = cs.commander_id
+WHERE cs.commander_id = ? ORDER BY cs.position LIMIT 1
+`
+
+type GetFlagshipDisplayRow struct {
+	TemplateID uint32
+	SkinID     uint32
+	Propose    uint32
+}
+
+func (q *Queries) GetFlagshipDisplay(ctx context.Context, commanderID uint32) (GetFlagshipDisplayRow, error) {
+	row := q.db.QueryRowContext(ctx, getFlagshipDisplay, commanderID)
+	var i GetFlagshipDisplayRow
+	err := row.Scan(&i.TemplateID, &i.SkinID, &i.Propose)
+	return i, err
+}
+
 const listCommonFlags = `-- name: ListCommonFlags :many
 SELECT flag_id FROM commander_common_flags WHERE commander_id = ? ORDER BY flag_id
 `

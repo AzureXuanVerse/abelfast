@@ -85,3 +85,8 @@ UPDATE commanders SET gold_field_level = ?, gold_field_upgrade_at = ? WHERE id =
 
 -- name: SetClassFieldLevel :exec
 UPDATE commanders SET class_field_level = ?, class_field_upgrade_at = ? WHERE id = ?;
+
+-- name: GetFlagshipDisplay :one
+SELECT s.template_id, s.skin_id, s.propose FROM commander_secretaries cs
+JOIN ships s ON s.id = cs.ship_id AND s.commander_id = cs.commander_id
+WHERE cs.commander_id = ? ORDER BY cs.position LIMIT 1;
