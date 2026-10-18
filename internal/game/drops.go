@@ -27,8 +27,8 @@ const (
 // grantDrops stores rewards: resources, bag items, equipment, ships (with
 // their default equipment, skills and archive entry, pushed in SC_12042), and
 // backyard furniture, virtual items (the Specialized Core is stored as its
-// link item, the cruise pass points as their task counter, the rest as
-// virtual item counters) and ship skins (for good or for a time, as the
+// link item, the cruise pass points as their task counter, the Handover
+// Permits by expiry, the rest as virtual item counters) and ship skins (for good or for a time, as the
 // client adds them: Drop's DROP_TYPE_SKIN and DROP_TYPE_SKIN_TIMELIMIT
 // cases, model/vo/drop.lua) and meowfficers (grantMeowfficers, pushed in
 // SC_25039), recording the task progress they cause. Gear skins, frames...
@@ -81,6 +81,11 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 				return err
 			}
 			tx.event(TaskEvent{SubType: TaskSubCruisePt, Count: total + count})
+		case kind == dropTypeVItem && chapterTicketItems[id].kind != 0:
+			// Handover Permits, kept by expiry as the client adds them
+			if err := tx.addChapterTickets(id, count, time.Now()); err != nil {
+				return err
+			}
 		case kind == dropTypeVItem:
 			if err := tx.AddVirtualItem(id, count); err != nil {
 				return err
