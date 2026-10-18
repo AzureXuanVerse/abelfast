@@ -402,6 +402,48 @@ func (tx *Tx) addClassProficiency(exps []uint32, now time.Time) error {
 	if len(exps) == 0 {
 		return nil
 	}
+	commander, err := tx.settleClassForGain(now)
+	if err != nil {
+		return err
+	}
+	config := classFields[commander.ClassFieldLevel]
+	extra := classExtraRate(now)
+	proficiency := commander.ClassProficiency
+	for _, exp := range exps {
+		// the client's float arithmetic, in its order
+		gain := math.Floor(float64(exp) * float64(config.GetPercent) * float64(extra) * 0.01)
+		proficiency = uint32(min(float64(proficiency)+gain, float64(config.Store)))
+	}
+	return tx.SetClassField(tx.ctx, db.SetClassFieldParams{
+		ClassProficiency: proficiency,
+		ClassFieldAt:     commander.ClassFieldAt,
+		ID:               tx.commanderID,
+	})
+}
+
+// addFlatClassProficiency is NavalAcademyProxy:AddProficiency: amount more
+// proficiency in the lecture hall, up to its level's store (an Operational
+// Handover's class_exp). The hall is settled and pushed first, as in
+// addClassProficiency.
+func (tx *Tx) addFlatClassProficiency(amount uint32, now time.Time) error {
+	if amount == 0 {
+		return nil
+	}
+	commander, err := tx.settleClassForGain(now)
+	if err != nil {
+		return err
+	}
+	return tx.SetClassField(tx.ctx, db.SetClassFieldParams{
+		ClassProficiency: min(commander.ClassProficiency+amount, classFields[commander.ClassFieldLevel].Store),
+		ClassFieldAt:     commander.ClassFieldAt,
+		ID:               tx.commanderID,
+	})
+}
+
+// settleClassForGain settles the lecture hall before proficiency is added
+// and queues SC_22013 with what it then holds, returning the commander as
+// settled.
+func (tx *Tx) settleClassForGain(now time.Time) (db.Commander, error) {
 	expInWell := func() (uint32, error) {
 		resources, err := tx.ListResources(tx.ctx, tx.commanderID)
 		if err != nil {
@@ -416,38 +458,26 @@ func (tx *Tx) addClassProficiency(exps []uint32, now time.Time) error {
 	}
 	commander, err := tx.GetCommander(tx.ctx, tx.commanderID)
 	if err != nil {
-		return err
+		return commander, err
 	}
 	well, err := expInWell()
 	if err != nil {
-		return err
+		return commander, err
 	}
 	if err := tx.settleClassField(commander, well, now); err != nil {
-		return err
+		return commander, err
 	}
 	if commander, err = tx.GetCommander(tx.ctx, tx.commanderID); err != nil {
-		return err
+		return commander, err
 	}
 	if well, err = expInWell(); err != nil {
-		return err
+		return commander, err
 	}
 	tx.push(&protobuf.SC_22013{
 		Proficiency: proto.Uint32(commander.ClassProficiency),
 		ExpInWell:   proto.Uint32(well),
 	})
-	config := classFields[commander.ClassFieldLevel]
-	extra := classExtraRate(now)
-	proficiency := commander.ClassProficiency
-	for _, exp := range exps {
-		// the client's float arithmetic, in its order
-		gain := math.Floor(float64(exp) * float64(config.GetPercent) * float64(extra) * 0.01)
-		proficiency = uint32(min(float64(proficiency)+gain, float64(config.Store)))
-	}
-	return tx.SetClassField(tx.ctx, db.SetClassFieldParams{
-		ClassProficiency: proficiency,
-		ClassFieldAt:     commander.ClassFieldAt,
-		ID:               tx.commanderID,
-	})
+	return commander, nil
 }
 
 // fillResourceFields settles the commander's fields before SC_11003 and

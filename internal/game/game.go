@@ -126,6 +126,9 @@ func (game *Game) Register() {
 	packets.Handle(game.handleRemasterInfo)
 	packets.Handle(game.handleBeginStage)
 	packets.Handle(game.handleFinishStage)
+	packets.Handle(game.handleStartChapterAuto)
+	packets.Handle(game.handleEndChapterAuto)
+	packets.Handle(game.handleAddChapterAutoTime)
 	// tasks and activities
 	packets.Handle(game.handleSubmitTask)
 	packets.Handle(game.handleSubmitTasks)

@@ -243,11 +243,19 @@ func newChapter(template *chapterTemplate, teams []*protobuf.TEAM_INFO, now uint
 // padded with empty teams), which are checked and saved like CS_13107's and
 // numbered from 1. Each team's commander_main / commander_sub cats go along
 // (GROUPINCHAPTER_P13.commander_list, checkTeamMeowfficers). Non-zero
-// results make the client show levelScene_tracking_erro.
+// results make the client show levelScene_tracking_erro. No sortie starts
+// while an Operational Handover runs (chapterAutoRunning).
 func (game *Game) handleTracking13101(client *connection.Client, req *protobuf.CS_13101) error {
 	ctx := context.Background()
 	template := chapterTemplates[req.GetId()]
 	if template == nil {
+		return client.Send(&protobuf.SC_13102{Result: result(errRefused)})
+	}
+	running, err := chapterAutoRunning(ctx, game.DB.Queries, client.CommanderID)
+	if err != nil {
+		return err
+	}
+	if running {
 		return client.Send(&protobuf.SC_13102{Result: result(errRefused)})
 	}
 	var elite *protobuf.FLEET_INFO
@@ -294,7 +302,7 @@ func (game *Game) handleTracking13101(client *connection.Client, req *protobuf.C
 		return client.Send(&protobuf.SC_13102{Result: result(errRefused)})
 	}
 	session := &chapterSession{template: template, info: newChapter(template, teams, uint32(time.Now().Unix()))}
-	err := game.tx(ctx, client, func(tx *Tx) error {
+	err = game.tx(ctx, client, func(tx *Tx) error {
 		if err := tx.SpendResource(ResourceOil, template.oil); err != nil {
 			return err
 		}
