@@ -795,8 +795,8 @@ func chapterProgress(ctx context.Context, queries *db.Queries, commanderID, chap
 }
 
 // chapterList is SC_13001: the chapters played so far (Chapter.New reads
-// CHAPTERINFO) and the elite fleets by formation, no remaster tickets or
-// auto battles.
+// CHAPTERINFO) and the elite fleets by formation, no remaster tickets; the
+// login adds the Operational Handover (fillChapterAuto).
 func chapterList(ctx context.Context, queries *db.Queries, commanderID uint32, ships []db.Ship) (*protobuf.SC_13001, error) {
 	rows, err := queries.ListChapterProgress(ctx, commanderID)
 	if err != nil {

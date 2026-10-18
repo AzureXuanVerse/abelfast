@@ -295,7 +295,11 @@ var loginBurst = []loginPush{
 	// TechnologyNationProxy: no fleet tech
 	empty[protobuf.SC_64000](),
 	func(game *Game, l *login) (proto.Message, error) {
-		return chapterList(l.ctx, l.queries, l.commander.ID, l.ships)
+		msg, err := chapterList(l.ctx, l.queries, l.commander.ID, l.ships)
+		if err != nil {
+			return nil, err
+		}
+		return msg, fillChapterAuto(l.ctx, l.queries, l.commander.ID, l.now, msg)
 	},
 	func(game *Game, l *login) (proto.Message, error) {
 		return currentChapter(l.ctx, l.queries, l.commander.ID)
