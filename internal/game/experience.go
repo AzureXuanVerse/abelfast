@@ -2,15 +2,20 @@ package game
 
 import (
 	"cmp"
+	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"slices"
 	"strconv"
 
+	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/gamedata"
 	"github.com/ggmolly/belfast/internal/logger"
+	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
 // ys.Battle.BattleConst.BattleScore letters, as server/battle_exp.json keys
@@ -292,4 +297,73 @@ func addCommanderExp(tx *Tx, gained uint32) error {
 	}
 	tx.push(commissions)
 	return nil
+}
+
+// shipExpBooks is the exp one ship exp book gives, by item: the
+// item_data_statistics usage_arg of the gameset ship_exp_books items
+// (ShipExpItemUsagePage.GetAllItemIDs, the ones this region's table has).
+var shipExpBooks map[uint32]uint32
+
+func readShipExpBooks(items map[uint32]itemConfig) error {
+	var ids []uint32
+	if err := gamedata.GamesetDescription("ship_exp_books", &ids); err != nil {
+		return err
+	}
+	shipExpBooks = map[uint32]uint32{}
+	for _, id := range ids {
+		row, ok := items[id]
+		if !ok {
+			continue
+		}
+		if exp := gamedata.IDs(row.UsageArg); len(exp) > 0 {
+			shipExpBooks[id] = exp[0]
+		}
+	}
+	return nil
+}
+
+// handleUseShipExpBooks answers UseAddShipExpCommand
+// (controller/command/item/useaddshipexpcommand.lua, the ship's level bar
+// in its detail page, ShipExpItemUsagePage): books are ship exp books and
+// their counts, used on ship_id. On result 0 the client adds their
+// usage_arg x num to the ship with Ship:addExp (without accumulating, as
+// trainShip) and removes the books itself; nothing else is read. The page
+// is only offered below the ship's max level. No official capture has it:
+// the reply is built from the Lua alone.
+func (game *Game) handleUseShipExpBooks(client *connection.Client, req *protobuf.CS_22011) error {
+	err := game.tx(context.Background(), client, func(tx *Tx) error {
+		ship, err := tx.GetShip(tx.ctx, db.GetShipParams{ID: req.GetShipId(), CommanderID: tx.commanderID})
+		if errors.Is(err, sql.ErrNoRows) {
+			return errRefused
+		} else if err != nil {
+			return err
+		}
+		if ship.Level >= ship.MaxLevel {
+			return errRefused
+		}
+		exp := uint32(0)
+		for _, book := range req.GetBooks() {
+			per, ok := shipExpBooks[book.GetId()]
+			if !ok {
+				return errRefused
+			}
+			if err := tx.SpendItem(book.GetId(), book.GetNum()); err != nil {
+				return err
+			}
+			exp += per * book.GetNum()
+		}
+		if exp == 0 {
+			return errRefused
+		}
+		if trainShip(&ship, exp) {
+			tx.techPointsChanged()
+		}
+		return tx.UpdateShipBattleState(tx.ctx, db.UpdateShipBattleStateParams{
+			Level: ship.Level, Exp: ship.Exp, Intimacy: ship.Intimacy, Energy: ship.Energy, ID: ship.ID, CommanderID: tx.commanderID,
+		})
+	})
+	if err != nil && !refused(err) {
+		return err
+	}
+	return client.Send(&protobuf.SC_22012{Result: result(err)})
 }

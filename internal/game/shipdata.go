@@ -547,6 +547,9 @@ func loadShipData() error {
 	}
 	readItemUses(items, techPackGear(equips, equipStats), gametip)
 	readLessonBooks(items)
+	if err := readShipExpBooks(items); err != nil {
+		return err
+	}
 	readGiftDislikes(stats)
 	equipIDs = make(map[uint32]bool, len(equips))
 	equipReturns = make(map[uint32]equipReturn, len(equips))

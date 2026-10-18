@@ -321,7 +321,7 @@ func (tx *Tx) dormTraining(dorm db.CommanderDorm, commander db.Commander, traini
 }
 
 // trainShip gives a training ship its exp as BackYardRequestShipExpCommand
-// does: nothing at max level, Ship:addExp without accumulating (a ship
+// (and UseAddShipExpCommand for exp books) does: nothing at max level, Ship:addExp without accumulating (a ship
 // reaching its max level drops the rest). It tells whether it reached
 // the Fleet Technology level.
 func trainShip(ship *db.Ship, exp uint32) bool {
