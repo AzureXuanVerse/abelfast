@@ -91,7 +91,7 @@ func (q *Queries) CountShipGroups(ctx context.Context, commanderID uint32) (int6
 const createShip = `-- name: CreateShip :one
 INSERT INTO ships (commander_id, template_id, level, exp, energy, intimacy, max_level, is_locked, created_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, commander_id, template_id, level, exp, energy, intimacy, max_level, is_locked, created_at, state, proficiency, skin_id, propose, name, change_name_timestamp, common_flag
+RETURNING id, commander_id, template_id, level, exp, energy, intimacy, max_level, is_locked, created_at, state, proficiency, skin_id, propose, name, change_name_timestamp, common_flag, random_flag
 `
 
 type CreateShipParams struct {
@@ -137,6 +137,7 @@ func (q *Queries) CreateShip(ctx context.Context, arg CreateShipParams) (Ship, e
 		&i.Name,
 		&i.ChangeNameTimestamp,
 		&i.CommonFlag,
+		&i.RandomFlag,
 	)
 	return i, err
 }
@@ -156,7 +157,7 @@ func (q *Queries) DeleteShip(ctx context.Context, arg DeleteShipParams) error {
 }
 
 const getShip = `-- name: GetShip :one
-SELECT id, commander_id, template_id, level, exp, energy, intimacy, max_level, is_locked, created_at, state, proficiency, skin_id, propose, name, change_name_timestamp, common_flag FROM ships WHERE id = ? AND commander_id = ?
+SELECT id, commander_id, template_id, level, exp, energy, intimacy, max_level, is_locked, created_at, state, proficiency, skin_id, propose, name, change_name_timestamp, common_flag, random_flag FROM ships WHERE id = ? AND commander_id = ?
 `
 
 type GetShipParams struct {
@@ -185,6 +186,7 @@ func (q *Queries) GetShip(ctx context.Context, arg GetShipParams) (Ship, error) 
 		&i.Name,
 		&i.ChangeNameTimestamp,
 		&i.CommonFlag,
+		&i.RandomFlag,
 	)
 	return i, err
 }
@@ -324,7 +326,7 @@ func (q *Queries) ListShipSkillsByCommander(ctx context.Context, commanderID uin
 }
 
 const listShipsByCommander = `-- name: ListShipsByCommander :many
-SELECT id, commander_id, template_id, level, exp, energy, intimacy, max_level, is_locked, created_at, state, proficiency, skin_id, propose, name, change_name_timestamp, common_flag FROM ships WHERE commander_id = ? ORDER BY id
+SELECT id, commander_id, template_id, level, exp, energy, intimacy, max_level, is_locked, created_at, state, proficiency, skin_id, propose, name, change_name_timestamp, common_flag, random_flag FROM ships WHERE commander_id = ? ORDER BY id
 `
 
 func (q *Queries) ListShipsByCommander(ctx context.Context, commanderID uint32) ([]Ship, error) {
@@ -354,6 +356,7 @@ func (q *Queries) ListShipsByCommander(ctx context.Context, commanderID uint32) 
 			&i.Name,
 			&i.ChangeNameTimestamp,
 			&i.CommonFlag,
+			&i.RandomFlag,
 		); err != nil {
 			return nil, err
 		}
@@ -369,7 +372,7 @@ func (q *Queries) ListShipsByCommander(ctx context.Context, commanderID uint32) 
 }
 
 const listShipsByID = `-- name: ListShipsByID :many
-SELECT id, commander_id, template_id, level, exp, energy, intimacy, max_level, is_locked, created_at, state, proficiency, skin_id, propose, name, change_name_timestamp, common_flag FROM ships WHERE commander_id = ? AND id IN (/*SLICE:ids*/?) ORDER BY id
+SELECT id, commander_id, template_id, level, exp, energy, intimacy, max_level, is_locked, created_at, state, proficiency, skin_id, propose, name, change_name_timestamp, common_flag, random_flag FROM ships WHERE commander_id = ? AND id IN (/*SLICE:ids*/?) ORDER BY id
 `
 
 type ListShipsByIDParams struct {
@@ -415,6 +418,7 @@ func (q *Queries) ListShipsByID(ctx context.Context, arg ListShipsByIDParams) ([
 			&i.Name,
 			&i.ChangeNameTimestamp,
 			&i.CommonFlag,
+			&i.RandomFlag,
 		); err != nil {
 			return nil, err
 		}

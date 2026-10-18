@@ -170,6 +170,12 @@ type CommanderMedalShopPurchase struct {
 	Count       uint32
 }
 
+type CommanderRandomFlagship struct {
+	CommanderID uint32
+	Mode        uint32
+	Enabled     bool
+}
+
 type CommanderRequisition struct {
 	CommanderID uint32
 	Month       int64
@@ -350,6 +356,7 @@ type Ship struct {
 	Name                string
 	ChangeNameTimestamp uint32
 	CommonFlag          uint32
+	RandomFlag          bool
 }
 
 type ShipDiscussion struct {

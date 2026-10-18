@@ -108,6 +108,10 @@ func (game *Game) playerInfo(ctx context.Context, commander db.Commander, ships 
 	if err != nil {
 		return nil, err
 	}
+	randomShipMode, err := randomFlagshipMode(ctx, game.DB.Queries, commander.ID)
+	if err != nil {
+		return nil, err
+	}
 	purchases, err := shopPurchases(ctx, game.DB.Queries, commander.ID, time.Now())
 	if err != nil {
 		return nil, err
@@ -139,6 +143,7 @@ func (game *Game) playerInfo(ctx context.Context, commander db.Commander, ships 
 		StoryList:       stories,
 		FlagList:        flags,
 		BuyOilCount:     proto.Uint32(oilBought(purchases)),
+		RandomShipMode:  proto.Uint32(randomShipMode),
 	}, nil
 }
 

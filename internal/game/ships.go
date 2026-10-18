@@ -98,7 +98,7 @@ func shipInfo(ship db.Ship) *protobuf.SHIPINFO {
 	if ship.IsLocked {
 		locked = 1
 	}
-	return &protobuf.SHIPINFO{
+	info := &protobuf.SHIPINFO{
 		Id:                  proto.Uint32(ship.ID),
 		TemplateId:          proto.Uint32(ship.TemplateID),
 		Level:               proto.Uint32(ship.Level),
@@ -116,6 +116,10 @@ func shipInfo(ship db.Ship) *protobuf.SHIPINFO {
 		MaxLevel:            proto.Uint32(ship.MaxLevel),
 		CommonFlag:          proto.Uint32(ship.CommonFlag),
 	}
+	if ship.RandomFlag {
+		info.CharRandomFlag = []uint32{0} // the phantoms in the random pool, 0 the ship itself
+	}
+	return info
 }
 
 // fullShipInfo is the SHIPINFO of a ship with its slots and skills.
