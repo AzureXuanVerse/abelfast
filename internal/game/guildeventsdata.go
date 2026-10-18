@@ -98,11 +98,9 @@ var (
 	guildJoinLiveness, guildBossLiveness                                                 uint32
 	guildBossDailyCount                                                                  uint32 // operation_daily_boss_count
 	guildBossOil                                                                         uint32 // use_oil
+	guildDamageResource                                                                  uint32 // guild_damage_resource: the Damage Rating resource
 	guildReportMax                                                                       uint32 // operation_report_max
-	// guild_active_become_regular: the liveness a recruit becomes an
-	// ordinary member at (GuildMember:AddLiveness)
-	guildRegularLiveness uint32
-	guildDispatchResets  []uint32
+	guildDispatchResets                                                                  []uint32
 )
 
 // loadGuildEventData reads the operation tables and guildset values, after
@@ -131,6 +129,7 @@ func loadGuildEventData() error {
 		"operation_event_guild_active": &guildJoinLiveness,
 		"operation_boss_guild_active":  &guildBossLiveness,
 		"operation_daily_boss_count":   &guildBossDailyCount,
+		"guild_damage_resource":        &guildDamageResource,
 		"use_oil":                      &guildBossOil,
 		"operation_report_max":         &guildReportMax,
 	} {

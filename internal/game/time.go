@@ -51,6 +51,13 @@ func nextMonth(now time.Time) time.Time {
 	return time.Date(local.Year(), local.Month()+1, 1, 0, 0, 0, 0, gamedata.Zone)
 }
 
+// startOfMonth returns the midnight, server time, that began now's month:
+// when the monthly counts start again.
+func startOfMonth(now time.Time) time.Time {
+	local := now.In(gamedata.Zone)
+	return time.Date(local.Year(), local.Month(), 1, 0, 0, 0, 0, gamedata.Zone)
+}
+
 // sameServerDay tells whether a and b fall on the same day, server time.
 func sameServerDay(a, b time.Time) bool {
 	a, b = a.In(gamedata.Zone), b.In(gamedata.Zone)

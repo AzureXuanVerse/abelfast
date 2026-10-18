@@ -690,6 +690,8 @@ type GuildUser struct {
 	ExtraOperation uint32
 	BenefitTime    uint32
 	WeeklyTaskWeek uint32
+	OperationMonth uint32
+	OperationJoins uint32
 }
 
 type GuildWaitTime struct {

@@ -218,10 +218,16 @@ func (game *Game) beginGuildBoss(client *connection.Client, req *protobuf.CS_400
 				return errRefused
 			}
 		}
+		// a battle begun again before the last one's result (the client
+		// killed mid-fight) is the same attempt: no liveness twice
+		again := guildBossFighting(fighter, now)
 		if err := tx.StartGuildBossBattle(ctx, db.StartGuildBossBattleParams{
 			BossBattleAt: uint32(now.Unix()), OperationID: state.op.ID, CommanderID: client.CommanderID,
 		}); err != nil {
 			return err
+		}
+		if again {
+			return nil
 		}
 		if notices, err = tx.guildNoticesFor(member.GuildID); err != nil {
 			return err
@@ -246,9 +252,10 @@ func (game *Game) beginGuildBoss(client *connection.Client, req *protobuf.CS_400
 // the guild's boss, counted for the member's ranking and the day's fights,
 // and the battle costs guildset use_oil (GeneralPlayerCosume takes it on
 // the client). A defeated boss ends the operation and leaves a boss report
-// for every member that damaged it. The reply carries no drops or exp (the
-// rewards come with the report); result 20 tells the client the boss was
-// already defeated.
+// for every member that damaged it. The reply's only drop is the damage
+// dealt as the Damage Rating resource, which the result page shows (no
+// exp: the rewards come with the report); result 20 tells the client the
+// boss was already defeated.
 func (game *Game) finishGuildBoss(client *connection.Client, req *protobuf.CS_40003) error {
 	ctx := context.Background()
 	reply := &protobuf.SC_40004{}
@@ -273,6 +280,11 @@ func (game *Game) finishGuildBoss(client *connection.Client, req *protobuf.CS_40
 		}
 		if err != nil {
 			return err
+		}
+		// only the result of a battle begun (CS_40001), within the day's
+		// fights: one result per beginning
+		if !guildBossFighting(fighter, now) || guildBossDaily(fighter, now) >= guildBossDailyCount {
+			return errRefused
 		}
 		damage := uint64(0)
 		for _, enemy := range req.GetEnemyInfo() {
@@ -310,15 +322,10 @@ func (game *Game) finishGuildBoss(client *connection.Client, req *protobuf.CS_40
 			}
 		}
 		reply.Mvp = proto.Uint32(battleMVP(req.GetStatistics(), byID))
-		// the result page shows the commander's ships from ship_exp_list:
-		// listed without exp, intimacy unchanged (10000 + 0 gained)
-		for _, stat := range req.GetStatistics() {
-			if _, own := byID[stat.GetShipId()]; own {
-				reply.ShipExpList = append(reply.ShipExpList, &protobuf.SHIP_EXP{
-					ShipId: proto.Uint32(stat.GetShipId()), Exp: proto.Uint32(0), Intimacy: proto.Uint32(maxIntimacy),
-				})
-			}
-		}
+		// the result page's "contribution" is the drop of guildset
+		// guild_damage_resource (NewGuildResultGradePage:GetContributionPoint):
+		// the Damage Rating, the damage counted for the boss
+		reply.DropInfo = []*protobuf.DROPINFO{dropInfo(dropTypeResource, guildDamageResource, dealt)}
 		return nil
 	})
 	if errors.Is(err, errNoGuildOperation) {
@@ -351,5 +358,11 @@ func guildBossBattleOngoing(ctx context.Context, queries *db.Queries, guildID, c
 	if err != nil {
 		return false, err
 	}
-	return member.BossBattleAt != 0 && now.Sub(time.Unix(int64(member.BossBattleAt), 0)) < guildBossBattleLength, nil
+	return guildBossFighting(member, now), nil
+}
+
+// guildBossFighting tells whether a member began a boss battle less than
+// guildBossBattleLength ago and sent no result yet.
+func guildBossFighting(member db.GuildOperationMember, now time.Time) bool {
+	return member.BossBattleAt != 0 && now.Sub(time.Unix(int64(member.BossBattleAt), 0)) < guildBossBattleLength
 }

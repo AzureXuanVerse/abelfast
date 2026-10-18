@@ -18,9 +18,6 @@ UPDATE guild_users SET weekly_task_week = ? WHERE commander_id = ?;
 UPDATE guild_users SET extra_donate = extra_donate + ?, extra_operation = extra_operation + ?
 WHERE commander_id = ?;
 
--- name: SetGuildUserExtraOperation :exec
-UPDATE guild_users SET extra_operation = ? WHERE commander_id = ?;
-
 -- name: GetGuildLogistics :one
 SELECT * FROM guild_logistics WHERE guild_id = ?;
 
@@ -78,3 +75,6 @@ SELECT task_id, accept_time, submit_time FROM commander_tasks WHERE commander_id
 
 -- name: DeleteCommanderTask :exec
 DELETE FROM commander_tasks WHERE commander_id = ? AND task_id = ?;
+
+-- name: SetGuildUserOperationJoins :exec
+UPDATE guild_users SET operation_month = ?, operation_joins = ? WHERE commander_id = ?;

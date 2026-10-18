@@ -8,9 +8,6 @@ SELECT * FROM guild_operations
 WHERE guild_id = ? AND NOT ended AND end_time > sqlc.arg(now)
 ORDER BY id DESC LIMIT 1;
 
--- name: GetGuildOperation :one
-SELECT * FROM guild_operations WHERE id = ?;
-
 -- name: CountGuildOperationsSince :one
 SELECT COUNT(*) FROM guild_operations WHERE guild_id = ? AND start_time >= sqlc.arg(since);
 
@@ -56,10 +53,6 @@ SELECT * FROM guild_operation_members WHERE operation_id = ? AND commander_id = 
 
 -- name: ListGuildOperationMembers :many
 SELECT * FROM guild_operation_members WHERE operation_id = ? ORDER BY boss_damage DESC, commander_id;
-
--- name: CountGuildOperationJoins :one
-SELECT COUNT(*) FROM guild_operation_members
-WHERE commander_id = ? AND joined_at >= sqlc.arg(since) AND NOT extra;
 
 -- name: SaveGuildBossFight :exec
 UPDATE guild_operation_members SET boss_day = ?, boss_count = ?, boss_damage = ?, boss_battle_at = 0
@@ -115,3 +108,16 @@ SELECT status FROM guild_report_claims WHERE report_id = ? AND commander_id = ?;
 
 -- name: UseGuildUserExtraOperation :execrows
 UPDATE guild_users SET extra_operation = extra_operation - 1 WHERE commander_id = ? AND extra_operation > 0;
+
+-- name: DeleteGuildMissionShipsOf :exec
+DELETE FROM guild_operation_ships WHERE operation_id = ? AND event_id = ? AND commander_id = ?;
+
+-- name: DeleteGuildBossFleetShipsOf :exec
+DELETE FROM guild_boss_fleet_ships
+WHERE operation_id = sqlc.arg(operation_id) AND (commander_id = sqlc.arg(commander_id) OR user_id = sqlc.arg(commander_id));
+
+-- name: DeleteGuildBossFleetMeowfficersOf :exec
+DELETE FROM guild_boss_fleet_meowfficers WHERE operation_id = ? AND commander_id = ?;
+
+-- name: DeleteGuildOperationMember :exec
+DELETE FROM guild_operation_members WHERE operation_id = ? AND commander_id = ?;

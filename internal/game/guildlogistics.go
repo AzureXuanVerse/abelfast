@@ -167,21 +167,24 @@ func drawDonateTasks() db.IDList {
 }
 
 // guildUser is the commander's guild state, its donations drawn again when
-// a server day began since they were (rolled).
-func guildUser(ctx context.Context, queries *db.Queries, commanderID uint32, now time.Time) (user db.GuildUser, rolled bool, err error) {
-	if err := queries.CreateGuildUser(ctx, commanderID); err != nil {
-		return user, false, err
+// a server day began since they were: then the client gets the new ones
+// (SC_62031: a guild starts its count again on it, the client asks for
+// nothing at midnight in a guild).
+func (tx *Tx) guildUser(now time.Time) (user db.GuildUser, err error) {
+	if err := tx.CreateGuildUser(tx.ctx, tx.commanderID); err != nil {
+		return user, err
 	}
-	if user, err = queries.GetGuildUser(ctx, commanderID); err != nil {
-		return user, false, err
+	if user, err = tx.GetGuildUser(tx.ctx, tx.commanderID); err != nil {
+		return user, err
 	}
 	today := uint32(startOfDay(now).Unix())
 	if user.DonateDay == today {
-		return user, false, nil
+		return user, nil
 	}
 	user.DonateDay, user.DonateCount, user.DonateTasks = today, 0, drawDonateTasks()
-	return user, true, queries.SetGuildUserDonations(ctx, db.SetGuildUserDonationsParams{
-		DonateDay: user.DonateDay, DonateCount: 0, DonateTasks: user.DonateTasks, ExtraDonate: user.ExtraDonate, CommanderID: commanderID,
+	tx.push(&protobuf.SC_62031{DonateTasks: user.DonateTasks})
+	return user, tx.SetGuildUserDonations(tx.ctx, db.SetGuildUserDonationsParams{
+		DonateDay: user.DonateDay, DonateCount: 0, DonateTasks: user.DonateTasks, ExtraDonate: user.ExtraDonate, CommanderID: tx.commanderID,
 	})
 }
 
@@ -338,7 +341,7 @@ func (tx *Tx) addGuildRankScore(guildID, commanderID, kind, n uint32, now time.T
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	weekStart, monthStart := guildWeek(now), uint32(nextMonth(now).AddDate(0, -1, 0).Unix())
+	weekStart, monthStart := guildWeek(now), uint32(startOfMonth(now).Unix())
 	if score.WeekStart != weekStart {
 		score.Week = 0
 	}
@@ -359,13 +362,15 @@ func (tx *Tx) addGuildRankScore(guildID, commanderID, kind, n uint32, now time.T
 // the extra donations and operations, when it last collected the supplies,
 // whether it took this week's mission reward and its guild technologies.
 // The personal guild mission tasks of past weeks are dropped (the client
-// drops them at midnight, ZeroHourCommand).
+// drops them at midnight, ZeroHourCommand). The client asks again at each
+// day (for the public guild), which sends a guild's new donations
+// (guildUser).
 func (game *Game) handleGuildUserInfo(client *connection.Client, req *protobuf.CS_60102) error {
 	ctx := context.Background()
 	now := serverNow()
 	info := &protobuf.USER_GUILD_INFO{}
 	err := game.tx(ctx, client, func(tx *Tx) error {
-		user, _, err := guildUser(ctx, tx.Queries, client.CommanderID, now)
+		user, err := tx.guildUser(now)
 		if err != nil {
 			return err
 		}
@@ -428,11 +433,10 @@ func (tx *Tx) dropPastGuildTasks(now time.Time) error {
 func (game *Game) handleGuildDonate(client *connection.Client, req *protobuf.CS_62002) error {
 	ctx := context.Background()
 	now := serverNow()
+	// the day's new donations reach the client even when this one is
+	// refused (it may be one of yesterday's)
 	err := game.tx(ctx, client, func(tx *Tx) error {
-		user, rolled, err := guildUser(ctx, tx.Queries, client.CommanderID, now)
-		if rolled && err == nil {
-			tx.push(&protobuf.SC_62031{DonateTasks: user.DonateTasks})
-		}
+		_, err := tx.guildUser(now)
 		return err
 	})
 	if err != nil {
@@ -441,7 +445,7 @@ func (game *Game) handleGuildDonate(client *connection.Client, req *protobuf.CS_
 	reply := &protobuf.SC_62003{}
 	var notices *guildNotices
 	err = game.tx(ctx, client, func(tx *Tx) error {
-		user, _, err := guildUser(ctx, tx.Queries, client.CommanderID, now)
+		user, err := tx.guildUser(now)
 		if err != nil {
 			return err
 		}
@@ -551,17 +555,31 @@ func (game *Game) guildDonated(tx *Tx, member db.GuildMember, config guildContri
 	return notices, tx.addGuildLiveness(game, member, config.GuildActive, notices)
 }
 
-// guildAdministratorTx is the commander's membership if it administers its
-// guild, errRefused otherwise.
-func guildAdministratorTx(tx *Tx) (db.GuildMember, error) {
-	member, ok, err := guildMembership(tx.ctx, tx.Queries, tx.commanderID)
+// useGuildOrders spends count Guild Contribution Directives (an extra
+// donation each) or Guild Operation Orders (an extra operation each), in a
+// guild only (UseItemCommand: not_exist_guild_use_item); on result 0 the
+// client adds them itself (Guild:AddExtraDonateCnt / AddExtraBattleCnt).
+func (tx *Tx) useGuildOrders(id, count uint32, usage string) error {
+	_, inGuild, err := guildMembership(tx.ctx, tx.Queries, tx.commanderID)
 	if err != nil {
-		return member, err
+		return err
 	}
-	if !ok || !guildAdministrator(member.Duty) {
-		return member, errRefused
+	if !inGuild {
+		return errRefused
 	}
-	return member, nil
+	if err := tx.SpendItem(id, count); err != nil {
+		return err
+	}
+	if err := tx.CreateGuildUser(tx.ctx, tx.commanderID); err != nil {
+		return err
+	}
+	extras := db.AddGuildUserExtrasParams{CommanderID: tx.commanderID}
+	if usage == usageGuildDonate {
+		extras.ExtraDonate = count
+	} else {
+		extras.ExtraOperation = count
+	}
+	return tx.AddGuildUserExtras(tx.ctx, extras)
 }
 
 // handleGuildBuySupply answers GuildBuySupplyCommand (CS_62007): an
@@ -670,7 +688,7 @@ func (game *Game) handleGuildSupplyAward(client *connection.Client, req *protobu
 		if !ok || member.Duty == guildDutyRecruit || sameServerDay(time.Unix(int64(member.JoinTime), 0), now) {
 			return errRefused
 		}
-		user, _, err := guildUser(ctx, tx.Queries, client.CommanderID, now)
+		user, err := tx.guildUser(now)
 		if err != nil {
 			return err
 		}
@@ -837,7 +855,7 @@ func (game *Game) handleGuildRank(client *connection.Client, req *protobuf.CS_62
 		return err
 	}
 	now := serverNow()
-	weekStart, monthStart := guildWeek(now), uint32(nextMonth(now).AddDate(0, -1, 0).Unix())
+	weekStart, monthStart := guildWeek(now), uint32(startOfMonth(now).Unix())
 	periods := map[uint32]*protobuf.RANK_INFO_P62{}
 	for _, period := range []uint32{guildRankWeek, guildRankMonth, guildRankTotal} {
 		periods[period] = &protobuf.RANK_INFO_P62{Period: proto.Uint32(period)}
@@ -971,7 +989,7 @@ func (game *Game) guildTaskClaimed(tx *Tx, taskID uint32, config taskConfig) ([]
 		if err := tx.addGuildRankScore(member.GuildID, member.CommanderID, guildRankMission, 1, now); err != nil {
 			return nil, nil, err
 		}
-		user, _, err := guildUser(tx.ctx, tx.Queries, tx.commanderID, now)
+		user, err := tx.guildUser(now)
 		if err != nil {
 			return nil, nil, err
 		}

@@ -198,23 +198,6 @@ func (q *Queries) ClearGuildBossFleetMeowfficers(ctx context.Context, arg ClearG
 	return err
 }
 
-const countGuildOperationJoins = `-- name: CountGuildOperationJoins :one
-SELECT COUNT(*) FROM guild_operation_members
-WHERE commander_id = ? AND joined_at >= ?2 AND NOT extra
-`
-
-type CountGuildOperationJoinsParams struct {
-	CommanderID uint32
-	Since       uint32
-}
-
-func (q *Queries) CountGuildOperationJoins(ctx context.Context, arg CountGuildOperationJoinsParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countGuildOperationJoins, arg.CommanderID, arg.Since)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const countGuildOperationsSince = `-- name: CountGuildOperationsSince :one
 SELECT COUNT(*) FROM guild_operations WHERE guild_id = ? AND start_time >= ?2
 `
@@ -275,26 +258,62 @@ func (q *Queries) DamageGuildBoss(ctx context.Context, arg DamageGuildBossParams
 	return err
 }
 
-const getGuildOperation = `-- name: GetGuildOperation :one
-SELECT id, guild_id, operation_id, start_time, end_time, boss_id, boss_hp, boss_damage, boss_active, ended FROM guild_operations WHERE id = ?
+const deleteGuildBossFleetMeowfficersOf = `-- name: DeleteGuildBossFleetMeowfficersOf :exec
+DELETE FROM guild_boss_fleet_meowfficers WHERE operation_id = ? AND commander_id = ?
 `
 
-func (q *Queries) GetGuildOperation(ctx context.Context, id uint32) (GuildOperation, error) {
-	row := q.db.QueryRowContext(ctx, getGuildOperation, id)
-	var i GuildOperation
-	err := row.Scan(
-		&i.ID,
-		&i.GuildID,
-		&i.OperationID,
-		&i.StartTime,
-		&i.EndTime,
-		&i.BossID,
-		&i.BossHp,
-		&i.BossDamage,
-		&i.BossActive,
-		&i.Ended,
-	)
-	return i, err
+type DeleteGuildBossFleetMeowfficersOfParams struct {
+	OperationID uint32
+	CommanderID uint32
+}
+
+func (q *Queries) DeleteGuildBossFleetMeowfficersOf(ctx context.Context, arg DeleteGuildBossFleetMeowfficersOfParams) error {
+	_, err := q.db.ExecContext(ctx, deleteGuildBossFleetMeowfficersOf, arg.OperationID, arg.CommanderID)
+	return err
+}
+
+const deleteGuildBossFleetShipsOf = `-- name: DeleteGuildBossFleetShipsOf :exec
+DELETE FROM guild_boss_fleet_ships
+WHERE operation_id = ?1 AND (commander_id = ?2 OR user_id = ?2)
+`
+
+type DeleteGuildBossFleetShipsOfParams struct {
+	OperationID uint32
+	CommanderID uint32
+}
+
+func (q *Queries) DeleteGuildBossFleetShipsOf(ctx context.Context, arg DeleteGuildBossFleetShipsOfParams) error {
+	_, err := q.db.ExecContext(ctx, deleteGuildBossFleetShipsOf, arg.OperationID, arg.CommanderID)
+	return err
+}
+
+const deleteGuildMissionShipsOf = `-- name: DeleteGuildMissionShipsOf :exec
+DELETE FROM guild_operation_ships WHERE operation_id = ? AND event_id = ? AND commander_id = ?
+`
+
+type DeleteGuildMissionShipsOfParams struct {
+	OperationID uint32
+	EventID     uint32
+	CommanderID uint32
+}
+
+func (q *Queries) DeleteGuildMissionShipsOf(ctx context.Context, arg DeleteGuildMissionShipsOfParams) error {
+	_, err := q.db.ExecContext(ctx, deleteGuildMissionShipsOf, arg.OperationID, arg.EventID, arg.CommanderID)
+	return err
+}
+
+const deleteGuildOperationMember = `-- name: DeleteGuildOperationMember :exec
+DELETE FROM guild_operation_members WHERE operation_id = ? AND commander_id = ?
+`
+
+type DeleteGuildOperationMemberParams struct {
+	OperationID uint32
+	CommanderID uint32
+}
+
+func (q *Queries) DeleteGuildOperationMember(ctx context.Context, arg DeleteGuildOperationMemberParams) error {
+	_, err := q.db.ExecContext(ctx, deleteGuildOperationMember, arg.OperationID, arg.CommanderID)
+	return err
 }
 
 const getGuildOperationMember = `-- name: GetGuildOperationMember :one

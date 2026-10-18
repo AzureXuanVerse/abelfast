@@ -339,12 +339,9 @@ func (game *Game) handleSetGuildDuty(client *connection.Client, req *protobuf.CS
 	update := &protobuf.SC_60031{}
 	var base *protobuf.SC_60030
 	err := game.tx(ctx, client, func(tx *Tx) error {
-		self, ok, err := guildMembership(ctx, tx.Queries, client.CommanderID)
+		self, err := guildAdministratorTx(tx)
 		if err != nil {
 			return err
-		}
-		if !ok || !guildAdministrator(self.Duty) {
-			return errRefused
 		}
 		target, ok, err := guildMembership(ctx, tx.Queries, req.GetPlayerId())
 		if err != nil {
@@ -448,12 +445,22 @@ func (game *Game) setGuildDuties(tx *Tx, guildID uint32, changes [][2]uint32, up
 }
 
 // removeGuildMember takes a member out of its guild with a log line (quit
-// or fire): the update for the members (duty 0 and the line), the line
-// alone and the members left.
+// or fire), and out of its running operation: the update for the members
+// (duty 0 and the line), the line alone and the members left.
 func (game *Game) removeGuildMember(tx *Tx, member db.GuildMember, cmd uint32) (*protobuf.SC_60031, *protobuf.LOG_INFO, []uint32, error) {
 	commander, err := tx.GetCommander(tx.ctx, member.CommanderID)
 	if err != nil {
 		return nil, nil, nil, err
+	}
+	now := serverNow()
+	state, open, err := openGuildOperation(tx.ctx, tx.Queries, member.GuildID, now)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if open {
+		if err := state.withdraw(tx.ctx, tx.Queries, member.CommanderID, now); err != nil {
+			return nil, nil, nil, err
+		}
 	}
 	if err := tx.DeleteGuildMember(tx.ctx, member.CommanderID); err != nil {
 		return nil, nil, nil, err
@@ -485,12 +492,9 @@ func (game *Game) handleFireGuildMember(client *connection.Client, req *protobuf
 	var update *protobuf.SC_60031
 	var line *protobuf.LOG_INFO
 	err := game.tx(ctx, client, func(tx *Tx) error {
-		self, ok, err := guildMembership(ctx, tx.Queries, client.CommanderID)
+		self, err := guildAdministratorTx(tx)
 		if err != nil {
 			return err
-		}
-		if !ok || !guildAdministrator(self.Duty) {
-			return errRefused
 		}
 		target, ok, err := guildMembership(ctx, tx.Queries, req.GetPlayerId())
 		if err != nil {
@@ -669,7 +673,8 @@ func (game *Game) handleQuitGuild(client *connection.Client, req *protobuf.CS_60
 // and doesn't add the member: every member online gets it (SC_60031), the
 // new member its guild if online (SC_60000). 1 is an applicant already in a
 // guild (the client then rejects the request), 4 one still in its cooldown
-// after leaving a guild, 4306 a full guild. Built from the Lua alone.
+// after leaving a guild, 4306 a full guild; those drop the request here too.
+// Built from the Lua alone.
 func (game *Game) handleAcceptGuildRequest(client *connection.Client, req *protobuf.CS_60020) error {
 	ctx := context.Background()
 	applicant := req.GetPlayerId()
@@ -677,12 +682,9 @@ func (game *Game) handleAcceptGuildRequest(client *connection.Client, req *proto
 	var guildID uint32
 	update := &protobuf.SC_60031{}
 	err := game.tx(ctx, client, func(tx *Tx) error {
-		self, ok, err := guildMembership(ctx, tx.Queries, client.CommanderID)
+		self, err := guildAdministratorTx(tx)
 		if err != nil {
 			return err
-		}
-		if !ok || !guildAdministrator(self.Duty) {
-			return errRefused
 		}
 		guildID = self.GuildID
 		exists, err := tx.GuildRequestExists(ctx, db.GuildRequestExistsParams{GuildID: guildID, CommanderID: applicant})
@@ -748,7 +750,7 @@ func (game *Game) handleAcceptGuildRequest(client *connection.Client, req *proto
 		update.LogList = append(update.LogList, line)
 		return nil
 	})
-	if errors.Is(err, errGuildPlayerJoined) || errors.Is(err, errGuildJoinCooldown) {
+	if errors.Is(err, errGuildPlayerJoined) || errors.Is(err, errGuildJoinCooldown) || errors.Is(err, errGuildFull) {
 		// the request is gone either way, as the client drops it
 		if delErr := game.DB.DeleteGuildRequest(ctx, db.DeleteGuildRequestParams{GuildID: guildID, CommanderID: applicant}); delErr != nil {
 			return delErr
@@ -777,12 +779,9 @@ func (game *Game) handleAcceptGuildRequest(client *connection.Client, req *proto
 func (game *Game) handleRejectGuildRequest(client *connection.Client, req *protobuf.CS_60022) error {
 	ctx := context.Background()
 	err := game.tx(ctx, client, func(tx *Tx) error {
-		self, ok, err := guildMembership(ctx, tx.Queries, client.CommanderID)
+		self, err := guildAdministratorTx(tx)
 		if err != nil {
 			return err
-		}
-		if !ok || !guildAdministrator(self.Duty) {
-			return errRefused
 		}
 		return tx.DeleteGuildRequest(ctx, db.DeleteGuildRequestParams{GuildID: self.GuildID, CommanderID: req.GetPlayerId()})
 	})

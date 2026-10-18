@@ -366,12 +366,9 @@ func (game *Game) handleStartGuildTechGroup(client *connection.Client, req *prot
 	ctx := context.Background()
 	var members []uint32
 	err := game.tx(ctx, client, func(tx *Tx) error {
-		member, ok, err := guildMembership(ctx, tx.Queries, client.CommanderID)
+		member, err := guildAdministratorTx(tx)
 		if err != nil {
 			return err
-		}
-		if !ok || !guildAdministrator(member.Duty) {
-			return errRefused
 		}
 		tech, ok := guildTechs[req.GetId()]
 		if !ok || tech.NextTech == 0 {

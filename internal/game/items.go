@@ -20,18 +20,21 @@ import (
 
 // item_data_statistics usage (ItemUsage, model/const/itemusage.lua) of the
 // items belfast opens, with the skin ones of skinitems.go and the ship gifts
-// of gifts.go. The others change state belfast doesn't keep yet (the guild,
-// commander boxes, remastered chapters) and are refused. Skill books,
+// of gifts.go, the guild orders of guildlogistics.go. The others change
+// state belfast doesn't keep yet (commander boxes, remastered chapters) and
+// are refused. Skill books,
 // augment module stones and combat logistics plans are spent by their own
 // packets, never through CS_15002 (UseItemCommand asserts on them).
 const (
-	usageDrop          = "usage_drop"
-	usageDropTemplate  = "usgae_drop_template" // sic
-	usageDropAppointed = "usage_drop_appointed"
-	usageInvitation    = "usage_invitation"
-	usageFood          = "usage_food"
-	usageDormLvUp      = "usage_dorm_lv_up"
-	usageShipGift      = "usage_favorability"
+	usageDrop           = "usage_drop"
+	usageDropTemplate   = "usgae_drop_template" // sic
+	usageDropAppointed  = "usage_drop_appointed"
+	usageInvitation     = "usage_invitation"
+	usageFood           = "usage_food"
+	usageDormLvUp       = "usage_dorm_lv_up"
+	usageShipGift       = "usage_favorability"
+	usageGuildDonate    = "usage_guild_donate"
+	usageGuildOperation = "usage_guild_operation"
 )
 
 // itemUseConfig is what item_data_statistics says about using an item.
@@ -441,6 +444,8 @@ func (tx *Tx) useItem(id, count uint32, arg []uint32) ([]*protobuf.DROPINFO, err
 		drops = skins
 	case usageSkinExp:
 		return nil, tx.useSkinTrial(id, count, arg, use)
+	case usageGuildDonate, usageGuildOperation:
+		return nil, tx.useGuildOrders(id, count, use.usage)
 	default:
 		return nil, errRefused
 	}

@@ -264,12 +264,9 @@ func (game *Game) handleGuildAssaultFleets(client *connection.Client, req *proto
 func (game *Game) handleGuildRecommendAssaultShip(client *connection.Client, req *protobuf.CS_61033) error {
 	ctx := context.Background()
 	err := game.tx(ctx, client, func(tx *Tx) error {
-		member, ok, err := guildMembership(ctx, tx.Queries, client.CommanderID)
+		member, err := guildAdministratorTx(tx)
 		if err != nil {
 			return err
-		}
-		if !ok || !guildAdministrator(member.Duty) {
-			return errRefused
 		}
 		cmd := req.GetCmd()
 		if cmd != guildRecommendShip && cmd != guildCancelRecommendShip {

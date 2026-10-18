@@ -145,7 +145,7 @@ func (q *Queries) GetGuildRankScore(ctx context.Context, arg GetGuildRankScorePa
 }
 
 const getGuildUser = `-- name: GetGuildUser :one
-SELECT commander_id, donate_day, donate_count, donate_tasks, extra_donate, extra_operation, benefit_time, weekly_task_week FROM guild_users WHERE commander_id = ?
+SELECT commander_id, donate_day, donate_count, donate_tasks, extra_donate, extra_operation, benefit_time, weekly_task_week, operation_month, operation_joins FROM guild_users WHERE commander_id = ?
 `
 
 func (q *Queries) GetGuildUser(ctx context.Context, commanderID uint32) (GuildUser, error) {
@@ -160,6 +160,8 @@ func (q *Queries) GetGuildUser(ctx context.Context, commanderID uint32) (GuildUs
 		&i.ExtraOperation,
 		&i.BenefitTime,
 		&i.WeeklyTaskWeek,
+		&i.OperationMonth,
+		&i.OperationJoins,
 	)
 	return i, err
 }
@@ -419,17 +421,18 @@ func (q *Queries) SetGuildUserDonations(ctx context.Context, arg SetGuildUserDon
 	return err
 }
 
-const setGuildUserExtraOperation = `-- name: SetGuildUserExtraOperation :exec
-UPDATE guild_users SET extra_operation = ? WHERE commander_id = ?
+const setGuildUserOperationJoins = `-- name: SetGuildUserOperationJoins :exec
+UPDATE guild_users SET operation_month = ?, operation_joins = ? WHERE commander_id = ?
 `
 
-type SetGuildUserExtraOperationParams struct {
-	ExtraOperation uint32
+type SetGuildUserOperationJoinsParams struct {
+	OperationMonth uint32
+	OperationJoins uint32
 	CommanderID    uint32
 }
 
-func (q *Queries) SetGuildUserExtraOperation(ctx context.Context, arg SetGuildUserExtraOperationParams) error {
-	_, err := q.db.ExecContext(ctx, setGuildUserExtraOperation, arg.ExtraOperation, arg.CommanderID)
+func (q *Queries) SetGuildUserOperationJoins(ctx context.Context, arg SetGuildUserOperationJoinsParams) error {
+	_, err := q.db.ExecContext(ctx, setGuildUserOperationJoins, arg.OperationMonth, arg.OperationJoins, arg.CommanderID)
 	return err
 }
 

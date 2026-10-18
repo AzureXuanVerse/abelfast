@@ -68,6 +68,19 @@ func guildAdministrator(duty uint32) bool {
 	return duty == guildDutyCommander || duty == guildDutyDeputy
 }
 
+// guildAdministratorTx is the commander's membership if it administers its
+// guild, errRefused otherwise.
+func guildAdministratorTx(tx *Tx) (db.GuildMember, error) {
+	member, ok, err := guildMembership(tx.ctx, tx.Queries, tx.commanderID)
+	if err != nil {
+		return member, err
+	}
+	if !ok || !guildAdministrator(member.Duty) {
+		return member, errRefused
+	}
+	return member, nil
+}
+
 // guildBaseInfo is a guild's GUILD_BASE_INFO, with its member count.
 func guildBaseInfo(guild db.Guild, memberCount uint32) *protobuf.GUILD_BASE_INFO {
 	return &protobuf.GUILD_BASE_INFO{

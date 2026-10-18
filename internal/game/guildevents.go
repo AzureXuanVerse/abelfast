@@ -122,6 +122,49 @@ func (state *guildOperationState) unlocked(mission *db.GuildOperationMission) bo
 	return false
 }
 
+// withdraw takes a member leaving the guild out of the operation: the work
+// done until now stays (settled first), their fleets leave the missions
+// still running, with the efficiency they brought, their boss fleets and
+// the support ships of theirs the others' boss fleets borrowed go, and
+// they stop taking part (coming back is a new join: its month's count is
+// on the commander, guildOperationJoins).
+func (state *guildOperationState) withdraw(ctx context.Context, queries *db.Queries, commanderID uint32, now time.Time) error {
+	if err := state.settle(ctx, queries, now); err != nil {
+		return err
+	}
+	for i := range state.missions {
+		mission := &state.missions[i]
+		if mission.FinishedAt != 0 {
+			continue
+		}
+		var gone uint32
+		for _, ship := range state.missionShips(mission.EventID) {
+			if ship.CommanderID == commanderID {
+				gone += ship.Efficiency
+			}
+		}
+		if gone == 0 {
+			continue
+		}
+		mission.Efficiency -= min(gone, mission.Efficiency)
+		if err := saveGuildMission(ctx, queries, *mission); err != nil {
+			return err
+		}
+		if err := queries.DeleteGuildMissionShipsOf(ctx, db.DeleteGuildMissionShipsOfParams{
+			OperationID: state.op.ID, EventID: mission.EventID, CommanderID: commanderID,
+		}); err != nil {
+			return err
+		}
+	}
+	if err := queries.DeleteGuildBossFleetShipsOf(ctx, db.DeleteGuildBossFleetShipsOfParams{OperationID: state.op.ID, CommanderID: commanderID}); err != nil {
+		return err
+	}
+	if err := queries.DeleteGuildBossFleetMeowfficersOf(ctx, db.DeleteGuildBossFleetMeowfficersOfParams{OperationID: state.op.ID, CommanderID: commanderID}); err != nil {
+		return err
+	}
+	return queries.DeleteGuildOperationMember(ctx, db.DeleteGuildOperationMemberParams{OperationID: state.op.ID, CommanderID: commanderID})
+}
+
 // missionShips are the ships dispatched to a mission.
 func (state *guildOperationState) missionShips(eventID uint32) []db.GuildOperationShip {
 	var ships []db.GuildOperationShip
@@ -309,12 +352,6 @@ func (state *guildOperationState) addReport(ctx context.Context, queries *db.Que
 	return nil
 }
 
-// startOfMonth is when now's month began, server time (the monthly joins
-// and operation counts reset, GuildProxy's DayCall on day 1).
-func startOfMonth(now time.Time) time.Time {
-	return nextMonth(now).AddDate(0, -1, 0)
-}
-
 // guildBossDaily is the member's boss fights today.
 func guildBossDaily(member db.GuildOperationMember, now time.Time) uint32 {
 	if member.BossDay != uint32(startOfDay(now).Unix()) {
@@ -436,13 +473,11 @@ func (game *Game) currentOperation(ctx context.Context, queries *db.Queries, sta
 	if operation.Fleets, err = guildBossFleets(ctx, queries, state.op.ID, commanderID); err != nil {
 		return nil, err
 	}
-	joins, err := queries.CountGuildOperationJoins(ctx, db.CountGuildOperationJoinsParams{
-		CommanderID: commanderID, Since: uint32(startOfMonth(now).Unix()),
-	})
+	joins, err := guildOperationJoins(ctx, queries, commanderID, now)
 	if err != nil {
 		return nil, err
 	}
-	operation.JoinTimes = proto.Uint32(uint32(joins))
+	operation.JoinTimes = proto.Uint32(joins)
 	member, err := queries.GetGuildOperationMember(ctx, db.GetGuildOperationMemberParams{OperationID: state.op.ID, CommanderID: commanderID})
 	switch {
 	case err == nil:
@@ -512,12 +547,9 @@ func (game *Game) handleActivateGuildOperation(client *connection.Client, req *p
 	ctx := context.Background()
 	var guildID uint32
 	err := game.tx(ctx, client, func(tx *Tx) error {
-		member, ok, err := guildMembership(ctx, tx.Queries, client.CommanderID)
+		member, err := guildAdministratorTx(tx)
 		if err != nil {
 			return err
-		}
-		if !ok || !guildAdministrator(member.Duty) {
-			return errRefused
 		}
 		guildID = member.GuildID
 		config, known := guildOperations[req.GetChapterId()]
@@ -660,6 +692,16 @@ func (game *Game) handleGuildOperation(client *connection.Client, req *protobuf.
 	return client.Send(reply)
 }
 
+// guildOperationJoins is how many operations the commander joined this
+// month without an extra operation, in whatever guild.
+func guildOperationJoins(ctx context.Context, queries *db.Queries, commanderID uint32, now time.Time) (uint32, error) {
+	user, err := queries.GetGuildUser(ctx, commanderID)
+	if errors.Is(err, sql.ErrNoRows) || err == nil && user.OperationMonth != uint32(startOfMonth(now).Unix()) {
+		return 0, nil
+	}
+	return user.OperationJoins, err
+}
+
 // handleJoinGuildOperation takes the commander into the open operation
 // (GuildJoinEventCommand, CS_61031): guildset efficiency_param_times joins a
 // month, then an extra operation each (GuildEvent:IncreaseJoinCnt). The
@@ -676,13 +718,21 @@ func (game *Game) handleJoinGuildOperation(client *connection.Client, req *proto
 		if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-		joins, err := tx.CountGuildOperationJoins(ctx, db.CountGuildOperationJoinsParams{
-			CommanderID: client.CommanderID, Since: uint32(startOfMonth(now).Unix()),
-		})
+		joins, err := guildOperationJoins(ctx, tx.Queries, client.CommanderID, now)
 		if err != nil {
 			return err
 		}
-		extra := joins >= int64(guildJoinsPerMonth)
+		extra := joins >= guildJoinsPerMonth
+		if !extra {
+			if err := tx.CreateGuildUser(ctx, client.CommanderID); err != nil {
+				return err
+			}
+			if err := tx.SetGuildUserOperationJoins(ctx, db.SetGuildUserOperationJoinsParams{
+				OperationMonth: uint32(startOfMonth(now).Unix()), OperationJoins: joins + 1, CommanderID: client.CommanderID,
+			}); err != nil {
+				return err
+			}
+		}
 		if extra {
 			used, err := tx.UseGuildUserExtraOperation(ctx, client.CommanderID)
 			if err != nil {
