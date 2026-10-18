@@ -178,6 +178,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleQuickFinishMeowfficerBoxes)
 	packets.Handle(game.handleRefreshMeowfficerBoxes)
 	packets.Handle(game.handleOpenMeowfficerBox)
+	packets.Handle(game.handleEquipMeowfficer)
 	// mail
 	packets.Handle(game.handleMailList)
 	packets.Handle(game.handleArchiveList)

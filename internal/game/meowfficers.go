@@ -393,3 +393,61 @@ func (game *Game) handleBuyMeowfficerBoxes(client *connection.Client, req *proto
 	}
 	return client.Send(&protobuf.SC_25019{Result: result(err), Awards: awards})
 }
+
+// handleEquipMeowfficer puts a cat in a fleet's command (pos 1) or support
+// (pos 2) slot, or empties it with commanderid 0
+// (EquipCommanderToFleetCommande, CS_25006). The client first takes the cat
+// out of any other fleet or slot (SelectFleetCommanderCommand) and keeps two
+// cats of the same group apart; both are refused here too. Built from the
+// Lua alone.
+func (game *Game) handleEquipMeowfficer(client *connection.Client, req *protobuf.CS_25006) error {
+	fleetID, pos, catID := req.GetGroupid(), req.GetPos(), req.GetCommanderid()
+	err := errRefused
+	if pos >= 1 && pos <= meowfficerFleetSlots {
+		err = game.tx(context.Background(), client, func(tx *Tx) error {
+			fleets, err := tx.ListFleets(tx.ctx, tx.commanderID)
+			if err != nil {
+				return err
+			}
+			if !slices.ContainsFunc(fleets, func(fleet db.ListFleetsRow) bool { return fleet.FleetID == fleetID }) {
+				return errRefused
+			}
+			if catID == 0 {
+				return tx.ClearFleetMeowfficer(tx.ctx, db.ClearFleetMeowfficerParams{CommanderID: tx.commanderID, FleetID: fleetID, Pos: pos})
+			}
+			cat, err := tx.GetMeowfficer(tx.ctx, db.GetMeowfficerParams{CommanderID: tx.commanderID, ID: catID})
+			if errors.Is(err, sql.ErrNoRows) {
+				return errRefused
+			}
+			if err != nil {
+				return err
+			}
+			assigned, err := tx.ListFleetMeowfficers(tx.ctx, tx.commanderID)
+			if err != nil {
+				return err
+			}
+			for _, slot := range assigned {
+				if slot.FleetID == fleetID && slot.Pos == pos {
+					continue
+				}
+				if slot.MeowfficerID == catID {
+					return errRefused
+				}
+				if slot.FleetID == fleetID {
+					other, err := tx.GetMeowfficer(tx.ctx, db.GetMeowfficerParams{CommanderID: tx.commanderID, ID: slot.MeowfficerID})
+					if err != nil {
+						return err
+					}
+					if meowfficerTemplates[other.TemplateID].GroupType == meowfficerTemplates[cat.TemplateID].GroupType {
+						return errRefused
+					}
+				}
+			}
+			return tx.SetFleetMeowfficer(tx.ctx, db.SetFleetMeowfficerParams{CommanderID: tx.commanderID, FleetID: fleetID, Pos: pos, MeowfficerID: catID})
+		})
+	}
+	if err != nil && !refused(err) {
+		return err
+	}
+	return client.Send(&protobuf.SC_25007{Result: result(err)})
+}

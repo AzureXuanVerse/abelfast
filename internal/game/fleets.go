@@ -62,8 +62,8 @@ func setFleetShips(ctx context.Context, queries *db.Queries, commanderID uint32,
 	return nil
 }
 
-// fleetList is SC_12101, FleetProxy's fleets. The capture lists them by
-// descending id.
+// fleetList is SC_12101, FleetProxy's fleets with their meowfficers
+// (Fleet.commanderIds, by pos). The capture lists them by descending id.
 func fleetList(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobuf.SC_12101, error) {
 	fleets, err := queries.ListFleets(ctx, commanderID)
 	if err != nil {
@@ -73,12 +73,21 @@ func fleetList(ctx context.Context, queries *db.Queries, commanderID uint32) (*p
 	if err != nil {
 		return nil, err
 	}
+	cats, err := queries.ListFleetMeowfficers(ctx, commanderID)
+	if err != nil {
+		return nil, err
+	}
 	msg := &protobuf.SC_12101{GroupList: make([]*protobuf.GROUPINFO_P12, len(fleets))}
 	for i, fleet := range fleets {
 		group := &protobuf.GROUPINFO_P12{Id: proto.Uint32(fleet.FleetID), Name: proto.String(fleet.Name)}
 		for _, ship := range ships {
 			if ship.FleetID == fleet.FleetID {
 				group.ShipList = append(group.ShipList, ship.ShipID)
+			}
+		}
+		for _, cat := range cats {
+			if cat.FleetID == fleet.FleetID {
+				group.Commanders = append(group.Commanders, &protobuf.COMMANDERSINFO{Pos: proto.Uint32(cat.Pos), Id: proto.Uint32(cat.MeowfficerID)})
 			}
 		}
 		msg.GroupList[i] = group
