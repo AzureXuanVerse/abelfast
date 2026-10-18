@@ -104,6 +104,17 @@ func (game *Game) guildMemberInfo(member db.GuildMember, commander db.Commander)
 	}
 }
 
+// playerInfoP60 is a commander as a guild's leader, applicant or chat
+// message sender (Guild:warpChatInfo reads it as a GuildMember).
+func (game *Game) playerInfoP60(commander db.Commander) *protobuf.PLAYER_INFO_P60 {
+	return &protobuf.PLAYER_INFO_P60{
+		Id:      proto.Uint32(commander.ID),
+		Name:    proto.String(commander.Name),
+		Lv:      proto.Uint32(commander.Level),
+		Display: game.displayInfo(commander),
+	}
+}
+
 // guildLogInfo is a guild log line.
 func guildLogInfo(row db.GuildLog) *protobuf.LOG_INFO {
 	return &protobuf.LOG_INFO{
@@ -300,10 +311,4 @@ func (game *Game) handleGuildUserInfo(client *connection.Client, req *protobuf.C
 	return client.Send(&protobuf.SC_60103{UserInfo: &protobuf.USER_GUILD_INFO{
 		DonateTasks: []uint32{1, 2, 20},
 	}})
-}
-
-// handleGuildShop answers GetGuildShopCommand: outside a guild the shop is
-// empty and never refreshes.
-func (game *Game) handleGuildShop(client *connection.Client, req *protobuf.CS_60033) error {
-	return client.Send(&protobuf.SC_60034{Result: result(nil)})
 }

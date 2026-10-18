@@ -109,6 +109,9 @@ func (game *Game) Register() {
 	packets.Handle(game.handlePublicGuildTech)
 	packets.Handle(game.handleGuildUserInfo)
 	packets.Handle(game.handleGuildShop)
+	packets.Handle(game.handleGuildShopPurchase)
+	packets.Handle(game.handleGuildSendMsg)
+	packets.Handle(game.handleGuildChatList)
 	// ships, builds and inventory
 	packets.Handle(game.handleBuildShip)
 	packets.Handle(game.handleBuildQuickFinish)

@@ -206,6 +206,18 @@ type CommanderGameRoom struct {
 	FirstEnter  uint32
 }
 
+type CommanderGuildShop struct {
+	CommanderID     uint32
+	NextRefreshTime int64
+	RefreshCount    uint32
+}
+
+type CommanderGuildShopPurchase struct {
+	CommanderID uint32
+	Slot        uint32
+	Count       uint32
+}
+
 type CommanderHandbookFinished struct {
 	CommanderID uint32
 	PageID      uint32

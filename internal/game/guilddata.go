@@ -45,6 +45,9 @@ func loadGuildData() error {
 	if guildRenameCost, ok = gameset["modify_guild_cost"]; !ok {
 		return gamedata.Missing("gameset", "modify_guild_cost")
 	}
+	if err := loadGuildShop(); err != nil {
+		return err
+	}
 	return nil
 }
 

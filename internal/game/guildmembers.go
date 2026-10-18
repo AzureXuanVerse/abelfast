@@ -157,12 +157,9 @@ func guildSimpleInfo(ctx context.Context, game *Game, queries *db.Queries, guild
 	if err != nil {
 		return nil, err
 	}
-	friend := game.friendInfo(leader.Commander)
 	return &protobuf.GUILD_SIMPLE_INFO{
-		Base: guildBaseInfo(guild, memberCount),
-		Leader: &protobuf.PLAYER_INFO_P60{
-			Id: friend.Id, Name: friend.Name, Lv: friend.Lv, Display: friend.Display,
-		},
+		Base:     guildBaseInfo(guild, memberCount),
+		Leader:   game.playerInfoP60(leader.Commander),
 		TechSeat: proto.Uint32(maxMembers - guildLevelAt(guild.Level).MemberNum),
 	}, nil
 }
@@ -201,13 +198,10 @@ func (game *Game) handleGuildRequests(client *connection.Client, req *protobuf.C
 		return err
 	}
 	for _, row := range requests {
-		friend := game.friendInfo(row.Commander)
 		reply.RequestList = append(reply.RequestList, &protobuf.MSG_INFO_P60{
 			Timestamp: proto.Uint32(row.GuildRequest.Time),
-			Player: &protobuf.PLAYER_INFO_P60{
-				Id: friend.Id, Name: friend.Name, Lv: friend.Lv, Display: friend.Display,
-			},
-			Content: proto.String(row.GuildRequest.Content),
+			Player:    game.playerInfoP60(row.Commander),
+			Content:   proto.String(row.GuildRequest.Content),
 		})
 	}
 	return client.Send(reply)
