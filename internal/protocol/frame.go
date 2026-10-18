@@ -1,15 +1,18 @@
 package protocol
 
 import (
+	"bytes"
+	"compress/zlib"
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 )
 
 /*
 Frame layout (see packer.lua):
   - 2 bytes (uint16) : size of the rest of the frame
-  - 1 byte  (uint8)  : 0x00
+  - 1 byte  (uint8)  : 0x00, or 0x01 when the payload is zlib compressed
   - 2 bytes (uint16) : packet id
   - 2 bytes (uint16) : packet index, echoed back in replies
   - rest             : protobuf payload
@@ -32,10 +35,20 @@ func ParseHeader(frame []byte) Header {
 	}
 }
 
-// AppendFrame appends a framed packet to dst.
+// AppendFrame appends a framed packet to dst. A payload too large for the
+// size field is zlib compressed and flagged (the client inflates it, e.g. the
+// SC_12001 dock of a commander with hundreds of ships).
 func AppendFrame(dst []byte, id int, index int, payload []byte) []byte {
+	flag := byte(0x00)
+	if len(payload)+MinFrameSize > math.MaxUint16 {
+		var compressed bytes.Buffer
+		w := zlib.NewWriter(&compressed)
+		w.Write(payload)
+		w.Close()
+		payload, flag = compressed.Bytes(), 0x01
+	}
 	dst = binary.BigEndian.AppendUint16(dst, uint16(len(payload)+MinFrameSize))
-	dst = append(dst, 0x00)
+	dst = append(dst, flag)
 	dst = binary.BigEndian.AppendUint16(dst, uint16(id))
 	dst = binary.BigEndian.AppendUint16(dst, uint16(index))
 	return append(dst, payload...)
