@@ -93,6 +93,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleFleetTechAwardAll)
 	packets.HandleLenient(game.handleSetFleetTechAttrs)
 	packets.Handle(game.handleGuildInfo)
+	packets.Handle(game.handleCreateGuild)
 	packets.Handle(game.handlePublicGuildTech)
 	packets.Handle(game.handleGuildUserInfo)
 	packets.Handle(game.handleGuildShop)

@@ -467,6 +467,54 @@ type FriendRequest struct {
 	SentAt      int64
 }
 
+type Guild struct {
+	ID              uint32
+	Name            string
+	Policy          uint32
+	Faction         uint32
+	Manifesto       string
+	Announce        string
+	Level           uint32
+	Exp             uint32
+	Capital         uint32
+	ChangeFactionCd uint32
+	KickLeaderCd    uint32
+	CreatedAt       uint32
+}
+
+type GuildChat struct {
+	ID          uint32
+	GuildID     uint32
+	CommanderID uint32
+	Content     string
+	Time        uint32
+}
+
+type GuildLog struct {
+	ID      uint32
+	GuildID uint32
+	Cmd     uint32
+	Time    uint32
+	UserID  uint32
+	Name    string
+	Arg1    uint32
+}
+
+type GuildMember struct {
+	CommanderID uint32
+	GuildID     uint32
+	Duty        uint32
+	Liveness    uint32
+	JoinTime    uint32
+}
+
+type GuildRequest struct {
+	GuildID     uint32
+	CommanderID uint32
+	Content     string
+	Time        uint32
+}
+
 type Mail struct {
 	ID          uint32
 	CommanderID uint32

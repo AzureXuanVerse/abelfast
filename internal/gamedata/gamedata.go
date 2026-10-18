@@ -157,6 +157,26 @@ func Gameset() (map[string]uint32, error) {
 	return gameset, nil
 }
 
+// Setting is a row of a settings table keyed by name (guildset...): a
+// key_value, or key_args for the settings that hold a list.
+type Setting struct {
+	KeyValue uint32          `json:"key_value"`
+	KeyArgs  json.RawMessage `json:"key_args"`
+}
+
+// Settings reads a settings table, by setting name.
+func Settings(name string) (map[string]Setting, error) {
+	raw, err := file(name)
+	if err != nil {
+		return nil, err
+	}
+	var rows map[string]Setting
+	if err := json.Unmarshal(raw, &rows); err != nil {
+		return nil, fmt.Errorf("config table %s: %w", name, err)
+	}
+	return rows, nil
+}
+
 // Gametip reads the gametip strings (what the client's i18n(key) shows), by
 // key.
 func Gametip() (map[string]string, error) {
