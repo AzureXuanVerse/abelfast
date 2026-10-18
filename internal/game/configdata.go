@@ -8,6 +8,7 @@ import "github.com/ggmolly/belfast/internal/gamedata"
 func loadGameData() error {
 	return gamedata.LoadAll(
 		loadShipData,
+		gamedata.Load("equip_upgrade_data", &equipTransforms),
 		loadBuildExchange,
 		loadSkinData,
 		loadChapterData,

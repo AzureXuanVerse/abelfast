@@ -34,6 +34,14 @@ type shipTemplate struct {
 	// material and how far it can be enhanced
 	StrengthenID uint32 `json:"strengthen_id"`
 
+	// the equipment types each of its 5 slots takes, equip_1..5
+	// (Ship:isForbiddenAtPos)
+	Slot1 []uint32 `json:"equip_1"`
+	Slot2 []uint32 `json:"equip_2"`
+	Slot3 []uint32 `json:"equip_3"`
+	Slot4 []uint32 `json:"equip_4"`
+	Slot5 []uint32 `json:"equip_5"`
+
 	Rarity      uint32 `json:"-"`
 	Nationality uint32 `json:"-"`
 	Type        uint32 `json:"-"`
@@ -51,6 +59,15 @@ type shipTemplate struct {
 // equips are what the ship comes with, equip_id_1..3.
 func (template shipTemplate) equips() [3]uint32 {
 	return [3]uint32{template.Equip1, template.Equip2, template.Equip3}
+}
+
+// slotTypes are the equipment types slot pos (1..5) takes.
+func (template shipTemplate) slotTypes(pos uint32) []uint32 {
+	slots := [shipEquipSlots][]uint32{template.Slot1, template.Slot2, template.Slot3, template.Slot4, template.Slot5}
+	if pos < 1 || pos > shipEquipSlots {
+		return nil
+	}
+	return slots[pos-1]
 }
 
 // ship_data_statistics row: attrs by Ship.PROPERTIES (model/vo/ship.lua),
@@ -122,6 +139,10 @@ type equipTemplateConfig struct {
 	Prev       uint32  `json:"prev"` // 0 for a gear's +0
 	Group      uint32  `json:"group"`
 	EquipLimit *uint32 `json:"equip_limit"`
+	// its type and the ship types that can't equip it (on the base row,
+	// Ship:isForbiddenAtPos)
+	Type              uint32   `json:"type"`
+	ShipTypeForbidden []uint32 `json:"ship_type_forbidden"`
 }
 
 // equipEvasion is what a piece of equipment adds to evasion: a flat dodge
@@ -327,6 +348,9 @@ var (
 	equipIDs      map[uint32]bool      // every equip_data_template id
 	equipReturns  map[uint32]equipReturn
 	equipGroups   map[uint32]uint32 // equip_data_template id: its group, the +0's id
+
+	// every equip_data_template row, the +N without their base's fields
+	equipTemplates map[uint32]equipTemplateConfig
 	// what retiring a ship gives (Ship:calReturnRes): gold by
 	// ship_data_statistics type, drops by rarity
 	retireGold  map[uint32]uint32
@@ -584,6 +608,7 @@ func loadShipData() error {
 	equipIDs = make(map[uint32]bool, len(equips))
 	equipReturns = make(map[uint32]equipReturn, len(equips))
 	equipGroups = make(map[uint32]uint32, len(equips))
+	equipTemplates = equips
 	for id, equip := range equips {
 		equipIDs[id] = true
 		equipReturns[id] = equip.equipReturn
