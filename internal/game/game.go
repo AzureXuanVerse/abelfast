@@ -74,7 +74,6 @@ func (game *Game) Register() {
 	packets.Handle(game.handleSecondaryPassword)
 	packets.Handle(game.handleChangeChatRoom)
 	packets.Handle(game.handleClientReport)
-	packets.Handle(game.handleCommanderHome)
 	packets.Handle(game.handleWorldBoss)
 	packets.Handle(game.handleWorldState)
 	packets.Handle(game.handleMetaPTData)
@@ -172,13 +171,17 @@ func (game *Game) Register() {
 	packets.Handle(game.handleEducate)
 	packets.Handle(game.handleNewEducate)
 	packets.Handle(game.handleEducateEndings)
-	// meowfficers
+	// meowfficers and the cattery
 	packets.Handle(game.handleBuyMeowfficerBoxes)
 	packets.Handle(game.handleTrainMeowfficerBox)
 	packets.Handle(game.handleQuickFinishMeowfficerBoxes)
 	packets.Handle(game.handleRefreshMeowfficerBoxes)
 	packets.Handle(game.handleOpenMeowfficerBox)
 	packets.Handle(game.handleEquipMeowfficer)
+	packets.Handle(game.handleCommanderHome)
+	packets.Handle(game.handleCatteryScene)
+	packets.Handle(game.handlePutMeowfficerInCattery)
+	packets.Handle(game.handleCatteryOp)
 	// mail
 	packets.Handle(game.handleMailList)
 	packets.Handle(game.handleArchiveList)
