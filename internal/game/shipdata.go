@@ -308,6 +308,10 @@ var (
 	retireItems map[uint32][][]uint32
 	// ship_data_by_type team_type by ship type (Ship:getTeamType)
 	shipTeams map[uint32]string
+	// archiveGroups are the ship_data_group groups: the archives
+	// (CollectionProxy) build a ShipGroup from that table for every group
+	// SC_17001 lists, so activity NPC ships (no row) stay out of it
+	archiveGroups map[uint32]bool
 	// ship_data_group share_group_id by group_type
 	shareGroups map[uint32][]uint32
 	// gameset urpt_chapter_max: [limit counter id, cap] of the Specialized
@@ -417,7 +421,9 @@ func loadShipData() error {
 
 	blueprints := map[uint32]bool{}
 	shareGroups = map[uint32][]uint32{}
+	archiveGroups = map[uint32]bool{}
 	for _, group := range groups {
+		archiveGroups[group.GroupType] = true
 		if group.HandbookType == handbookBlueprint {
 			blueprints[group.GroupType] = true
 		}

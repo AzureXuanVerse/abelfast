@@ -418,6 +418,9 @@ func collectionState(ctx context.Context, queries *db.Queries, commanderID uint3
 		})
 	}
 	for _, group := range groups {
+		if !archiveGroups[group.GroupID] {
+			continue
+		}
 		// heart_count is the likes of every commander of the server
 		msg.ShipInfoList = append(msg.ShipInfoList, &protobuf.SHIP_STATISTICS_INFO{
 			Id:          proto.Uint32(group.GroupID),
@@ -436,6 +439,9 @@ func collectionState(ctx context.Context, queries *db.Queries, commanderID uint3
 // of the archive count medal when its group is new. A new ship (level 1,
 // newShipIntimacy) never raises the best values of a group already there.
 func recordShipGroup(ctx context.Context, queries *db.Queries, ship db.Ship) (*protobuf.SC_17002, error) {
+	if !archiveGroups[ship.TemplateID/10] {
+		return nil, nil
+	}
 	added, err := queries.AddShipGroup(ctx, db.AddShipGroupParams{
 		CommanderID: ship.CommanderID,
 		GroupID:     ship.TemplateID / 10, // ship_data_template.group_type
