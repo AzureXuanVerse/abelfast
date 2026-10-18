@@ -15,8 +15,7 @@ import (
 
 // shop_template genres (ShopArgs, model/const/shopargs.lua) belfast sells.
 // The others need state belfast doesn't keep yet (the cruise pass skins,
-// Operation Siren, the backyard and academy levels, dorm 3D...) and are
-// refused.
+// Operation Siren, dorm 3D...) and are refused.
 const (
 	genreNone           = ""
 	genreGemShop        = "gem_shop"
@@ -242,6 +241,24 @@ func (goods shopGoods) amount(count, level uint32) (uint32, bool) {
 	return uint32(goods.Num) * count, true
 }
 
+// fieldUpgradePrice is what the academy field upgrade goods cost
+// (ShoppingCommand, resource_num -1): use[2] of the field's level row, in
+// the goods' resource_type. false when the upgrade can't start
+// (BaseResourceField:CanUpgrade): one at a time (the client sends count
+// 1), below its row's user_level, at the max level, while one runs, or
+// the lecture hall before it opens (the client can't load its scene,
+// SystemOpenMgr).
+func (goods shopGoods) fieldUpgradePrice(commander db.Commander, count uint32) (uint32, bool) {
+	table := fieldUpgrades[goods.effect]
+	level, upgradeAt := fieldLevel(commander, goods.effect)
+	upgrade, ok := table.rows[level]
+	if !ok || count != 1 || upgradeAt != 0 || level >= table.max || commander.Level < upgrade.UserLevel ||
+		(goods.effect == effectClassFieldLevel && commander.Level < classOpenLevel) {
+		return 0, false
+	}
+	return upgrade.Use[1], true
+}
+
 // shopPurchases is how many times the commander bought each shop_template
 // row since it last reset.
 func shopPurchases(ctx context.Context, queries *db.Queries, commanderID uint32, now time.Time) (map[uint32]uint32, error) {
@@ -363,6 +380,16 @@ func (tx *Tx) buyGoods(id, count uint32, now time.Time) ([]*protobuf.DROPINFO, e
 		}
 	}
 	price, ok := goods.price(count, discount, now)
+	if _, field := fieldUpgrades[goods.effect]; field && goods.Type == 0 {
+		// an upgrade that ended raises the level this one starts from
+		if err := tx.settleResourceFields(commander, now); err != nil {
+			return nil, err
+		}
+		if commander, err = tx.GetCommander(tx.ctx, tx.commanderID); err != nil {
+			return nil, err
+		}
+		price, ok = goods.fieldUpgradePrice(commander, count)
+	}
 	amount, okAmount := goods.amount(count, commander.Level)
 	if !ok || !okAmount {
 		return nil, errRefused
@@ -373,7 +400,7 @@ func (tx *Tx) buyGoods(id, count uint32, now time.Time) ([]*protobuf.DROPINFO, e
 	var drops []*protobuf.DROPINFO
 	switch goods.Type {
 	case 0:
-		err = tx.extend(goods, commander, amount)
+		err = tx.extend(goods, commander, amount, now)
 	case dropTypeResource, dropTypeItem, dropTypeShip, dropTypeVItem:
 		drops = []*protobuf.DROPINFO{dropInfo(goods.Type, goods.target, amount)}
 		err = tx.grantDrops(drops)
@@ -398,13 +425,21 @@ func (tx *Tx) buyGoods(id, count uint32, now time.Time) ([]*protobuf.DROPINFO, e
 	return drops, err
 }
 
-// extend applies a type 0 purchase, a capacity extension of amount; the
-// count limit is the capacity it extends from.
-func (tx *Tx) extend(goods shopGoods, commander db.Commander, amount uint32) error {
+// extend applies a type 0 purchase, a capacity extension of amount (the
+// count limit is the capacity it extends from) or an academy field
+// upgrade.
+func (tx *Tx) extend(goods shopGoods, commander db.Commander, amount uint32, now time.Time) error {
 	if ok, err := tx.extendDorm(goods, amount); ok {
 		return err
 	}
 	switch goods.effect {
+	case effectOilFieldLevel, effectGoldFieldLevel, effectClassFieldLevel:
+		// ExtendCommand starts the field's timer: its level's time
+		// (NavalAcademyProxy:StartUpGradeSuccess); fieldUpgradePrice
+		// checked it can start
+		level, _ := fieldLevel(commander, goods.effect)
+		upgrade := fieldUpgrades[goods.effect].rows[level]
+		return tx.setFieldLevel(goods.effect, level, now.Unix()+upgrade.Time)
 	case effectShipBagSize:
 		if !goods.countAllows(commander.ShipBagMax) || commander.ShipBagMax+amount > maxShipBag {
 			return errRefused

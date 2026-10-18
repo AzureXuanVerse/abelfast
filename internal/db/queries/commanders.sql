@@ -76,3 +76,12 @@ UPDATE commanders SET gold_field_at = ? WHERE id = ?;
 
 -- name: SetClassField :exec
 UPDATE commanders SET class_proficiency = ?, class_field_at = ? WHERE id = ?;
+
+-- name: SetOilFieldLevel :exec
+UPDATE commanders SET oil_field_level = ?, oil_field_upgrade_at = ? WHERE id = ?;
+
+-- name: SetGoldFieldLevel :exec
+UPDATE commanders SET gold_field_level = ?, gold_field_upgrade_at = ? WHERE id = ?;
+
+-- name: SetClassFieldLevel :exec
+UPDATE commanders SET class_field_level = ?, class_field_upgrade_at = ? WHERE id = ?;

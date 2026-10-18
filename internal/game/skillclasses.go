@@ -201,23 +201,29 @@ func quickFinishesAllowed(now time.Time) uint32 {
 
 // navalAcademy is SC_22001, NavalAcademyProxy's state: the levels of the
 // oil field, merchant and lecture hall (their template tables start at 1,
-// captured), the hall's proficiency, the Tactical Class rooms, lessons and
-// today's quick finishes. The proficiency is read again: SC_11003 settled
-// the hall after the login loaded the commander.
+// captured) and when their running upgrade ends (0 none, captured; the
+// client counts down to it and levels the field up itself, an end it
+// already passed would leave the field unable to upgrade), the hall's
+// proficiency, the Tactical Class rooms, lessons and today's quick
+// finishes. The fields are read again: SC_11003 settled them, finishing
+// the upgrades that ended, after the login loaded the commander.
 func navalAcademy(ctx context.Context, queries *db.Queries, commander db.Commander, now time.Time) (*protobuf.SC_22001, error) {
 	classes, err := queries.ListSkillClasses(ctx, commander.ID)
 	if err != nil {
 		return nil, err
 	}
-	hall, err := queries.GetCommander(ctx, commander.ID)
+	fields, err := queries.GetCommander(ctx, commander.ID)
 	if err != nil {
 		return nil, err
 	}
 	msg := &protobuf.SC_22001{
-		OilWellLevel:       proto.Uint32(commander.OilFieldLevel),
-		GoldWellLevel:      proto.Uint32(commander.GoldFieldLevel),
-		ClassLv:            proto.Uint32(hall.ClassFieldLevel),
-		Class:              &protobuf.NAVALACADEMY_CLASS{Proficiency: proto.Uint32(hall.ClassProficiency)},
+		OilWellLevel:       proto.Uint32(fields.OilFieldLevel),
+		OilWellLvUpTime:    proto.Uint32(uint32(fields.OilFieldUpgradeAt)),
+		GoldWellLevel:      proto.Uint32(fields.GoldFieldLevel),
+		GoldWellLvUpTime:   proto.Uint32(uint32(fields.GoldFieldUpgradeAt)),
+		ClassLv:            proto.Uint32(fields.ClassFieldLevel),
+		ClassLvUpTime:      proto.Uint32(uint32(fields.ClassFieldUpgradeAt)),
+		Class:              &protobuf.NAVALACADEMY_CLASS{Proficiency: proto.Uint32(fields.ClassProficiency)},
 		SkillClassList:     make([]*protobuf.SKILL_CLASS, len(classes)),
 		SkillClassNum:      proto.Uint32(commander.SkillClassNum),
 		DailyFinishBuffCnt: proto.Uint32(quickFinishesUsed(commander, now)),

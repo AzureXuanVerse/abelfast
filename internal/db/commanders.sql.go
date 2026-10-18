@@ -109,7 +109,7 @@ func (q *Queries) CountCommanders(ctx context.Context) (int64, error) {
 const createCommander = `-- name: CreateCommander :one
 INSERT INTO commanders (account_id, name, starter_ship, registered_at)
 VALUES (?, ?, ?, ?)
-RETURNING id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, oil_field_at, gold_field_at, oil_field_level, gold_field_level, class_field_level, class_proficiency, class_field_at
+RETURNING id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, oil_field_at, gold_field_at, oil_field_level, gold_field_level, class_field_level, class_proficiency, class_field_at, oil_field_upgrade_at, gold_field_upgrade_at, class_field_upgrade_at
 `
 
 type CreateCommanderParams struct {
@@ -155,6 +155,9 @@ func (q *Queries) CreateCommander(ctx context.Context, arg CreateCommanderParams
 		&i.ClassFieldLevel,
 		&i.ClassProficiency,
 		&i.ClassFieldAt,
+		&i.OilFieldUpgradeAt,
+		&i.GoldFieldUpgradeAt,
+		&i.ClassFieldUpgradeAt,
 	)
 	return i, err
 }
@@ -169,7 +172,7 @@ func (q *Queries) DeleteSecretaries(ctx context.Context, commanderID uint32) err
 }
 
 const getCommander = `-- name: GetCommander :one
-SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, oil_field_at, gold_field_at, oil_field_level, gold_field_level, class_field_level, class_proficiency, class_field_at FROM commanders WHERE id = ?
+SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, oil_field_at, gold_field_at, oil_field_level, gold_field_level, class_field_level, class_proficiency, class_field_at, oil_field_upgrade_at, gold_field_upgrade_at, class_field_upgrade_at FROM commanders WHERE id = ?
 `
 
 func (q *Queries) GetCommander(ctx context.Context, id uint32) (Commander, error) {
@@ -203,12 +206,15 @@ func (q *Queries) GetCommander(ctx context.Context, id uint32) (Commander, error
 		&i.ClassFieldLevel,
 		&i.ClassProficiency,
 		&i.ClassFieldAt,
+		&i.OilFieldUpgradeAt,
+		&i.GoldFieldUpgradeAt,
+		&i.ClassFieldUpgradeAt,
 	)
 	return i, err
 }
 
 const getCommanderByAccount = `-- name: GetCommanderByAccount :one
-SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, oil_field_at, gold_field_at, oil_field_level, gold_field_level, class_field_level, class_proficiency, class_field_at FROM commanders WHERE account_id = ?
+SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, oil_field_at, gold_field_at, oil_field_level, gold_field_level, class_field_level, class_proficiency, class_field_at, oil_field_upgrade_at, gold_field_upgrade_at, class_field_upgrade_at FROM commanders WHERE account_id = ?
 `
 
 func (q *Queries) GetCommanderByAccount(ctx context.Context, accountID uint32) (Commander, error) {
@@ -242,6 +248,9 @@ func (q *Queries) GetCommanderByAccount(ctx context.Context, accountID uint32) (
 		&i.ClassFieldLevel,
 		&i.ClassProficiency,
 		&i.ClassFieldAt,
+		&i.OilFieldUpgradeAt,
+		&i.GoldFieldUpgradeAt,
+		&i.ClassFieldUpgradeAt,
 	)
 	return i, err
 }
@@ -393,6 +402,21 @@ func (q *Queries) SetClassField(ctx context.Context, arg SetClassFieldParams) er
 	return err
 }
 
+const setClassFieldLevel = `-- name: SetClassFieldLevel :exec
+UPDATE commanders SET class_field_level = ?, class_field_upgrade_at = ? WHERE id = ?
+`
+
+type SetClassFieldLevelParams struct {
+	ClassFieldLevel     uint32
+	ClassFieldUpgradeAt int64
+	ID                  uint32
+}
+
+func (q *Queries) SetClassFieldLevel(ctx context.Context, arg SetClassFieldLevelParams) error {
+	_, err := q.db.ExecContext(ctx, setClassFieldLevel, arg.ClassFieldLevel, arg.ClassFieldUpgradeAt, arg.ID)
+	return err
+}
+
 const setCommanderExp = `-- name: SetCommanderExp :exec
 UPDATE commanders SET level = ?, exp = ? WHERE id = ?
 `
@@ -433,6 +457,21 @@ type SetGoldFieldAtParams struct {
 
 func (q *Queries) SetGoldFieldAt(ctx context.Context, arg SetGoldFieldAtParams) error {
 	_, err := q.db.ExecContext(ctx, setGoldFieldAt, arg.GoldFieldAt, arg.ID)
+	return err
+}
+
+const setGoldFieldLevel = `-- name: SetGoldFieldLevel :exec
+UPDATE commanders SET gold_field_level = ?, gold_field_upgrade_at = ? WHERE id = ?
+`
+
+type SetGoldFieldLevelParams struct {
+	GoldFieldLevel     uint32
+	GoldFieldUpgradeAt int64
+	ID                 uint32
+}
+
+func (q *Queries) SetGoldFieldLevel(ctx context.Context, arg SetGoldFieldLevelParams) error {
+	_, err := q.db.ExecContext(ctx, setGoldFieldLevel, arg.GoldFieldLevel, arg.GoldFieldUpgradeAt, arg.ID)
 	return err
 }
 
@@ -489,6 +528,21 @@ type SetOilFieldAtParams struct {
 
 func (q *Queries) SetOilFieldAt(ctx context.Context, arg SetOilFieldAtParams) error {
 	_, err := q.db.ExecContext(ctx, setOilFieldAt, arg.OilFieldAt, arg.ID)
+	return err
+}
+
+const setOilFieldLevel = `-- name: SetOilFieldLevel :exec
+UPDATE commanders SET oil_field_level = ?, oil_field_upgrade_at = ? WHERE id = ?
+`
+
+type SetOilFieldLevelParams struct {
+	OilFieldLevel     uint32
+	OilFieldUpgradeAt int64
+	ID                uint32
+}
+
+func (q *Queries) SetOilFieldLevel(ctx context.Context, arg SetOilFieldLevelParams) error {
+	_, err := q.db.ExecContext(ctx, setOilFieldLevel, arg.OilFieldLevel, arg.OilFieldUpgradeAt, arg.ID)
 	return err
 }
 
