@@ -3,6 +3,7 @@ package game
 import (
 	"context"
 	"math/rand/v2"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -174,7 +175,8 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 	}
 
 	var updated []db.Ship
-	techLevel := false // a ship reached level 120: pt_level
+	var proficiency []uint32 // exps the lecture hall takes a share of
+	techLevel := false       // a ship reached level 120: pt_level
 	for _, stat := range req.GetStatistics() {
 		ship, ok := byID[stat.GetShipId()]
 		if !ok {
@@ -199,6 +201,9 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 		before := ship.Level
 		addShipExp(&ship, gained)
 		techLevel = techLevel || (before < techShipLevel && ship.Level >= techShipLevel)
+		if feedsClass(ship) {
+			proficiency = append(proficiency, gained)
+		}
 		ship.Intimacy = min(ship.Intimacy+affinity, maxIntimacy)
 		updated = append(updated, ship)
 	}
@@ -253,6 +258,9 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 		if err := tx.grantDrops(reply.DropInfo); err != nil {
 			return err
 		}
+		if err := tx.addClassProficiency(proficiency, time.Now()); err != nil {
+			return err
+		}
 		return session.save(ctx, queries, client.CommanderID)
 	})
 	if err != nil {
@@ -267,6 +275,15 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 		return err
 	}
 	return client.Send(reply)
+}
+
+// feedsClass tells whether a ship's battle exp, once added (addShipExp),
+// gives the lecture hall proficiency (FinishStageCommand.addShipsExp with
+// accumulate, as BattleGateScenario passes): a ship that can_get_proficency
+// above gameset level_get_proficency, or at its max level with exp left.
+func feedsClass(ship db.Ship) bool {
+	return shipLevelings[ship.TemplateID].accumulate &&
+		(ship.Level > levelGetProficency || ship.Level == ship.MaxLevel && ship.Exp > 0)
 }
 
 // battleAffinity is the affinity (intimacy, 1/100) a win gives. It is random

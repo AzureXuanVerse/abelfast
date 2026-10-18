@@ -156,6 +156,7 @@ var (
 	mvpExpPercent       uint32 // mvp_exp_percent
 	battleConsumeEnergy uint32 // battle_consume_energy
 	expOverflowMax      uint32 // exp_overflow_max
+	levelGetProficency  uint32 // level_get_proficency
 )
 
 // gamesetValues are the gameset settings loadChapterData reads.
@@ -164,6 +165,7 @@ var gamesetValues = map[string]*uint32{
 	"mvp_exp_percent":       &mvpExpPercent,
 	"battle_consume_energy": &battleConsumeEnergy,
 	"exp_overflow_max":      &expOverflowMax,
+	"level_get_proficency":  &levelGetProficency,
 }
 
 // energyHappy is the energy_template row of the highest morale, which

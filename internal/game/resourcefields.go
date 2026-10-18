@@ -3,6 +3,7 @@ package game
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -27,12 +28,16 @@ var oilFields, goldFields map[uint32]resourceField
 // classField is a class_upgrade_template row, the lecture hall at a level
 // (ClassResourceField): it turns proficiency_cost_per_min proficiency a
 // minute into proficency_to_exp_rant percent of it in expField, up to stock
-// of its item_id (an EXP Data Pack, usage_arg exp each).
+// of its item_id (an EXP Data Pack, usage_arg exp each). Battles give it
+// proficency_get_percent of some ships' exp as proficiency, up to store
+// (GetExp2ProficiencyRatio, GetMaxProficiency).
 type classField struct {
 	Item       uint32 `json:"item_id"`
 	Stock      uint32 `json:"stock"`
 	CostPerMin uint32 `json:"proficency_cost_per_min"`
 	ExpRate    uint32 `json:"proficency_to_exp_rant"`
+	GetPercent uint32 `json:"proficency_get_percent"`
+	Store      uint32 `json:"store"`
 }
 
 // classBook is the item a classField makes: exp is its usage_arg
@@ -190,6 +195,74 @@ func (tx *Tx) settleClassField(commander db.Commander, exp uint32, now time.Time
 	return tx.SetClassField(tx.ctx, db.SetClassFieldParams{
 		ClassProficiency: commander.ClassProficiency - uint32(spend),
 		ClassFieldAt:     since + ticks*classTick,
+		ID:               tx.commanderID,
+	})
+}
+
+// classExtraRate is AcademyCourse:getExtraRate: battles give the lecture
+// hall twice the proficiency on the server week's 7th day (Sunday).
+func classExtraRate(now time.Time) uint32 {
+	if serverWeekday(now) == 7 {
+		return 2
+	}
+	return 1
+}
+
+// addClassProficiency is NavalAcademyProxy:AddCourseProficiency for each
+// ship exp of a battle that feeds the lecture hall (addShipsExp): it adds
+// floor(exp x proficency_get_percent x extra rate x 0.01) to the hall's
+// proficiency, up to the level's store, one exp after the other as the
+// client does. The hall is settled first, and SC_22013 sends what it then
+// holds ahead of the reply: the client adds the same exps to it itself, so
+// both end on the same proficiency although belfast doesn't push the ticks.
+func (tx *Tx) addClassProficiency(exps []uint32, now time.Time) error {
+	if len(exps) == 0 {
+		return nil
+	}
+	expInWell := func() (uint32, error) {
+		resources, err := tx.ListResources(tx.ctx, tx.commanderID)
+		if err != nil {
+			return 0, err
+		}
+		for _, row := range resources {
+			if row.ResourceID == ResourceClassField {
+				return row.Amount, nil
+			}
+		}
+		return 0, nil
+	}
+	commander, err := tx.GetCommander(tx.ctx, tx.commanderID)
+	if err != nil {
+		return err
+	}
+	well, err := expInWell()
+	if err != nil {
+		return err
+	}
+	if err := tx.settleClassField(commander, well, now); err != nil {
+		return err
+	}
+	if commander, err = tx.GetCommander(tx.ctx, tx.commanderID); err != nil {
+		return err
+	}
+	if well, err = expInWell(); err != nil {
+		return err
+	}
+	tx.push(&protobuf.SC_22013{
+		Proficiency: proto.Uint32(commander.ClassProficiency),
+		ExpInWell:   proto.Uint32(well),
+	})
+	config := classFields[commander.ClassFieldLevel]
+	extra := classExtraRate(now)
+	proficiency := commander.ClassProficiency
+	for _, exp := range exps {
+		// the client's float arithmetic, in its order
+		gain := math.Floor(float64(exp) * float64(config.GetPercent) * float64(extra) * 0.01)
+		proficiency = uint32(min(float64(proficiency)+gain, float64(config.Store)))
+	}
+	return tx.SetClassField(tx.ctx, db.SetClassFieldParams{
+		ClassProficiency: proficiency,
+		ClassFieldAt:     commander.ClassFieldAt,
 		ID:               tx.commanderID,
 	})
 }

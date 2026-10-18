@@ -65,6 +65,13 @@ func periodStart(now time.Time, period time.Duration) time.Time {
 	return reference.Add(now.Sub(reference).Truncate(period))
 }
 
+// serverWeekday is TimeMgr:GetServerWeek: the day of the week, server
+// time, counted from 1 on Monday as the client counts it from the
+// monday_0oclock_timestamp it is sent (mondayReference).
+func serverWeekday(now time.Time) uint32 {
+	return uint32(now.Sub(periodStart(now, week))/(24*time.Hour)) + 1
+}
+
 // nextExerciseReset returns the first exercise attempt refill after now.
 func nextExerciseReset(now time.Time) time.Time {
 	reset := startOfDay(now)
