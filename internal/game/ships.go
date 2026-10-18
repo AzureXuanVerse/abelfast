@@ -27,7 +27,8 @@ const (
 )
 
 // NewShip returns the row for a freshly obtained ship: level 1, morale and
-// level cap from its ship_data_template (energy, max_level).
+// level cap from its own ship_data_template (energy, max_level), which every
+// template has (a limit broken or 9000xx variant has its own max_level).
 func NewShip(commanderID uint32, templateID uint32) db.CreateShipParams {
 	// every base template has energy 150 and max_level 70
 	params := db.CreateShipParams{
@@ -39,21 +40,22 @@ func NewShip(commanderID uint32, templateID uint32) db.CreateShipParams {
 		MaxLevel:    70,
 		CreatedAt:   time.Now().Unix(),
 	}
-	if template, ok := shipTemplates[templateID]; ok {
+	if template, ok := ownableShips[templateID]; ok {
 		params.Energy = template.Energy
 		params.MaxLevel = template.MaxLevel
 	}
 	return params
 }
 
-// AddShip gives the commander a new ship of templateID, with the equipment
-// (ship_data_template equip_id_1..3) and skills (buff_list, level 1) it comes
-// with, and records it in the archives. When that unlocks a new archive entry
+// AddShip gives the commander a new ship of templateID, any ownableShip (not
+// only a base template), with the equipment (its ship_data_template
+// equip_id_1..3) and skills (its buff_list, level 1) it comes with, and
+// records its group in the archives. When that unlocks a new archive entry
 // its SC_17002 is pushed (the official server sends it before the reply or
 // push carrying the ship).
 func (tx *Tx) AddShip(templateID uint32) (*protobuf.SHIPINFO, error) {
 	ctx, queries := tx.ctx, tx.Queries
-	template, ok := shipTemplates[templateID]
+	template, ok := ownableShip(templateID)
 	if !ok {
 		return nil, fmt.Errorf("ship template %d: %w", templateID, errRefused)
 	}
@@ -436,15 +438,19 @@ func collectionState(ctx context.Context, queries *db.Queries, commanderID uint3
 }
 
 // recordShipGroup adds a new ship to the archives, and returns the SC_17002
-// of the archive count medal when its group is new. A new ship (level 1,
-// newShipIntimacy) never raises the best values of a group already there.
+// of the archive count medal when its group is new. The group is its
+// template's group_type (shipGroup), the one CollectionProxy:flushCollection
+// unlocks on the client: 900004's Suffolk is 20304, not 90000. A new ship
+// (level 1, newShipIntimacy) never raises the best values of a group
+// already there.
 func recordShipGroup(ctx context.Context, queries *db.Queries, ship db.Ship) (*protobuf.SC_17002, error) {
-	if !archiveGroups[ship.TemplateID/10] {
+	group := shipGroup(ship.TemplateID)
+	if !archiveGroups[group] {
 		return nil, nil
 	}
 	added, err := queries.AddShipGroup(ctx, db.AddShipGroupParams{
 		CommanderID: ship.CommanderID,
-		GroupID:     ship.TemplateID / 10, // ship_data_template.group_type
+		GroupID:     group,
 		IntimacyMax: ship.Intimacy,
 		LvMax:       ship.Level,
 	})

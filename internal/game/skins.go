@@ -215,7 +215,7 @@ func (tx *Tx) setShipSkin(shipID, skinID, shadow uint32, now time.Time) error {
 	} else if err != nil {
 		return err
 	}
-	if skinID != 0 && skinID != shipTemplates[ship.TemplateID].defaultSkin {
+	if skinID != 0 && skinID != ownableShips[ship.TemplateID].defaultSkin {
 		if err := tx.canWear(ship, skinID, now); err != nil {
 			return err
 		}
@@ -234,7 +234,7 @@ func (tx *Tx) setShipSkin(shipID, skinID, shadow uint32, now time.Time) error {
 // Retrofit skins are refused: belfast keeps no retrofits.
 func (tx *Tx) canWear(ship db.Ship, skinID uint32, now time.Time) error {
 	skin, ok := shipSkins[skinID]
-	group := ship.TemplateID / 10
+	group := shipGroup(ship.TemplateID) // Ship.groupId, ShipSkin's ship_group
 	shared := skin.group != group
 	if !ok || (shared && !slices.Contains(shareGroups[group], skin.group)) {
 		return errRefused

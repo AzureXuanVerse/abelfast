@@ -15,13 +15,16 @@ import (
 // shipTemplate is a ship_data_template row, with its ship_data_statistics
 // rarity, nationality and type.
 type shipTemplate struct {
-	Star     uint32   `json:"star"`
-	Energy   uint32   `json:"energy"`
-	MaxLevel uint32   `json:"max_level"`
-	Equip1   uint32   `json:"equip_id_1"`
-	Equip2   uint32   `json:"equip_id_2"`
-	Equip3   uint32   `json:"equip_id_3"`
-	Skills   []uint32 `json:"buff_list"`
+	// the ship's group (Ship.groupId, its archive entry); id/10 for the
+	// base templates but not for every template (shipGroup)
+	GroupType uint32   `json:"group_type"`
+	Star      uint32   `json:"star"`
+	Energy    uint32   `json:"energy"`
+	MaxLevel  uint32   `json:"max_level"`
+	Equip1    uint32   `json:"equip_id_1"`
+	Equip2    uint32   `json:"equip_id_2"`
+	Equip3    uint32   `json:"equip_id_3"`
+	Skills    []uint32 `json:"buff_list"`
 	// 1 when the ship keeps exp past its max level (Ship:CanAccumulateExp)
 	CanGetProficency uint32 `json:"can_get_proficency"`
 
@@ -294,6 +297,12 @@ type shipLeveling struct {
 
 var (
 	shipTemplates map[uint32]shipTemplate
+	// ownableShips are the ship_data_template ids a ship can be created
+	// from as a drop (AddShip): every template that has statistics, base
+	// templates and the rest (limit broken stars, the 9000xx event and test
+	// variants of a group...). Builds, requisition, archive stars, tech
+	// points and retirement keep reading shipTemplates.
+	ownableShips map[uint32]shipTemplate
 	// every ship_data_template's, limit broken and retrofit ones included
 	shipLevelings map[uint32]shipLeveling
 	buildPools    map[uint32]buildPool
@@ -344,8 +353,8 @@ var (
 
 // loadShipData builds the ship, construction and equipment data: ships as
 // obtained (base templates, id ending in 1, that have statistics), the
-// construction pools, equipment upgrades, crafting recipes, item prices and
-// uses.
+// templates a ship can be given as (ownableShips), the construction pools,
+// equipment upgrades, crafting recipes, item prices and uses.
 func loadShipData() error {
 	var templates map[uint32]shipTemplate
 	var stats map[uint32]shipStatisticsConfig
@@ -432,20 +441,26 @@ func loadShipData() error {
 		}
 	}
 	shipTemplates = map[uint32]shipTemplate{}
+	ownableShips = map[uint32]shipTemplate{}
 	shipLevelings = map[uint32]shipLeveling{}
 	for id, row := range templates {
 		stat, ok := stats[id]
-		if ok {
-			shipLevelings[id] = shipLeveling{ur: stat.Rarity == shipRarityUR, accumulate: row.CanGetProficency == 1}
-		}
-		if id%10 != 1 || !ok {
+		if !ok {
 			continue
 		}
+		shipLevelings[id] = shipLeveling{ur: stat.Rarity == shipRarityUR, accumulate: row.CanGetProficency == 1}
 		row.Rarity, row.Nationality, row.Type = stat.Rarity, stat.Nationality, stat.Type
 		_, meta := metas[id]
 		row.unretirable = meta || blueprints[id/10]
 		row.defaultSkin = stat.SkinID
-		shipTemplates[id] = row
+		if id%10 == 1 {
+			shipTemplates[id] = row
+			ownableShips[id] = row
+		} else if archiveGroups[row.GroupType] {
+			// the other stars and variants: Ship:Ctor reads the
+			// ship_data_group row of their group_type (all have one)
+			ownableShips[id] = row
+		}
 	}
 	if err := loadRequisitions(groups); err != nil {
 		return err
@@ -533,6 +548,28 @@ func loadShipData() error {
 		equipReturns[id] = equip.equipReturn
 	}
 	return nil
+}
+
+// ownableShip is the ship_data_template a ship can be given as (AddShip):
+// any of ownableShips whose default skin (ship_data_statistics skin_id) is
+// in ship_skin_template, the painting Ship:getPainting reads for a ship
+// wearing no skin (900536's 900493 isn't).
+func ownableShip(templateID uint32) (shipTemplate, bool) {
+	template, ok := ownableShips[templateID]
+	if !ok {
+		return shipTemplate{}, false
+	}
+	_, painted := shipSkins[template.defaultSkin]
+	return template, painted
+}
+
+// shipGroup is a ship_data_template's group_type (Ship.groupId), id/10 for
+// an id belfast has no template for.
+func shipGroup(templateID uint32) uint32 {
+	if template, ok := ownableShips[templateID]; ok {
+		return template.GroupType
+	}
+	return templateID / 10
 }
 
 // obtainedFromPool is whether a ship_data_group description has a
