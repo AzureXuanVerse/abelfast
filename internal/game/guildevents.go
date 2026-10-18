@@ -548,7 +548,7 @@ func (game *Game) handleActivateGuildOperation(client *connection.Client, req *p
 		if err != nil {
 			return err
 		}
-		if err := tx.addGuildCapitalLog(guild.ID, commander, guildCapitalBattle, config.ID); err != nil {
+		if err := tx.addGuildCapitalLog(guild.ID, commander, guildCapitalBattle, config.Consume); err != nil {
 			return err
 		}
 		return createGuildOperation(ctx, tx.Queries, guild.ID, config.ID, now)

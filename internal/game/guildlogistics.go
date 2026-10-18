@@ -56,7 +56,7 @@ const (
 	guildCapitalDonate     = 1 // event_target: the contribution id
 	guildCapitalSupply     = 2
 	guildCapitalWeeklyTask = 3 // event_target: the funds the mission brought
-	guildCapitalBattle     = 4 // event_target: the operation
+	guildCapitalBattle     = 4 // event_target: the funds spent
 	guildCapitalTechSwitch = 5 // event_target: the technology
 	guildCapitalTech       = 6
 	guildCapitalTechOver   = 7

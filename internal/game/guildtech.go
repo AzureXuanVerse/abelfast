@@ -359,7 +359,9 @@ func (game *Game) handleUpgradeGuildTech(client *connection.Client, req *protobu
 // short of its last level. The reply only closes the page: every member
 // online, the administrator too, gets SC_62018 with the group's id, on which
 // GuildProxy stops the group researched until then, starts this one and
-// counts the day's choice. Built from the Lua alone.
+// counts the day's choice. The funds log gets a SWITCH_TOGGLE line with the
+// template id (GuildCapitalLog: guild_tech_change_log). Built from the Lua
+// alone.
 func (game *Game) handleStartGuildTechGroup(client *connection.Client, req *protobuf.CS_62020) error {
 	ctx := context.Background()
 	var members []uint32
@@ -393,6 +395,13 @@ func (game *Game) handleStartGuildTechGroup(client *connection.Client, req *prot
 		if err := tx.StartGuildTechnology(ctx, db.StartGuildTechnologyParams{
 			GuildID: member.GuildID, GroupID: tech.Group, TechID: tech.ID, StartedAt: now.Unix(),
 		}); err != nil {
+			return err
+		}
+		commander, err := tx.GetCommander(ctx, client.CommanderID)
+		if err != nil {
+			return err
+		}
+		if err := tx.addGuildCapitalLog(member.GuildID, commander, guildCapitalTechSwitch, req.GetId()); err != nil {
 			return err
 		}
 		members, err = tx.ListGuildMemberIDs(ctx, member.GuildID)

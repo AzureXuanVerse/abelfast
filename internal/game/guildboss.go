@@ -310,6 +310,15 @@ func (game *Game) finishGuildBoss(client *connection.Client, req *protobuf.CS_40
 			}
 		}
 		reply.Mvp = proto.Uint32(battleMVP(req.GetStatistics(), byID))
+		// the result page shows the commander's ships from ship_exp_list:
+		// listed without exp, intimacy unchanged (10000 + 0 gained)
+		for _, stat := range req.GetStatistics() {
+			if _, own := byID[stat.GetShipId()]; own {
+				reply.ShipExpList = append(reply.ShipExpList, &protobuf.SHIP_EXP{
+					ShipId: proto.Uint32(stat.GetShipId()), Exp: proto.Uint32(0), Intimacy: proto.Uint32(maxIntimacy),
+				})
+			}
+		}
 		return nil
 	})
 	if errors.Is(err, errNoGuildOperation) {
