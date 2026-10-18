@@ -162,6 +162,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleMiniGameShop)
 	packets.Handle(game.handleSeasonInfo)
 	packets.Handle(game.handleMilitaryShop)
+	packets.Handle(game.handleSkinPreviewUsage)
 	packets.Handle(game.handleEducate)
 	packets.Handle(game.handleNewEducate)
 	packets.Handle(game.handleEducateEndings)

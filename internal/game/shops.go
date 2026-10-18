@@ -170,3 +170,15 @@ func (game *Game) handleMiniGameShop(client *connection.Client, req *protobuf.CS
 		NextFlashTime: proto.Uint32(uint32(nextMonth(time.Now()).Unix())),
 	})
 }
+
+// handleSkinPreviewUsage acknowledges the skin shop's live2d preview toggle
+// (RecordSkinAnimPreviwBtnUsageCommand,
+// controller/command/shop/recordskinanimpreviwbtnusagecommand.lua, CS_16203):
+// flag is 1 when the preview was switched on. The client keeps the toggle in
+// PlayerPrefs and only shows an error tip when ret isn't 0.
+// Telemetry only: ignored for now; could feed usage stats later.
+//
+//belfast:static
+func (game *Game) handleSkinPreviewUsage(client *connection.Client, req *protobuf.CS_16203) error {
+	return client.Send(&protobuf.SC_16204{Ret: proto.Uint32(0)})
+}
