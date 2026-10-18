@@ -307,8 +307,11 @@ func storableDrop(kind, id uint32) bool {
 		_, ok := ownableShip(id)
 		return ok
 	case dropTypeSkin, dropTypeSkinTimeLimit:
-		_, ok := shipSkins[id]
-		return ok
+		// the client shows a skin on its group's star-1 ship
+		// (Drop.UpdateDropCase: ship_group .. "1"), which must exist
+		skin, ok := shipSkins[id]
+		_, base := ownableShip(skin.group*10 + 1)
+		return ok && skin.words && base
 	}
 	return false
 }

@@ -38,18 +38,27 @@ type shipSkin struct {
 	group       uint32 // ship_data_template group_type
 	skinType    int
 	changeGroup uint32 // change_skin.group, 0 for the others
+	// words: the skin has a ship_skin_words row. The client reads it to show
+	// the skin anywhere (ShipWordHelper.GetWordAndCV, from Drop:InitConfig
+	// for a mail or an award), so a skin without one can't be given.
+	words bool
 }
 
 var shipSkins map[uint32]shipSkin
 
 func loadSkinData() error {
 	var rows map[uint32]skinConfig
-	if err := gamedata.Load("ship_skin_template", &rows)(); err != nil {
+	var words map[uint32]json.RawMessage
+	if err := gamedata.LoadAll(
+		gamedata.Load("ship_skin_template", &rows),
+		gamedata.Load("ship_skin_words", &words),
+	); err != nil {
 		return err
 	}
 	shipSkins = make(map[uint32]shipSkin, len(rows))
 	for id, row := range rows {
-		skin := shipSkin{group: row.ShipGroup, skinType: row.SkinType}
+		_, hasWords := words[id]
+		skin := shipSkin{group: row.ShipGroup, skinType: row.SkinType, words: hasWords}
 		var change struct {
 			Group uint32 `json:"group"`
 		}
