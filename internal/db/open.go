@@ -29,9 +29,12 @@ type Store struct {
 }
 
 // Open opens (creating it if needed) the database at path and applies the
-// migrations it hasn't seen yet.
+// migrations it hasn't seen yet. Transactions take the write lock when they
+// begin (_txlock=immediate): two commanders' requests that read then write
+// the same rows (a guild's) wait on busy_timeout instead of one failing on
+// a stale snapshot.
 func Open(path string) (*Store, error) {
-	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=busy_timeout(5000)")
+	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=busy_timeout(5000)&_txlock=immediate")
 	if err != nil {
 		return nil, err
 	}
