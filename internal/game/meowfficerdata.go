@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/ggmolly/belfast/internal/gamedata"
+	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
 // Meowfficers are the client's "commanders" (CommanderProxy, protocol p25):
@@ -81,6 +82,16 @@ type catteryOpAward struct {
 	kind, id, count, chance uint32
 }
 
+// dropRestore is a drop_data_restore row: what a reward of target_type /
+// target_id one owns already turns into, resource_num of the resource
+// resource_type. The client never reads the table: it is the server's.
+type dropRestore struct {
+	TargetType   uint32 `json:"target_type"`
+	TargetID     uint32 `json:"target_id"`
+	ResourceType uint32 `json:"resource_type"`
+	ResourceNum  uint32 `json:"resource_num"`
+}
+
 var (
 	meowfficerTemplates map[uint32]meowfficerTemplate
 	meowfficerPools     map[uint32]meowfficerBoxPool
@@ -95,6 +106,15 @@ var (
 	// when the box starts training). A cat without a time is never drawn;
 	// without the file no box can be trained.
 	meowfficerTimes map[uint32]uint32
+	// meowfficerDuplicates is what a special cat (fixed talents) given to a
+	// commander who has one already turns into, by template id: one of each
+	// can be owned (wiki, Special Meowfficers: "Acquiring another copy will
+	// instead award 2000 Coin"). drop_data_restore has rows for Drake, Kidd
+	// (2000 gold) and Bellamy (1000 gold), and task 20733 (Drake) says "If
+	// you already have Meowfficer Drake, you will instead receive Coins.";
+	// the specials without a row get what a row of their rarity gives (a
+	// guess).
+	meowfficerDuplicates map[uint32]*protobuf.DROPINFO
 	// catteryPlayAwards are what playing with one housed cat gives, by
 	// commander_home teast_level[2] (a server-side drop id): server content,
 	// server/cattery_play_awards.json ({"<id>": [[type, id, count, chance
@@ -125,12 +145,14 @@ func loadMeowfficerData() error {
 	var items map[uint32]struct {
 		UsageArg json.RawMessage `json:"usage_arg"`
 	}
+	var restores map[uint32]dropRestore
 	err := gamedata.LoadAll(
 		gamedata.Load("commander_data_template", &meowfficerTemplates),
 		gamedata.Load("commander_data_create_material", &meowfficerPools),
 		gamedata.Load("commander_level", &meowfficerLevels),
 		gamedata.Load("commander_home", &catteryLevels),
 		gamedata.Load("item_data_statistics", &items),
+		gamedata.Load("drop_data_restore", &restores),
 		loadMeowfficerTimes,
 		loadCatteryPlayAwards,
 	)
@@ -172,7 +194,32 @@ func loadMeowfficerData() error {
 		pool := template.Rarity - 2
 		meowfficerCandidates[pool] = append(meowfficerCandidates[pool], id)
 	}
+	loadMeowfficerDuplicates(restores)
 	return loadMeowfficerBoxRates()
+}
+
+// loadMeowfficerDuplicates fills meowfficerDuplicates from the cat rows of
+// drop_data_restore, the specials without one by rarity.
+func loadMeowfficerDuplicates(restores map[uint32]dropRestore) {
+	meowfficerDuplicates = map[uint32]*protobuf.DROPINFO{}
+	byRarity := map[uint32]*protobuf.DROPINFO{}
+	for _, row := range restores {
+		template, ok := meowfficerTemplates[row.TargetID]
+		if row.TargetType != dropTypeMeowfficer || !ok || row.ResourceNum == 0 {
+			continue
+		}
+		restore := dropInfo(dropTypeResource, row.ResourceType, row.ResourceNum)
+		meowfficerDuplicates[row.TargetID] = restore
+		byRarity[template.Rarity] = restore
+	}
+	for id, template := range meowfficerTemplates {
+		if _, ok := meowfficerDuplicates[id]; ok || template.AbilityRefreshType != meowfficerFixedTalents {
+			continue
+		}
+		if restore, ok := byRarity[template.Rarity]; ok {
+			meowfficerDuplicates[id] = restore
+		}
+	}
 }
 
 // loadMeowfficerBoxRates reads the purchase rates out of

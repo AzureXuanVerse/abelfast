@@ -12,6 +12,7 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
+	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -252,11 +253,7 @@ func (game *Game) handleOpenMeowfficerBox(client *connection.Client, req *protob
 			return err
 		}
 		finished = box.FinishTime
-		talents := meowfficerStartingTalents(template.ID, rand.IntN)
-		cat, err = tx.CreateMeowfficer(tx.ctx, db.CreateMeowfficerParams{
-			CommanderID: tx.commanderID, TemplateID: template.ID, SkillID: template.SkillID,
-			Talents: talents, TalentOrigins: talents,
-		})
+		cat, err = tx.createMeowfficer(template)
 		return err
 	})
 	if err != nil && !refused(err) {
@@ -267,6 +264,68 @@ func (game *Game) handleOpenMeowfficerBox(client *connection.Client, req *protob
 		reply.Commander = meowfficerInfo(cat)
 	}
 	return client.Send(reply)
+}
+
+// createMeowfficer gives the commander a new cat of template, with its
+// starting talents (meowfficerStartingTalents).
+func (tx *Tx) createMeowfficer(template meowfficerTemplate) (db.Meowfficer, error) {
+	talents := meowfficerStartingTalents(template.ID, rand.IntN)
+	return tx.CreateMeowfficer(tx.ctx, db.CreateMeowfficerParams{
+		CommanderID: tx.commanderID, TemplateID: template.ID, SkillID: template.SkillID,
+		Talents: talents, TalentOrigins: talents,
+	})
+}
+
+// grantMeowfficers gives a reward's cats (DROP_TYPE_COMMANDER_CAT: the
+// client's Drop.AddDropCase does nothing for them, CommanderProxy adds the
+// SC_25039 grantDrops pushes). A special cat the commander has already
+// turns into its meowfficerDuplicates resource instead: entry is rewritten
+// so the reply lists the coins, which the client adds, and no cat (its
+// award window would show the newest cat again, and nothing would tell it
+// of the gold). Copies of a special beyond the first (no config gives
+// more than one) are turned into the resource too, unlisted. No
+// reward path of the client checks the cattery's room (only opening a box
+// does, GetCommanderCommand's commander_capcity_is_max; the mail claim's
+// CheckOverflow covers gold, oil, gear and ships), and its checks all read
+// commander_bag_max <= count: a reward is never refused and may house more
+// cats than the cattery holds.
+func (tx *Tx) grantMeowfficers(entry *protobuf.DROPINFO) ([]*protobuf.COMMANDERINFO, error) {
+	template, ok := meowfficerTemplates[entry.GetId()]
+	if !ok {
+		logger.WithFields("Drops", logger.FieldValue("meowfficer", entry.GetId())).Warn("drop not stored")
+		return nil, nil
+	}
+	count := entry.GetNumber()
+	if restore, unique := meowfficerDuplicates[template.ID]; unique && count > 0 {
+		owned, err := tx.ownedCount(dropTypeMeowfficer, template.ID)
+		if err != nil {
+			return nil, err
+		}
+		copies := count - 1
+		if owned > 0 {
+			copies = count
+		}
+		if copies > 0 {
+			if err := tx.AddResource(restore.GetId(), restore.GetNumber()*copies); err != nil {
+				return nil, err
+			}
+		}
+		if owned > 0 {
+			entry.Type, entry.Id, entry.Number = proto.Uint32(restore.GetType()), proto.Uint32(restore.GetId()), proto.Uint32(restore.GetNumber()*copies)
+			return nil, nil
+		}
+		count = 1
+		entry.Number = proto.Uint32(1)
+	}
+	var cats []*protobuf.COMMANDERINFO
+	for range count {
+		cat, err := tx.createMeowfficer(template)
+		if err != nil {
+			return nil, err
+		}
+		cats = append(cats, meowfficerInfo(cat))
+	}
+	return cats, nil
 }
 
 // handleRefreshMeowfficerBoxes answers RefreshCommanderBoxesCommand

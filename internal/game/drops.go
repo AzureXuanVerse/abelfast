@@ -21,6 +21,7 @@ const (
 	dropTypeVItem     = 8 // item_virtual_data_statistics
 	// ship_skin_template, number the seconds it lasts
 	dropTypeSkinTimeLimit = 23
+	dropTypeMeowfficer    = 25 // DROP_TYPE_COMMANDER_CAT, commander_data_template
 )
 
 // grantDrops stores rewards: resources, bag items, equipment, ships (with
@@ -29,9 +30,11 @@ const (
 // link item, the cruise pass points as their task counter, the rest as
 // virtual item counters) and ship skins (for good or for a time, as the
 // client adds them: Drop's DROP_TYPE_SKIN and DROP_TYPE_SKIN_TIMELIMIT
-// cases, model/vo/drop.lua), recording the task progress they cause. Gear
-// skins, frames... have no storage yet and are only logged.
+// cases, model/vo/drop.lua) and meowfficers (grantMeowfficers, pushed in
+// SC_25039), recording the task progress they cause. Gear skins, frames...
+// have no storage yet and are only logged.
 func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
+	var cats []*protobuf.COMMANDERINFO
 	for _, entry := range drops {
 		kind, id, count := entry.GetType(), entry.GetId(), entry.GetNumber()
 		switch {
@@ -82,9 +85,21 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 			if err := tx.AddVirtualItem(id, count); err != nil {
 				return err
 			}
+		case kind == dropTypeMeowfficer:
+			added, err := tx.grantMeowfficers(entry)
+			if err != nil {
+				return err
+			}
+			cats = append(cats, added...)
 		default:
 			logger.WithFields("Drops", logger.FieldValue("type", kind), logger.FieldValue("id", id)).Warn("drop not stored")
 		}
+	}
+	if len(cats) > 0 {
+		// CommanderProxy adds them ahead of the reply, whose award window
+		// shows the newest as many as the drops it lists
+		// (ContextMediator ON_ACHIEVE, GetNewestCommander)
+		tx.push(&protobuf.SC_25039{CommanderList: cats})
 	}
 	return nil
 }

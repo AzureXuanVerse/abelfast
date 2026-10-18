@@ -132,8 +132,8 @@ type Mail struct {
 
 // mailStorable is whether claiming a mail can store an attachment: what
 // grantDrops keeps (resources, bag items, equipment, ships, furniture,
-// virtual items, ship skins) and is in the game's tables. Gear skins,
-// frames, emojis... have no storage yet.
+// virtual items, ship skins, meowfficers) and is in the game's tables. Gear
+// skins, frames, emojis... have no storage yet.
 func mailStorable(kind, id uint32) bool {
 	switch kind {
 	case dropTypeResource:

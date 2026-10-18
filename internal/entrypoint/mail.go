@@ -26,7 +26,7 @@ func runMail(args []string) {
 	title := flags.String("title", "", "mail title")
 	sender := flags.String("sender", "", "sender, empty for the client's default (Headquarters)")
 	body := flags.String("body", "", `mail text, "\n" for a new line`)
-	attach := flags.String("attach", "", "attachments, type:id:count[,type:id:count...] (DROP_TYPE_*: 1 resource, 2 item, 3 equipment, 4 ship, 5 furniture, 8 virtual item)")
+	attach := flags.String("attach", "", "attachments, type:id:count[,type:id:count...] (DROP_TYPE_*: 1 resource, 2 item, 3 equipment, 4 ship, 5 furniture, 7 skin, 8 virtual item, 25 meowfficer)")
 	flags.Parse(args)
 
 	attachments, err := parseDrops(*attach)
