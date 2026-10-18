@@ -120,6 +120,10 @@ func (game *Game) playerInfo(ctx context.Context, commander db.Commander, ships 
 	if err != nil {
 		return nil, err
 	}
+	cryptolalia, err := game.DB.ListCryptolalia(ctx, commander.ID)
+	if err != nil {
+		return nil, err
+	}
 	characters := make([]*protobuf.KVDATA, len(secretaries))
 	for i, secretary := range secretaries {
 		characters[i] = &protobuf.KVDATA{Key: proto.Uint32(secretary.ShipID), Value: proto.Uint32(secretary.PhantomID)}
@@ -149,5 +153,6 @@ func (game *Game) playerInfo(ctx context.Context, commander db.Commander, ships 
 		BuyOilCount:     proto.Uint32(oilBought(purchases)),
 		RandomShipMode:  proto.Uint32(randomShipMode),
 		CdList:          cds,
+		Soundstory:      cryptolalia,
 	}, nil
 }

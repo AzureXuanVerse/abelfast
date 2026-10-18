@@ -158,6 +158,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleMedalShop)
 	packets.Handle(game.handleMedalShopPurchase)
 	packets.Handle(game.handleRequisition)
+	packets.Handle(game.handleUnlockCryptolalia)
 	packets.Handle(game.handleShopStreet)
 	packets.Handle(game.handleMiniGameShop)
 	packets.Handle(game.handleSeasonInfo)

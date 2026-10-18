@@ -107,6 +107,11 @@ type CommanderCooldown struct {
 	Until       int64
 }
 
+type CommanderCryptolalium struct {
+	CommanderID uint32
+	StoryID     uint32
+}
+
 type CommanderDorm struct {
 	CommanderID          uint32
 	Level                uint32
