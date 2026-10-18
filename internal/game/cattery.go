@@ -2,6 +2,7 @@ package game
 
 import (
 	"context"
+	"encoding/json"
 	"math/rand/v2"
 	"slices"
 	"time"
@@ -123,6 +124,38 @@ func saveCatterySlot(tx *Tx, slot db.MeowfficerCattery) error {
 	})
 }
 
+// catteryCleanLoss is the cleanliness the cattery loses a day,
+// commander_home flower[2].
+func catteryCleanLoss(home catteryLevel) uint32 {
+	var flower []json.RawMessage
+	var loss uint32
+	if json.Unmarshal(home.Flower, &flower) == nil && len(flower) > 1 {
+		json.Unmarshal(flower[1], &loss)
+	}
+	return loss
+}
+
+// settleCatteryClean takes the cleanliness lost since it was last settled
+// off: flower[2] each server day (CommanderProxy's day call, ReduceClean
+// once any slot is dirty, which every housed cat is after ResetCatteryOP and
+// every slot the client fills in itself), down to 0. The first settlement
+// only starts the count.
+func settleCatteryClean(tx *Tx, state *db.MeowfficerState, now time.Time) error {
+	if state.CleanTime != 0 {
+		loss := catteryCleanLoss(cattery(state.HomeLevel))
+		for day := nextDay(time.Unix(state.CleanTime, 0)); !day.After(now) && loss > 0 && state.HomeClean > 0; day = day.AddDate(0, 0, 1) {
+			state.HomeClean -= min(loss, state.HomeClean)
+		}
+	}
+	state.CleanTime = now.Unix()
+	if err := tx.CreateMeowfficerState(tx.ctx, tx.commanderID); err != nil {
+		return err
+	}
+	return tx.SetMeowfficerHomeClean(tx.ctx, db.SetMeowfficerHomeCleanParams{
+		HomeClean: state.HomeClean, CleanTime: state.CleanTime, CommanderID: tx.commanderID,
+	})
+}
+
 // handleCommanderHome answers GetCommanderHomeCommand (CS_25026, sent once
 // SC_25001 is in): the cattery's level, EXP and cleanliness and its open
 // slots. A housed cat's EXP is settled first and sent with its slot
@@ -139,6 +172,9 @@ func (game *Game) handleCommanderHome(client *connection.Client, req *protobuf.C
 		}
 		slots, err := tx.ListMeowfficerCatteries(tx.ctx, tx.commanderID)
 		if err != nil {
+			return err
+		}
+		if err := settleCatteryClean(tx, &state, now); err != nil {
 			return err
 		}
 		home := cattery(state.HomeLevel)
@@ -281,6 +317,9 @@ func (game *Game) handleCatteryOp(client *connection.Client, req *protobuf.CS_25
 			if cats == 0 {
 				return errRefused
 			}
+			if err := settleCatteryClean(tx, &state, now); err != nil {
+				return err
+			}
 			homeExp := home.CleanExp
 			switch op {
 			case catteryClean:
@@ -354,4 +393,36 @@ func doCatteryOp(tx *Tx, home catteryLevel, op uint32, slot *db.MeowfficerCatter
 		return err
 	}
 	return saveCatterySlot(tx, *slot)
+}
+
+// handleChangeCatteryStyle changes an open slot's style
+// (CommanderChangeCatteryStyleCommand, CS_25032): one of the cattery
+// level's nest_appearance (the others show locked, cathome_style_unlock),
+// not the one it has. Built from the Lua alone.
+func (game *Game) handleChangeCatteryStyle(client *connection.Client, req *protobuf.CS_25032) error {
+	slotID, style := req.GetSlotidx(), req.GetStyleidx()
+	err := game.tx(context.Background(), client, func(tx *Tx) error {
+		state, err := meowfficerState(tx.ctx, tx.Queries, tx.commanderID)
+		if err != nil {
+			return err
+		}
+		home := cattery(state.HomeLevel)
+		if slotID < 1 || slotID > home.NestNumber || slotID > catterySlotCount || !slices.Contains(home.NestStyles, style) {
+			return errRefused
+		}
+		slots, err := tx.ListMeowfficerCatteries(tx.ctx, tx.commanderID)
+		if err != nil {
+			return err
+		}
+		slot := catterySlot(slots, tx.commanderID, slotID)
+		if slot.Style == style {
+			return errRefused
+		}
+		slot.Style = style
+		return saveCatterySlot(tx, slot)
+	})
+	if err != nil && !refused(err) {
+		return err
+	}
+	return client.Send(&protobuf.SC_25033{Result: result(err)})
 }

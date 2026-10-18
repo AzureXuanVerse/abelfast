@@ -187,6 +187,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleCatteryScene)
 	packets.Handle(game.handlePutMeowfficerInCattery)
 	packets.Handle(game.handleCatteryOp)
+	packets.Handle(game.handleChangeCatteryStyle)
 	// mail
 	packets.Handle(game.handleMailList)
 	packets.Handle(game.handleArchiveList)

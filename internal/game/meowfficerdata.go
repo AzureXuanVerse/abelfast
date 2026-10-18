@@ -60,7 +60,9 @@ type meowfficerLevel struct {
 // clean, a feed and a play give per housed cat (bwiki 指挥喵: 30, 10, 20),
 // feed_level[2] the EXP a feed gives each cat, teast_level[2] what a play
 // gives (catteryPlayAwards), exp_number the EXP a housed cat earns an hour,
-// flower[1] the cleanliness a clean adds, nest_number the slots open.
+// flower[1] the cleanliness a clean adds and flower[2] what it loses a day,
+// nest_number the slots open, nest_appearance the slot styles
+// (commander_home_style) that can be picked.
 type catteryLevel struct {
 	Level      uint32          `json:"level"`
 	HomeExp    uint32          `json:"home_exp"`
@@ -70,6 +72,7 @@ type catteryLevel struct {
 	TeastLevel []uint32        `json:"teast_level"`
 	Flower     json.RawMessage `json:"flower"`
 	NestNumber uint32          `json:"nest_number"`
+	NestStyles []uint32        `json:"nest_appearance"`
 }
 
 // catteryOpAward is one entry of a play's awards: a drop given with a
