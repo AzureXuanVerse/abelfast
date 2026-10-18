@@ -216,8 +216,9 @@ func (game *Game) handleTrainMeowfficerBox(client *connection.Client, req *proto
 // handleOpenMeowfficerBox takes the cat out of a finished box
 // (GetCommanderCommand, CS_25004, NG008): the client checks the box is
 // finished and commander_bag_max has room, adds SC_25005's commander and
-// empties the box. finish_time is never read; it is the box's. Built from
-// the Lua alone.
+// empties the box. The cat comes with its starting talents
+// (meowfficerStartingTalents). finish_time is never read; it is the box's.
+// Built from the Lua alone.
 func (game *Game) handleOpenMeowfficerBox(client *connection.Client, req *protobuf.CS_25004) error {
 	now := time.Now().Unix()
 	var cat db.Meowfficer
@@ -251,9 +252,10 @@ func (game *Game) handleOpenMeowfficerBox(client *connection.Client, req *protob
 			return err
 		}
 		finished = box.FinishTime
+		talents := meowfficerStartingTalents(template.ID, rand.IntN)
 		cat, err = tx.CreateMeowfficer(tx.ctx, db.CreateMeowfficerParams{
 			CommanderID: tx.commanderID, TemplateID: template.ID, SkillID: template.SkillID,
-			Talents: db.IDList{}, TalentOrigins: db.IDList{},
+			Talents: talents, TalentOrigins: talents,
 		})
 		return err
 	})
