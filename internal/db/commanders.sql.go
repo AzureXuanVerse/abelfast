@@ -149,6 +149,15 @@ func (q *Queries) CreateCommander(ctx context.Context, arg CreateCommanderParams
 	return i, err
 }
 
+const deleteSecretaries = `-- name: DeleteSecretaries :exec
+DELETE FROM commander_secretaries WHERE commander_id = ?
+`
+
+func (q *Queries) DeleteSecretaries(ctx context.Context, commanderID uint32) error {
+	_, err := q.db.ExecContext(ctx, deleteSecretaries, commanderID)
+	return err
+}
+
 const getCommander = `-- name: GetCommander :one
 SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food FROM commanders WHERE id = ?
 `

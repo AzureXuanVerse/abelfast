@@ -48,6 +48,9 @@ SELECT flag_id FROM commander_common_flags WHERE commander_id = ? ORDER BY flag_
 -- name: ListSecretaries :many
 SELECT * FROM commander_secretaries WHERE commander_id = ? ORDER BY position;
 
+-- name: DeleteSecretaries :exec
+DELETE FROM commander_secretaries WHERE commander_id = ?;
+
 -- name: SetSecretary :exec
 INSERT INTO commander_secretaries (commander_id, position, ship_id, phantom_id) VALUES (?, ?, ?, ?)
 ON CONFLICT (commander_id, position) DO UPDATE SET ship_id = excluded.ship_id, phantom_id = excluded.phantom_id;

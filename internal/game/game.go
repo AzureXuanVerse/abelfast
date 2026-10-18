@@ -141,6 +141,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleLimitChallenge)
 	packets.Handle(game.handleChargeList)
 	packets.Handle(game.handleShopping)
+	packets.Handle(game.handleChangeSecretaries)
 	packets.Handle(game.handleMedalShop)
 	packets.Handle(game.handleMedalShopPurchase)
 	packets.Handle(game.handleRequisition)
