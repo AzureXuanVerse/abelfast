@@ -19,6 +19,38 @@ type Build struct {
 	FinishTime  int64
 }
 
+type ChapterAutoBattle struct {
+	CommanderID    uint32
+	Seq            uint32
+	Type           uint32
+	ChapterID      uint32
+	FinishAt       int64
+	TicketExpireAt int64
+	Seconds        uint32
+}
+
+type ChapterAutoRecord struct {
+	CommanderID uint32
+	Type        uint32
+	ChapterID   uint32
+	Seconds     uint32
+}
+
+type ChapterAutoState struct {
+	CommanderID uint32
+	Oil         uint32
+	TimeUsed    uint32
+	ExtraTime   uint32
+	Day         int64
+}
+
+type ChapterAutoTicket struct {
+	CommanderID uint32
+	Type        uint32
+	ExpireAt    int64
+	Count       uint32
+}
+
 type ChapterEliteFleet struct {
 	CommanderID uint32
 	Formation   uint32
