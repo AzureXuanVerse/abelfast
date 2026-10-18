@@ -38,30 +38,33 @@ type ChapterState struct {
 }
 
 type Commander struct {
-	ID              uint32
-	AccountID       uint32
-	Name            string
-	StarterShip     uint32
-	RegisteredAt    int64
-	GuideIndex      uint32
-	NewGuideIndex   uint32
-	Level           uint32
-	Exp             uint32
-	ShipBagMax      uint32
-	EquipBagMax     uint32
-	CommanderBagMax uint32
-	Rank            uint32
-	ChatRoomID      uint32
-	MailStoreroomLv uint32
-	Manifesto       string
-	DormFood        uint32
-	SkillClassNum   uint32
-	QuickFinishDay  int64
-	QuickFinishes   uint32
-	OilFieldAt      int64
-	GoldFieldAt     int64
-	OilFieldLevel   uint32
-	GoldFieldLevel  uint32
+	ID               uint32
+	AccountID        uint32
+	Name             string
+	StarterShip      uint32
+	RegisteredAt     int64
+	GuideIndex       uint32
+	NewGuideIndex    uint32
+	Level            uint32
+	Exp              uint32
+	ShipBagMax       uint32
+	EquipBagMax      uint32
+	CommanderBagMax  uint32
+	Rank             uint32
+	ChatRoomID       uint32
+	MailStoreroomLv  uint32
+	Manifesto        string
+	DormFood         uint32
+	SkillClassNum    uint32
+	QuickFinishDay   int64
+	QuickFinishes    uint32
+	OilFieldAt       int64
+	GoldFieldAt      int64
+	OilFieldLevel    uint32
+	GoldFieldLevel   uint32
+	ClassFieldLevel  uint32
+	ClassProficiency uint32
+	ClassFieldAt     int64
 }
 
 type CommanderActivity struct {

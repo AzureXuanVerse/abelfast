@@ -17,7 +17,10 @@ import (
 const (
 	ResourceOilField  = 5 // oil waiting in the academy's oil field
 	ResourceGoldField = 7 // gold waiting in the academy's merchant
-	ResourceGuildCoin = 8
+	// exp waiting in the academy's lecture hall (expField), packed into
+	// EXP Data Packs by CS_22009
+	ResourceClassField = 10
+	ResourceGuildCoin  = 8
 )
 
 var (

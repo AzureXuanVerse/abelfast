@@ -199,18 +199,25 @@ func quickFinishesAllowed(now time.Time) uint32 {
 	return n
 }
 
-// navalAcademy is SC_22001, NavalAcademyProxy's state: oil field, merchant
-// and classroom at level 1 (their template tables start there, captured),
-// the Tactical Class rooms, lessons and today's quick finishes.
+// navalAcademy is SC_22001, NavalAcademyProxy's state: the levels of the
+// oil field, merchant and lecture hall (their template tables start at 1,
+// captured), the hall's proficiency, the Tactical Class rooms, lessons and
+// today's quick finishes. The proficiency is read again: SC_11003 settled
+// the hall after the login loaded the commander.
 func navalAcademy(ctx context.Context, queries *db.Queries, commander db.Commander, now time.Time) (*protobuf.SC_22001, error) {
 	classes, err := queries.ListSkillClasses(ctx, commander.ID)
+	if err != nil {
+		return nil, err
+	}
+	hall, err := queries.GetCommander(ctx, commander.ID)
 	if err != nil {
 		return nil, err
 	}
 	msg := &protobuf.SC_22001{
 		OilWellLevel:       proto.Uint32(commander.OilFieldLevel),
 		GoldWellLevel:      proto.Uint32(commander.GoldFieldLevel),
-		ClassLv:            proto.Uint32(1),
+		ClassLv:            proto.Uint32(hall.ClassFieldLevel),
+		Class:              &protobuf.NAVALACADEMY_CLASS{Proficiency: proto.Uint32(hall.ClassProficiency)},
 		SkillClassList:     make([]*protobuf.SKILL_CLASS, len(classes)),
 		SkillClassNum:      proto.Uint32(commander.SkillClassNum),
 		DailyFinishBuffCnt: proto.Uint32(quickFinishesUsed(commander, now)),
