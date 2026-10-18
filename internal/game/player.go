@@ -130,6 +130,10 @@ func (game *Game) playerInfo(ctx context.Context, commander db.Commander, ships 
 	if err != nil {
 		return nil, err
 	}
+	guildWait, err := guildWaitTime(ctx, game.DB.Queries, commander.ID)
+	if err != nil {
+		return nil, err
+	}
 	characters := make([]*protobuf.KVDATA, len(secretaries))
 	for i, secretary := range secretaries {
 		characters[i] = &protobuf.KVDATA{Key: proto.Uint32(secretary.ShipID), Value: proto.Uint32(secretary.PhantomID)}
@@ -160,5 +164,6 @@ func (game *Game) playerInfo(ctx context.Context, commander db.Commander, ships 
 		RandomShipMode:  proto.Uint32(randomShipMode),
 		CdList:          cds,
 		Soundstory:      cryptolalia,
+		GuildWaitTime:   proto.Uint32(guildWait),
 	}, nil
 }

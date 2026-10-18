@@ -515,6 +515,11 @@ type GuildRequest struct {
 	Time        uint32
 }
 
+type GuildWaitTime struct {
+	CommanderID uint32
+	Until       uint32
+}
+
 type Mail struct {
 	ID          uint32
 	CommanderID uint32

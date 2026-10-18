@@ -196,7 +196,7 @@ func (game *Game) tellGuild(client *connection.Client, members []uint32, except 
 // guild, or a guild id of 0 outside one (GuildProxy then exits it; the
 // official server still fills policy, faction and level with 1). A new
 // guild makes GuildProxy ask for the chat, the user info, the assault fleets,
-// the operation and the requests.
+// the operation and the requests. A pending impeachment is settled first.
 func (game *Game) handleGuildInfo(client *connection.Client, req *protobuf.CS_60037) error {
 	ctx := context.Background()
 	member, ok, err := guildMembership(ctx, game.DB.Queries, client.CommanderID)
@@ -204,13 +204,10 @@ func (game *Game) handleGuildInfo(client *connection.Client, req *protobuf.CS_60
 		return err
 	}
 	if !ok {
-		return client.Send(&protobuf.SC_60000{Guild: &protobuf.GUILD_INFO{
-			Base: &protobuf.GUILD_BASE_INFO{
-				Policy:  proto.Uint32(guildPolicyPower),
-				Faction: proto.Uint32(guildFactionAzurLane),
-				Level:   proto.Uint32(1),
-			},
-		}})
+		return client.Send(noGuild())
+	}
+	if err := game.settleGuildImpeachment(ctx, client, member.GuildID); err != nil {
+		return err
 	}
 	info, err := game.guildInfo(ctx, game.DB.Queries, member.GuildID)
 	if err != nil {
