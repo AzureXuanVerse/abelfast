@@ -343,7 +343,7 @@ func (game *Game) handleChapterOp(client *connection.Client, req *protobuf.CS_13
 	reply := opReply(nil)
 	switch req.GetAct() {
 	case opRetreat:
-		return game.retreat(ctx, client, session, req.GetGroupId())
+		return game.retreat(ctx, client, session, req.GetGroupId(), req.GetActArg_1() == 1)
 	case opMove:
 		reply = session.move(req.GetGroupId(), req.GetActArg_1(), req.GetActArg_2())
 	case opAmbush:
@@ -372,7 +372,10 @@ func (game *Game) handleChapterOp(client *connection.Client, req *protobuf.CS_13
 // retreat ends the sortie (OpRetreat, group 0) or pulls one fleet out. Ending
 // a won chapter (ChapterLevelData:UpdateProgressOnRetreat) adds progress_boss
 // to its progress, counts a clear, and a pass when it was already cleared.
-func (game *Game) retreat(ctx context.Context, client *connection.Client, session *chapterSession, groupID uint32) error {
+// A win the client ends on uninterrupted Auto-Repeat (act_arg_1 1) sets the
+// stage's Operational Handover record (recordChapterAuto), sent back as
+// auto_battle_time_update.
+func (game *Game) retreat(ctx context.Context, client *connection.Client, session *chapterSession, groupID uint32, autoRepeat bool) error {
 	if groupID != 0 && len(session.info.MainGroupList) > 1 {
 		groups := session.info.MainGroupList[:0]
 		for _, group := range session.info.MainGroupList {
@@ -386,9 +389,17 @@ func (game *Game) retreat(ctx context.Context, client *connection.Client, sessio
 		}
 		return client.Send(opReply(nil))
 	}
+	reply := opReply(nil)
 	err := game.tx(ctx, client, func(tx *Tx) error {
 		queries := tx.Queries
 		if session.won() {
+			if autoRepeat {
+				seconds, err := recordChapterAuto(tx, session, time.Now())
+				if err != nil {
+					return err
+				}
+				reply.AutoBattleTimeUpdate = proto.Uint32(seconds)
+			}
 			progress, err := chapterProgress(ctx, queries, client.CommanderID, session.template.id)
 			if err != nil {
 				return err
@@ -411,7 +422,7 @@ func (game *Game) retreat(ctx context.Context, client *connection.Client, sessio
 	if err != nil {
 		return err
 	}
-	return client.Send(opReply(nil))
+	return client.Send(reply)
 }
 
 // move walks a fleet to (row, column) (OpMove). The path goes around enemies
