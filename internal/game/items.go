@@ -57,7 +57,7 @@ type itemUse struct {
 	contents [][]uint32
 	// usage_drop tech packs without a drop_packs.json entry: the fallback
 	// draw
-	pack dropPack
+	pack *dropPack
 	// usage_drop_appointed: the [type, id, count] entries one is picked
 	// from (AssignedItemView, view/equipment/assigneditemview.lua).
 	choices [][]uint32
@@ -95,20 +95,25 @@ func loadItemData() error {
 const itemTypeEquipBox = 5
 
 // packGroup is one outcome of a random pack: drawn by weight, then one of
-// its pool's [type, id, count] entries.
+// its pool's [type, id, count] entries; an empty pool gives nothing.
 type packGroup struct {
 	Weight uint32     `json:"weight"`
 	Pool   [][]uint32 `json:"pool"`
 }
 
-// dropPack is a random pack's draw.
-type dropPack []packGroup
+// dropPack is a random pack's draw: its fixed [type, id, count] entries,
+// then one of its groups.
+type dropPack struct {
+	Fixed  [][]uint32  `json:"fixed"`
+	Groups []packGroup `json:"groups"`
+}
 
 // dropPacks are what the packs whose drop tables are server-side hold, by
 // item_data_statistics or item_virtual_data_statistics id: the tech packs,
 // the gear development packs, the "Mystery" placeholders the gift packs'
-// display_icon lists (54033 Mystery T3 Tech Pack...). Server content from
-// server/drop_packs.json of the data dir ({"<id>": {"groups": [...]}}),
+// display_icon lists (54033 Mystery T3 Tech Pack...), the guild supplies
+// (guildset guild_award_drop). Server content from server/drop_packs.json
+// of the data dir ({"<id>": {"fixed": [...], "groups": [...]}}),
 // scraped from the wiki's equipment box table by
 // internal/tools/wiki_drop_packs.py. Without it the nation tech packs fall
 // back to what their item text says (readTechPack).
@@ -120,35 +125,41 @@ func loadDropPacks() error {
 	if raw == nil || err != nil {
 		return err
 	}
-	var rows map[uint32]struct {
-		Groups dropPack `json:"groups"`
-	}
+	var rows map[uint32]dropPack
 	if err := json.Unmarshal(raw, &rows); err != nil {
 		return fmt.Errorf("drop packs: %w", err)
 	}
 	for id, row := range rows {
-		if row.Groups.valid() {
-			dropPacks[id] = row.Groups
+		if row.valid() {
+			dropPacks[id] = row
 		}
 	}
 	return nil
 }
 
 func (pack dropPack) valid() bool {
-	return len(pack) > 0 && !slices.ContainsFunc(pack, func(group packGroup) bool {
-		return group.Weight == 0 || len(group.Pool) == 0 || slices.ContainsFunc(group.Pool, func(entry []uint32) bool { return len(entry) < 3 })
-	})
+	short := func(entry []uint32) bool { return len(entry) < 3 }
+	return (len(pack.Fixed) > 0 || len(pack.Groups) > 0) && !slices.ContainsFunc(pack.Fixed, short) &&
+		!slices.ContainsFunc(pack.Groups, func(group packGroup) bool {
+			return group.Weight == 0 || slices.ContainsFunc(group.Pool, short)
+		})
 }
 
 // draw draws the pack count times, merging repeats.
 func (pack dropPack) draw(count uint32) []*protobuf.DROPINFO {
 	var drops []*protobuf.DROPINFO
 	for range count {
-		i := weightedPick(rand.Uint32N, pack, func(group packGroup) uint32 { return group.Weight })
-		if i < 0 {
-			return nil
+		for _, entry := range pack.Fixed {
+			drops = mergeDrop(drops, entry[0], entry[1], entry[2])
 		}
-		entry := pack[i].Pool[rand.IntN(len(pack[i].Pool))]
+		if len(pack.Groups) == 0 {
+			continue
+		}
+		i := weightedPick(rand.Uint32N, pack.Groups, func(group packGroup) uint32 { return group.Weight })
+		if i < 0 || len(pack.Groups[i].Pool) == 0 {
+			continue
+		}
+		entry := pack.Groups[i].Pool[rand.IntN(len(pack.Groups[i].Pool))]
 		drops = mergeDrop(drops, entry[0], entry[1], entry[2])
 	}
 	return drops
@@ -212,7 +223,7 @@ var (
 // whose name's first word is a word of the item's name ("T2 Sakura Tech
 // Pack"). nil when either can't be read (the starter submarine box, the
 // gear development packs).
-func readTechPack(row itemConfig, gear []packGear, gametip map[string]string) dropPack {
+func readTechPack(row itemConfig, gear []packGear, gametip map[string]string) *dropPack {
 	words := strings.Fields(row.Name)
 	nationality, found := uint32(0), 0
 	for key, nation := range nationTips {
@@ -234,16 +245,18 @@ func readTechPack(row itemConfig, gear []packGear, gametip map[string]string) dr
 	for _, match := range packRatePattern.FindAllStringSubmatch(display, -1) {
 		rate, err := strconv.ParseUint(match[1], 10, 32)
 		if err == nil {
-			pack = append(pack, packGroup{uint32(rate), byRarity[rarityByRateName[match[2]]]})
+			pack.Groups = append(pack.Groups, packGroup{uint32(rate), byRarity[rarityByRateName[match[2]]]})
 		}
 	}
-	if match := packOnlyPattern.FindStringSubmatch(display); len(pack) == 0 && match != nil {
-		pack = dropPack{{100, byRarity[rarityByRateName[match[1]]]}}
+	if match := packOnlyPattern.FindStringSubmatch(display); len(pack.Groups) == 0 && match != nil {
+		pack.Groups = []packGroup{{100, byRarity[rarityByRateName[match[1]]]}}
 	}
-	if !pack.valid() {
+	// a rate whose rarity has no gear is a misread: no pack rather than
+	// one that may give nothing
+	if !pack.valid() || slices.ContainsFunc(pack.Groups, func(group packGroup) bool { return len(group.Pool) == 0 }) {
 		return nil
 	}
-	return pack
+	return &pack
 }
 
 // readItemUses reads the usage of the item_data_statistics rows belfast
