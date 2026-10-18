@@ -29,3 +29,4 @@ wg/
 web/src/node_modules
 web/src/package-lock.json
 AzurLane*
+.cache/
