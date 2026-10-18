@@ -17,6 +17,8 @@ import (
 
 type Game struct {
 	DB *db.Store
+
+	online online // the commanders playing, see connect
 }
 
 // StartCommander creates what a new commander starts with (CS_10024), in
@@ -190,6 +192,19 @@ func (game *Game) Register() {
 	packets.Handle(game.handleExtendMailStorage)
 	packets.Handle(game.handleMailStorageWithdraw)
 	packets.Handle(game.handleMailTitles)
+	// friends
+	packets.Handle(game.handleSearchPlayer)
+	packets.Handle(game.handleRecommendPlayers)
+	packets.Handle(game.handleBatchGetPlayers)
+	packets.Handle(game.handleSendFriendRequest)
+	packets.Handle(game.handleAcceptFriendRequest)
+	packets.Handle(game.handleRejectFriendRequest)
+	packets.Handle(game.handleDeleteFriend)
+	packets.Handle(game.handleSendFriendMessage)
+	packets.Handle(game.handleBlacklist)
+	packets.Handle(game.handleBlockPlayer)
+	packets.Handle(game.handleUnblockPlayer)
+	packets.Handle(game.handleThemeAuthor)
 	// ship comments
 	packets.Handle(game.handleFetchDiscussion)
 	packets.Handle(game.handlePostDiscussion)
@@ -309,8 +324,10 @@ var loginBurst = []loginPush{
 	},
 	// CompensateProxy: no compensation mail
 	empty[protobuf.SC_30101](),
-	// FriendProxy: no friends or requests
-	empty[protobuf.SC_50000](),
+	// FriendProxy / NotificationProxy: friends and requests waiting
+	func(game *Game, l *login) (proto.Message, error) {
+		return game.friendList(l.ctx, l.queries, l.commander.ID)
+	},
 	func(game *Game, l *login) (proto.Message, error) { return game.activityList(l.ctx, l.commander) },
 	// ActivityPermanentProxy: no permanent (archived) event running
 	empty[protobuf.SC_11210](),
@@ -360,5 +377,5 @@ func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.
 			return err
 		}
 	}
-	return nil
+	return game.connect(ctx, client)
 }
