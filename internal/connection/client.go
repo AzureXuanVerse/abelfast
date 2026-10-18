@@ -23,6 +23,7 @@ const (
 
 var (
 	errClientClosed = errors.New("client is closed")
+	errQueueFull    = errors.New("client queue is full")
 
 	nextClientID atomic.Uint64
 )
@@ -62,6 +63,7 @@ type Client struct {
 	queueCond    *sync.Cond
 	packetPool   chan []byte
 	closed       bool
+	closeHooks   []func() // guarded by queueMu, run once closed
 	closeOnce    sync.Once
 	dispatchOnce sync.Once
 	metrics      clientMetrics
@@ -176,6 +178,8 @@ func (client *Client) closeWithError(err error) {
 	client.closeOnce.Do(func() {
 		client.queueMu.Lock()
 		client.closed = true
+		hooks := client.closeHooks
+		client.closeHooks = nil
 		client.queueCond.Broadcast()
 		client.queueMu.Unlock()
 		if err != nil && !isClosedConnError(err) {
@@ -183,7 +187,41 @@ func (client *Client) closeWithError(err error) {
 		}
 		_ = client.conn.Close()
 		client.logMetrics()
+		for _, hook := range hooks {
+			hook()
+		}
 	})
+}
+
+// OnClose runs fn once the connection is closed, right away if it already is.
+func (client *Client) OnClose(fn func()) {
+	client.queueMu.Lock()
+	if !client.closed {
+		client.closeHooks = append(client.closeHooks, fn)
+		client.queueMu.Unlock()
+		return
+	}
+	client.queueMu.Unlock()
+	fn()
+}
+
+// Run queues fn on the client's dispatcher: it runs between two packets, like
+// a handler, and what it sends (client.Push) is flushed right after. It is how
+// another client's request reaches this one (a friend request, a private
+// message). It fails without waiting when the client is closed or its queue
+// is full.
+func (client *Client) Run(fn func(client *Client) error) error {
+	client.queueMu.Lock()
+	defer client.queueMu.Unlock()
+	if client.closed {
+		return errClientClosed
+	}
+	if client.packetQueue.Length() >= packetQueueSize {
+		return errQueueFull
+	}
+	client.packetQueue.Add(fn)
+	client.queueCond.Signal()
+	return nil
 }
 
 func (client *Client) isClosed() bool {
@@ -240,13 +278,19 @@ func (client *Client) dispatchLoop() {
 			client.queueMu.Unlock()
 			return
 		}
-		packet := client.packetQueue.Remove().([]byte)
+		item := client.packetQueue.Remove()
 		client.queueCond.Signal()
 		client.queueMu.Unlock()
 
-		client.metrics.packets.Add(1)
-		err := client.handlePacket(packet)
-		client.releasePacketBuffer(packet)
+		var err error
+		switch item := item.(type) {
+		case []byte:
+			client.metrics.packets.Add(1)
+			err = client.handlePacket(item)
+			client.releasePacketBuffer(item)
+		case func(*Client) error:
+			err = client.runQueued(item)
+		}
 		if err != nil {
 			client.closeWithError(err)
 			return
@@ -261,6 +305,19 @@ func (client *Client) handlePacket(packet []byte) error {
 	client.packetIndex = header.Index
 	client.writeMu.Unlock()
 	if err := client.server.dispatcher(client, header.ID, packet[protocol.HeaderSize:]); err != nil {
+		client.metrics.handlerErrors.Add(1)
+		return err
+	}
+	return client.flush()
+}
+
+// runQueued runs a function queued by Run and flushes what it sent. Its
+// pushes carry index 0: they answer no request.
+func (client *Client) runQueued(fn func(*Client) error) error {
+	client.writeMu.Lock()
+	client.packetIndex = 0
+	client.writeMu.Unlock()
+	if err := fn(client); err != nil {
 		client.metrics.handlerErrors.Add(1)
 		return err
 	}
@@ -287,7 +344,8 @@ func (client *Client) releasePacketBuffer(buffer []byte) {
 
 func (client *Client) drainQueueLocked() {
 	for client.packetQueue.Length() > 0 {
-		packet := client.packetQueue.Remove().([]byte)
-		client.releasePacketBuffer(packet)
+		if packet, ok := client.packetQueue.Remove().([]byte); ok {
+			client.releasePacketBuffer(packet)
+		}
 	}
 }
