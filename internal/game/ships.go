@@ -87,6 +87,11 @@ func (tx *Tx) AddShip(templateID uint32) (*protobuf.SHIPINFO, error) {
 	if push != nil {
 		tx.push(push)
 		tx.techPointsChanged()
+	} else if raised, err := raiseShipGroup(ctx, queries, row); err != nil {
+		return nil, err
+	} else if raised {
+		// a limit broken copy of a group already there
+		tx.techPointsChanged()
 	}
 	return fullShipInfo(row, equips, skills), nil
 }
@@ -153,6 +158,14 @@ func shipList(ctx context.Context, queries *db.Queries, commanderID uint32, ship
 	if err != nil {
 		return nil, err
 	}
+	strengths, err := queries.ListShipStrengthsByCommander(ctx, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	strengthsByShip := map[uint32][]db.ShipStrength{}
+	for _, row := range strengths {
+		strengthsByShip[row.ShipID] = append(strengthsByShip[row.ShipID], row)
+	}
 	equipsByShip := map[uint32][]db.ShipEquipment{}
 	for _, equip := range equips {
 		equipsByShip[equip.ShipID] = append(equipsByShip[equip.ShipID], equip)
@@ -164,6 +177,7 @@ func shipList(ctx context.Context, queries *db.Queries, commanderID uint32, ship
 	msg := &protobuf.SC_12001{Shiplist: make([]*protobuf.SHIPINFO, len(ships))}
 	for i, ship := range ships {
 		msg.Shiplist[i] = fullShipInfo(ship, equipsByShip[ship.ID], skillsByShip[ship.ID])
+		msg.Shiplist[i].StrengthList = strengthInfo(strengthsByShip[ship.ID])
 	}
 	return msg, nil
 }
@@ -387,7 +401,8 @@ func (game *Game) handleLoveLetters(client *connection.Client, req *protobuf.CS_
 
 // collectionState is SC_17001, CollectionProxy: the archives (one
 // SHIP_STATISTICS_INFO per ship group owned), the milestone rewards
-// claimed and the medals' progress.
+// claimed and the medals' progress. The login's syncTechPoints raised the
+// entries from the ships owned first (raiseShipGroups).
 func collectionState(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobuf.SC_17001, error) {
 	groups, err := queries.ListShipGroups(ctx, commanderID)
 	if err != nil {
@@ -431,7 +446,7 @@ func collectionState(ctx context.Context, queries *db.Queries, commanderID uint3
 		// heart_count is the likes of every commander of the server
 		msg.ShipInfoList = append(msg.ShipInfoList, &protobuf.SHIP_STATISTICS_INFO{
 			Id:          proto.Uint32(group.GroupID),
-			Star:        proto.Uint32(archiveStar(group.GroupID)),
+			Star:        proto.Uint32(archiveStar(group)),
 			HeartFlag:   proto.Uint32(group.HeartFlag),
 			HeartCount:  proto.Uint32(heartCounts[group.GroupID]),
 			MarryFlag:   proto.Uint32(group.MarryFlag),
@@ -445,19 +460,20 @@ func collectionState(ctx context.Context, queries *db.Queries, commanderID uint3
 // recordShipGroup adds a new ship to the archives, and returns the SC_17002
 // of the archive count medal when its group is new. The group is its
 // template's group_type (shipGroup), the one CollectionProxy:flushCollection
-// unlocks on the client: 900004's Suffolk is 20304, not 90000. A new ship
-// (level 1, newShipIntimacy) never raises the best values of a group
-// already there.
+// unlocks on the client: 900004's Suffolk is 20304, not 90000. A ship of a
+// group already there may still raise its best values (raiseShipGroup).
 func recordShipGroup(ctx context.Context, queries *db.Queries, ship db.Ship) (*protobuf.SC_17002, error) {
-	group := shipGroup(ship.TemplateID)
-	if !archiveGroups[group] {
+	best, ok := shipGroupBest(ship)
+	if !ok {
 		return nil, nil
 	}
 	added, err := queries.AddShipGroup(ctx, db.AddShipGroupParams{
-		CommanderID: ship.CommanderID,
-		GroupID:     group,
-		IntimacyMax: ship.Intimacy,
-		LvMax:       ship.Level,
+		CommanderID: best.CommanderID,
+		GroupID:     best.GroupID,
+		IntimacyMax: best.IntimacyMax,
+		LvMax:       best.LvMax,
+		MarryFlag:   best.MarryFlag,
+		Star:        best.Star,
 	})
 	if err != nil || added == 0 {
 		return nil, err
@@ -472,6 +488,61 @@ func recordShipGroup(ctx context.Context, queries *db.Queries, ship db.Ship) (*p
 	return &protobuf.SC_17002{ProgressList: []*protobuf.ACHIEVEMENT_INFO{{
 		Id: proto.Uint32(archiveCountTrophy), Progress: proto.Uint32(uint32(groups)),
 	}}}, nil
+}
+
+// shipGroupBest is what a ship counts for in its archive entry, as
+// CollectionProxy.flushCollection raises the client's ShipGroup with it: its
+// template's star (Ship:getStar), level, intimacy and oath (marry_flag 1
+// when proposed). False for a ship outside the archives.
+func shipGroupBest(ship db.Ship) (db.RaiseShipGroupParams, bool) {
+	group := shipGroup(ship.TemplateID)
+	if !archiveGroups[group] {
+		return db.RaiseShipGroupParams{}, false
+	}
+	best := db.RaiseShipGroupParams{
+		CommanderID: ship.CommanderID,
+		GroupID:     group,
+		Star:        ownableShips[ship.TemplateID].Star,
+		IntimacyMax: ship.Intimacy,
+		LvMax:       ship.Level,
+	}
+	if ship.Propose != 0 {
+		best.MarryFlag = 1
+	}
+	return best, true
+}
+
+// raiseShipGroup raises the archive entry of the ship's group to the ship's
+// values (shipGroupBest), as the client does whenever BayProxy adds a ship
+// or updates one past them (BayProxy:updateShip): the entry keeps them once
+// the ship is retired, and the Fleet Technology points counted from it
+// (techPoints) with them. A handler that changes a ship's template (limit
+// break, retrofit), level, intimacy or oath calls it after saving the ship.
+// It tells whether a value was raised.
+func raiseShipGroup(ctx context.Context, queries *db.Queries, ship db.Ship) (bool, error) {
+	best, ok := shipGroupBest(ship)
+	if !ok {
+		return false, nil
+	}
+	raised, err := queries.RaiseShipGroup(ctx, best)
+	return raised > 0, err
+}
+
+// raiseShipGroups raises the commander's archive entries from every ship
+// owned, for the values no raiseShipGroup recorded yet: the stars of the
+// ships owned before the archive kept them (migration 0047) and the level
+// and affinity battles give.
+func raiseShipGroups(ctx context.Context, queries *db.Queries, commanderID uint32) error {
+	ships, err := queries.ListShipsByCommander(ctx, commanderID)
+	if err != nil {
+		return err
+	}
+	for _, ship := range ships {
+		if _, err := raiseShipGroup(ctx, queries, ship); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // setShipTrophies recomputes the faction medals from the commander's ships

@@ -359,9 +359,13 @@ func (game *Game) handleUseShipExpBooks(client *connection.Client, req *protobuf
 		if trainShip(&ship, exp) {
 			tx.techPointsChanged()
 		}
-		return tx.UpdateShipBattleState(tx.ctx, db.UpdateShipBattleStateParams{
+		if err := tx.UpdateShipBattleState(tx.ctx, db.UpdateShipBattleStateParams{
 			Level: ship.Level, Exp: ship.Exp, Intimacy: ship.Intimacy, Energy: ship.Energy, ID: ship.ID, CommanderID: tx.commanderID,
-		})
+		}); err != nil {
+			return err
+		}
+		_, err = raiseShipGroup(tx.ctx, tx.Queries, ship)
+		return err
 	})
 	if err != nil && !refused(err) {
 		return err

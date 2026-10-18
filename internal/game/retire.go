@@ -85,6 +85,10 @@ func (tx *Tx) retireShips(ids []uint32) error {
 				logger.WithFields("Retire", logger.FieldValue("ship", id), logger.FieldValue("skin", equip.SkinID)).Warn("gear skin not stored")
 			}
 		}
+		// the archive keeps its best values (and so its tech points) after it
+		if _, err := raiseShipGroup(ctx, queries, ship); err != nil {
+			return err
+		}
 		if err := queries.DeleteShip(ctx, db.DeleteShipParams{ID: id, CommanderID: tx.commanderID}); err != nil {
 			return err
 		}

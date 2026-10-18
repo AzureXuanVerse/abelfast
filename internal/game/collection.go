@@ -26,10 +26,12 @@ func loadCollectionData() error {
 	return gamedata.Load("storeup_data_template", &storeupConfigs)()
 }
 
-// archiveStar is a ship group's SHIP_STATISTICS_INFO star: its base
-// template's (ShipGroup.star, what Favorite.getStarCount adds up).
-func archiveStar(groupID uint32) uint32 {
-	return shipTemplates[groupID*10+1].Star
+// archiveStar is an archive entry's SHIP_STATISTICS_INFO star (ShipGroup.star,
+// what Favorite.getStarCount adds up and TechnologyNationProxy compares to
+// max_star): the best star a ship of the group reached, its base template's
+// at least.
+func archiveStar(group db.CommanderShipGroup) uint32 {
+	return max(group.Star, shipTemplates[group.GroupID*10+1].Star)
 }
 
 // collectionAwards is SC_17001 ship_award_list: the award indexes claimed
@@ -76,14 +78,14 @@ func (game *Game) handleCollectionAward(client *connection.Client, req *protobuf
 		if err != nil {
 			return err
 		}
-		owned := make(map[uint32]bool, len(groups))
+		owned := make(map[uint32]db.CommanderShipGroup, len(groups))
 		for _, group := range groups {
-			owned[group.GroupID] = true
+			owned[group.GroupID] = group
 		}
 		stars := uint32(0)
 		for _, groupID := range config.CharList {
-			if owned[groupID] {
-				stars += archiveStar(groupID)
+			if group, ok := owned[groupID]; ok {
+				stars += archiveStar(group)
 			}
 		}
 		if stars < config.Level[index-1] {

@@ -337,9 +337,13 @@ func trainShip(ship *db.Ship, exp uint32) bool {
 }
 
 func (tx *Tx) saveDormShip(ship db.Ship) error {
-	return tx.UpdateShipBattleState(tx.ctx, db.UpdateShipBattleStateParams{
+	if err := tx.UpdateShipBattleState(tx.ctx, db.UpdateShipBattleStateParams{
 		Level: ship.Level, Exp: ship.Exp, Intimacy: ship.Intimacy, Energy: ship.Energy, ID: ship.ID, CommanderID: tx.commanderID,
-	})
+	}); err != nil {
+		return err
+	}
+	_, err := raiseShipGroup(tx.ctx, tx.Queries, ship)
+	return err
 }
 
 // settleDorm settles the training since the last settlement: every

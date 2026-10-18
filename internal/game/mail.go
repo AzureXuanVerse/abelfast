@@ -605,12 +605,9 @@ func (tx *Tx) bagsHold(commander db.Commander, drops []*protobuf.DROPINFO) error
 		}
 	}
 	if ships > 0 {
-		owned, err := tx.ListShipsByCommander(tx.ctx, tx.commanderID)
-		if err != nil {
+		// META ships take no dock space (dockHasRoom)
+		if err := tx.dockHasRoom(ships); err != nil {
 			return err
-		}
-		if uint32(len(owned))+ships > commander.ShipBagMax {
-			return errRefused
 		}
 	}
 	if equipment > 0 {

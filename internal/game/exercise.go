@@ -234,6 +234,10 @@ func (game *Game) targetInfo(ctx context.Context, queries *db.Queries, standings
 	if err != nil {
 		return nil, 0, false, err
 	}
+	strengths, err := queries.ListShipStrengthsByCommander(ctx, commanderID)
+	if err != nil {
+		return nil, 0, false, err
+	}
 	full := func(ship db.Ship) *protobuf.SHIPINFO {
 		var shipEquips []db.ShipEquipment
 		for _, equip := range equips {
@@ -247,7 +251,9 @@ func (game *Game) targetInfo(ctx context.Context, queries *db.Queries, standings
 				shipSkills = append(shipSkills, db.ShipSkill(skill))
 			}
 		}
-		return fullShipInfo(ship, shipEquips, shipSkills)
+		info := fullShipInfo(ship, shipEquips, shipSkills)
+		info.StrengthList = strengthInfo(slices.DeleteFunc(slices.Clone(strengths), func(row db.ShipStrength) bool { return row.ShipID != ship.ID }))
+		return info
 	}
 	info := &protobuf.TARGETINFO{
 		Id:      proto.Uint32(commander.ID),
@@ -588,9 +594,16 @@ func (game *Game) finishDuel(client *connection.Client, req *protobuf.CS_40003) 
 				Exp:      proto.Uint32(gained),
 				Intimacy: proto.Uint32(maxIntimacy),
 			})
+			before := ship.Level
 			addShipExp(&ship, gained)
 			if err := saveShipBattleState(ctx, queries, ship); err != nil {
 				return err
+			}
+			if _, err := raiseShipGroup(ctx, queries, ship); err != nil {
+				return err
+			}
+			if before < techShipLevel && ship.Level >= techShipLevel {
+				tx.techPointsChanged()
 			}
 		}
 		reply.PlayerExp = proto.Uint32(0)

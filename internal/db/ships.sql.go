@@ -11,7 +11,7 @@ import (
 )
 
 const addShipGroup = `-- name: AddShipGroup :execrows
-INSERT INTO commander_ship_groups (commander_id, group_id, intimacy_max, lv_max) VALUES (?, ?, ?, ?)
+INSERT INTO commander_ship_groups (commander_id, group_id, intimacy_max, lv_max, marry_flag, star) VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT DO NOTHING
 `
 
@@ -20,6 +20,8 @@ type AddShipGroupParams struct {
 	GroupID     uint32
 	IntimacyMax uint32
 	LvMax       uint32
+	MarryFlag   uint32
+	Star        uint32
 }
 
 func (q *Queries) AddShipGroup(ctx context.Context, arg AddShipGroupParams) (int64, error) {
@@ -28,6 +30,8 @@ func (q *Queries) AddShipGroup(ctx context.Context, arg AddShipGroupParams) (int
 		arg.GroupID,
 		arg.IntimacyMax,
 		arg.LvMax,
+		arg.MarryFlag,
+		arg.Star,
 	)
 	if err != nil {
 		return 0, err
@@ -258,7 +262,7 @@ func (q *Queries) ListShipEquipmentsByCommander(ctx context.Context, commanderID
 }
 
 const listShipGroups = `-- name: ListShipGroups :many
-SELECT commander_id, group_id, intimacy_max, lv_max, marry_flag, heart_flag FROM commander_ship_groups WHERE commander_id = ? ORDER BY rowid
+SELECT commander_id, group_id, intimacy_max, lv_max, marry_flag, heart_flag, star FROM commander_ship_groups WHERE commander_id = ? ORDER BY rowid
 `
 
 func (q *Queries) ListShipGroups(ctx context.Context, commanderID uint32) ([]CommanderShipGroup, error) {
@@ -277,6 +281,7 @@ func (q *Queries) ListShipGroups(ctx context.Context, commanderID uint32) ([]Com
 			&i.LvMax,
 			&i.MarryFlag,
 			&i.HeartFlag,
+			&i.Star,
 		); err != nil {
 			return nil, err
 		}
@@ -463,6 +468,40 @@ func (q *Queries) ListTrophies(ctx context.Context, commanderID uint32) ([]Comma
 		return nil, err
 	}
 	return items, nil
+}
+
+const raiseShipGroup = `-- name: RaiseShipGroup :execrows
+UPDATE commander_ship_groups SET
+	star = CASE WHEN star < ?1 THEN ?1 ELSE star END,
+	intimacy_max = CASE WHEN intimacy_max < ?2 THEN ?2 ELSE intimacy_max END,
+	lv_max = CASE WHEN lv_max < ?3 THEN ?3 ELSE lv_max END,
+	marry_flag = CASE WHEN marry_flag < ?4 THEN ?4 ELSE marry_flag END
+WHERE commander_id = ?5 AND group_id = ?6
+AND (star < ?1 OR intimacy_max < ?2 OR lv_max < ?3 OR marry_flag < ?4)
+`
+
+type RaiseShipGroupParams struct {
+	Star        uint32
+	IntimacyMax uint32
+	LvMax       uint32
+	MarryFlag   uint32
+	CommanderID uint32
+	GroupID     uint32
+}
+
+func (q *Queries) RaiseShipGroup(ctx context.Context, arg RaiseShipGroupParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, raiseShipGroup,
+		arg.Star,
+		arg.IntimacyMax,
+		arg.LvMax,
+		arg.MarryFlag,
+		arg.CommanderID,
+		arg.GroupID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const setShipEquipment = `-- name: SetShipEquipment :exec

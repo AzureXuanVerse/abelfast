@@ -39,31 +39,19 @@ const techShipLevel = 120
 type techShipGroup struct{ star, level uint32 }
 
 // techShipGroups are the commander's ship groups by id. A group's star and
-// maxLV are its SC_17001 star / lv_max, raised by every ship of the group the
-// client sees (CollectionProxy.flushCollection), hence the owned ships here.
+// maxLV are its SC_17001 star / lv_max, the best ones a ship of the group
+// ever reached (raiseShipGroup): retiring the ship keeps them.
 func techShipGroups(ctx context.Context, queries *db.Queries, commanderID uint32) (map[uint32]techShipGroup, error) {
-	groups, err := queries.ListShipGroups(ctx, commanderID)
-	if err != nil {
+	if err := raiseShipGroups(ctx, queries, commanderID); err != nil {
 		return nil, err
 	}
-	ships, err := queries.ListShipsByCommander(ctx, commanderID)
+	groups, err := queries.ListShipGroups(ctx, commanderID)
 	if err != nil {
 		return nil, err
 	}
 	owned := make(map[uint32]techShipGroup, len(groups))
 	for _, group := range groups {
-		owned[group.GroupID] = techShipGroup{star: shipTemplates[group.GroupID*10+1].Star, level: group.LvMax}
-	}
-	for _, ship := range ships {
-		group, ok := owned[ship.TemplateID/10]
-		if !ok {
-			continue
-		}
-		if template, ok := shipTemplates[ship.TemplateID]; ok {
-			group.star = max(group.star, template.Star)
-		}
-		group.level = max(group.level, ship.Level)
-		owned[ship.TemplateID/10] = group
+		owned[group.GroupID] = techShipGroup{star: archiveStar(group), level: group.LvMax}
 	}
 	return owned, nil
 }

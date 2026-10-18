@@ -67,7 +67,11 @@ func (tx *Tx) giveShipGift(id, count, affection uint32, arg []uint32) error {
 		return nil
 	}
 	ship.Intimacy = min(ship.Intimacy+affection*count, limit)
-	return tx.UpdateShipBattleState(tx.ctx, db.UpdateShipBattleStateParams{
+	if err := tx.UpdateShipBattleState(tx.ctx, db.UpdateShipBattleStateParams{
 		Level: ship.Level, Exp: ship.Exp, Intimacy: ship.Intimacy, Energy: ship.Energy, ID: ship.ID, CommanderID: tx.commanderID,
-	})
+	}); err != nil {
+		return err
+	}
+	_, err = raiseShipGroup(tx.ctx, tx.Queries, ship)
+	return err
 }

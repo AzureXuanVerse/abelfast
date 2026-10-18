@@ -45,8 +45,17 @@ JOIN ships s ON s.id = k.ship_id
 WHERE s.commander_id = ? ORDER BY k.ship_id, k.rowid;
 
 -- name: AddShipGroup :execrows
-INSERT INTO commander_ship_groups (commander_id, group_id, intimacy_max, lv_max) VALUES (?, ?, ?, ?)
+INSERT INTO commander_ship_groups (commander_id, group_id, intimacy_max, lv_max, marry_flag, star) VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT DO NOTHING;
+
+-- name: RaiseShipGroup :execrows
+UPDATE commander_ship_groups SET
+	star = CASE WHEN star < sqlc.arg(star) THEN sqlc.arg(star) ELSE star END,
+	intimacy_max = CASE WHEN intimacy_max < sqlc.arg(intimacy_max) THEN sqlc.arg(intimacy_max) ELSE intimacy_max END,
+	lv_max = CASE WHEN lv_max < sqlc.arg(lv_max) THEN sqlc.arg(lv_max) ELSE lv_max END,
+	marry_flag = CASE WHEN marry_flag < sqlc.arg(marry_flag) THEN sqlc.arg(marry_flag) ELSE marry_flag END
+WHERE commander_id = sqlc.arg(commander_id) AND group_id = sqlc.arg(group_id)
+AND (star < sqlc.arg(star) OR intimacy_max < sqlc.arg(intimacy_max) OR lv_max < sqlc.arg(lv_max) OR marry_flag < sqlc.arg(marry_flag));
 
 -- name: ListShipGroups :many
 SELECT * FROM commander_ship_groups WHERE commander_id = ? ORDER BY rowid;

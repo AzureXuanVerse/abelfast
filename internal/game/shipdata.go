@@ -30,10 +30,16 @@ type shipTemplate struct {
 	// oil a battle costs (Ship:getStartBattleExpend, getEndBattleExpend)
 	OilAtStart uint32 `json:"oil_at_start"`
 	OilAtEnd   uint32 `json:"oil_at_end"`
+	// its ship_data_strengthen row: what it gives as an enhancement
+	// material and how far it can be enhanced
+	StrengthenID uint32 `json:"strengthen_id"`
 
 	Rarity      uint32 `json:"-"`
 	Nationality uint32 `json:"-"`
 	Type        uint32 `json:"-"`
+	// ship_data_statistics lock: the attributes it can't be enhanced in
+	// (AttributeType names, Ship:getModExpRatio)
+	locked []string
 	// blueprint (Ship:isBluePrintShip, its ship_data_group handbook_type is
 	// 2) or META (Ship:isMetaShip, a ship_meta_breakout id) ship, which
 	// ShipStatus.canDestroyShip never lets retire
@@ -54,6 +60,7 @@ type shipStatisticsConfig struct {
 	Rarity           uint32    `json:"rarity"`
 	Nationality      uint32    `json:"nationality"`
 	SkinID           uint32    `json:"skin_id"`
+	Lock             []string  `json:"lock"`
 	Attrs            []float64 `json:"attrs"`
 	AttrsGrowth      []float64 `json:"attrs_growth"`
 	AttrsGrowthExtra []float64 `json:"attrs_growth_extra"`
@@ -464,6 +471,7 @@ func loadShipData() error {
 		}
 		shipLevelings[id] = shipLeveling{ur: stat.Rarity == shipRarityUR, accumulate: row.CanGetProficency == 1}
 		row.Rarity, row.Nationality, row.Type = stat.Rarity, stat.Nationality, stat.Type
+		row.locked = stat.Lock
 		_, meta := metas[id]
 		row.unretirable = meta || blueprints[id/10]
 		row.defaultSkin = stat.SkinID

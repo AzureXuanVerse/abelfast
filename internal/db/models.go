@@ -294,6 +294,7 @@ type CommanderShipGroup struct {
 	LvMax       uint32
 	MarryFlag   uint32
 	HeartFlag   uint32
+	Star        uint32
 }
 
 type CommanderShopGroupPurchase struct {
@@ -630,4 +631,10 @@ type ShipSkill struct {
 	SkillID uint32
 	Level   uint32
 	Exp     uint32
+}
+
+type ShipStrength struct {
+	ShipID uint32
+	AttrID uint32
+	Exp    uint32
 }
