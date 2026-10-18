@@ -55,7 +55,9 @@ const (
 // handleBeginStage starts a battle (BeginStageCommand.SendRequest, CS_40001).
 // key is the token the client mixes into its CS_40003 check value; ships
 // lose battle_consume_energy morale (the client does the same on result 0).
-// On a campaign map the fleet must stand on the enemy being fought.
+// On a campaign map the fleet must stand on the enemy being fought; a daily
+// challenge must be playable and costs the fleet's start oil
+// (battleStartOil, refused without enough).
 func (game *Game) handleBeginStage(client *connection.Client, req *protobuf.CS_40001) error {
 	ctx := context.Background()
 	if req.GetSystem() == systemDuel {
@@ -83,19 +85,29 @@ func (game *Game) handleBeginStage(client *connection.Client, req *protobuf.CS_4
 	if err != nil {
 		return err
 	}
-	err = game.DB.InTx(ctx, func(queries *db.Queries) error {
+	err = game.tx(ctx, client, func(tx *Tx) error {
+		// a daily challenge costs its start oil now (BattleGateRoutine /
+		// BattleGateSubRoutine.Entrance), its end oil on a win (finishDaily)
+		if req.GetSystem() == systemRoutine || req.GetSystem() == systemSubRoutine {
+			if err := tx.SpendResource(ResourceOil, battleStartOil(byID)); err != nil {
+				return err
+			}
+		}
 		for _, id := range req.GetShipIdList() {
 			ship, ok := byID[id]
 			if !ok {
 				continue
 			}
 			ship.Energy -= min(ship.Energy, battleConsumeEnergy)
-			if err := saveShipBattleState(ctx, queries, ship); err != nil {
+			if err := saveShipBattleState(ctx, tx.Queries, ship); err != nil {
 				return err
 			}
 		}
 		return nil
 	})
+	if refused(err) {
+		return client.Send(&protobuf.SC_40002{Result: result(err)})
+	}
 	if err != nil {
 		return err
 	}
@@ -183,52 +195,25 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 			events = append(events, TaskEvent{SubType: TaskSubDefeatEnemy, Count: kills})
 		}
 	}
-	mvp := uint32(0)
-	best := uint32(0)
-	for _, stat := range req.GetStatistics() {
-		if _, ok := byID[stat.GetShipId()]; ok && (mvp == 0 || stat.GetDamageCause() > best) {
-			mvp, best = stat.GetShipId(), stat.GetDamageCause()
-		}
-	}
+	mvp := battleMVP(req.GetStatistics(), byID)
 	reply.Mvp = proto.Uint32(mvp)
 	flagship := uint32(0)
 	if len(group.ShipList) > 0 {
 		flagship = group.ShipList[0].GetId()
 	}
-
-	var updated []db.Ship
-	var proficiency []uint32 // exps the lecture hall takes a share of
-	techLevel := false       // a ship reached level 120: pt_level
 	for _, stat := range req.GetStatistics() {
-		ship, ok := byID[stat.GetShipId()]
-		if !ok {
-			continue
-		}
 		for _, inChapter := range group.ShipList {
-			if inChapter.GetId() == ship.ID {
+			if _, ok := byID[stat.GetShipId()]; ok && inChapter.GetId() == stat.GetShipId() {
 				inChapter.HpRant = proto.Uint32(min(stat.GetHpRest(), fullHP))
 			}
 		}
-		gained := shipBattleExp(expedition, score, ship, ship.ID == flagship, ship.ID == mvp)
-		events = append(events, TaskEvent{SubType: TaskSubSortieExp, Count: gained})
-		affinity := uint32(0)
-		if win {
-			affinity = battleAffinity(ship.ID == flagship, ship.ID == mvp)
-		}
-		reply.ShipExpList = append(reply.ShipExpList, &protobuf.SHIP_EXP{
-			ShipId:   proto.Uint32(ship.ID),
-			Exp:      proto.Uint32(gained),
-			Intimacy: proto.Uint32(maxIntimacy + affinity),
-		})
-		before := ship.Level
-		addShipExp(&ship, gained)
-		techLevel = techLevel || (before < techShipLevel && ship.Level >= techShipLevel)
-		if feedsClass(ship) {
-			proficiency = append(proficiency, gained)
-		}
-		ship.Intimacy = min(ship.Intimacy+affinity, maxIntimacy)
-		updated = append(updated, ship)
 	}
+	ships := settleBattleShips(req.GetStatistics(), byID, func(ship db.Ship) uint32 {
+		return shipBattleExp(expedition, scenarioExpRate, score, ship, ship.ID == flagship, ship.ID == mvp)
+	}, win, flagship, mvp)
+	events = append(events, ships.events...)
+	reply.ShipExpList = ships.exps
+	updated, proficiency, techLevel := ships.updated, ships.proficiency, ships.techLevel
 	group.Bullet = proto.Uint32(group.GetBullet() - min(group.GetBullet(), 1))
 	reply.PlayerExp = proto.Uint32(playerBattleExp(expedition, score, uint32(len(updated)), commander.Level))
 
@@ -312,6 +297,61 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 func feedsClass(ship db.Ship) bool {
 	return shipLevelings[ship.TemplateID].accumulate &&
 		(ship.Level > levelGetProficency || ship.Level == ship.MaxLevel && ship.Exp > 0)
+}
+
+// battleMVP is the ship of the statistics that dealt the most damage (the
+// first one on a tie), among byID's.
+func battleMVP(stats []*protobuf.STATISTICSINFO, byID map[uint32]db.Ship) uint32 {
+	mvp, best := uint32(0), uint32(0)
+	for _, stat := range stats {
+		if _, ok := byID[stat.GetShipId()]; ok && (mvp == 0 || stat.GetDamageCause() > best) {
+			mvp, best = stat.GetShipId(), stat.GetDamageCause()
+		}
+	}
+	return mvp
+}
+
+// battleShips is what a battle's ships get (settleBattleShips).
+type battleShips struct {
+	exps        []*protobuf.SHIP_EXP // SC_40004 ship_exp_list
+	updated     []db.Ship            // to save (saveShipBattleState)
+	proficiency []uint32             // exps the lecture hall takes a share of
+	techLevel   bool                 // a ship reached level 120: pt_level
+	events      []TaskEvent          // the exp earned (TaskSubSortieExp)
+}
+
+// settleBattleShips gives the ships of a battle's statistics (the ones of
+// byID) their exp (FinishStageCommand.addShipsExp: exp of each, added by
+// the client with accumulate) and, on a win, affinity (intimacy 10000 +
+// affinity gained).
+func settleBattleShips(stats []*protobuf.STATISTICSINFO, byID map[uint32]db.Ship, exp func(db.Ship) uint32, win bool, flagship, mvp uint32) battleShips {
+	var result battleShips
+	for _, stat := range stats {
+		ship, ok := byID[stat.GetShipId()]
+		if !ok {
+			continue
+		}
+		gained := exp(ship)
+		result.events = append(result.events, TaskEvent{SubType: TaskSubSortieExp, Count: gained})
+		affinity := uint32(0)
+		if win {
+			affinity = battleAffinity(ship.ID == flagship, ship.ID == mvp)
+		}
+		result.exps = append(result.exps, &protobuf.SHIP_EXP{
+			ShipId:   proto.Uint32(ship.ID),
+			Exp:      proto.Uint32(gained),
+			Intimacy: proto.Uint32(maxIntimacy + affinity),
+		})
+		before := ship.Level
+		addShipExp(&ship, gained)
+		result.techLevel = result.techLevel || (before < techShipLevel && ship.Level >= techShipLevel)
+		if feedsClass(ship) {
+			result.proficiency = append(result.proficiency, gained)
+		}
+		ship.Intimacy = min(ship.Intimacy+affinity, maxIntimacy)
+		result.updated = append(result.updated, ship)
+	}
+	return result
 }
 
 // battleAffinity is the affinity (intimacy, 1/100) a win gives. It is random

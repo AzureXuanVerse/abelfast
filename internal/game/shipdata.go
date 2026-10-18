@@ -27,6 +27,9 @@ type shipTemplate struct {
 	Skills    []uint32 `json:"buff_list"`
 	// 1 when the ship keeps exp past its max level (Ship:CanAccumulateExp)
 	CanGetProficency uint32 `json:"can_get_proficency"`
+	// oil a battle costs (Ship:getStartBattleExpend, getEndBattleExpend)
+	OilAtStart uint32 `json:"oil_at_start"`
+	OilAtEnd   uint32 `json:"oil_at_end"`
 
 	Rarity      uint32 `json:"-"`
 	Nationality uint32 `json:"-"`

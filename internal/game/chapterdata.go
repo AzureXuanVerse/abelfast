@@ -187,11 +187,15 @@ var energyStates map[uint32]energyConfig
 // from level n to n+1.
 var shipLevelExp []uint32
 
+// shipFightOilRatio is ship_level fight_oil_ratio by level, as shipLevelExp.
+var shipFightOilRatio []uint32
+
 // ship_level row
 type shipLevelConfig struct {
-	Level uint32 `json:"level"`
-	Exp   uint32 `json:"exp"`
-	ExpUR uint32 `json:"exp_ur"`
+	Level         uint32 `json:"level"`
+	Exp           uint32 `json:"exp"`
+	ExpUR         uint32 `json:"exp_ur"`
+	FightOilRatio uint32 `json:"fight_oil_ratio"` // oil_at_end x this / 10000
 }
 
 // loadChapterData builds every chapter of chapter_template, the expeditions
@@ -318,10 +322,12 @@ func loadChapterData() error {
 	}
 	shipLevelExp = make([]uint32, maxLevel)
 	shipLevelExpUR = make([]uint32, maxLevel)
+	shipFightOilRatio = make([]uint32, maxLevel)
 	for _, row := range levels {
 		if row.Level > 0 {
 			shipLevelExp[row.Level-1] = row.Exp
 			shipLevelExpUR[row.Level-1] = row.ExpUR
+			shipFightOilRatio[row.Level-1] = row.FightOilRatio
 		}
 	}
 	return nil

@@ -21,6 +21,7 @@ import (
 // Requests record them on their Tx when they happen.
 const (
 	TaskSubDefeatEnemy   = 11   // enemy ships sunk in a battle
+	TaskSubDailyStage    = 26   // daily challenge battles won, target: stage id
 	TaskSubExercise      = 27   // exercises fought, target: exerciseTaskWin for a win
 	TaskSubWin           = 20   // battles won
 	TaskSubDefeatBoss    = 21   // boss fleets defeated

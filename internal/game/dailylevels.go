@@ -3,6 +3,7 @@ package game
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math/rand/v2"
 	"slices"
 	"strconv"
@@ -53,9 +54,14 @@ type dailyLevel struct {
 
 // dailyStage is a stage of a daily challenge.
 type dailyStage struct {
+	id     uint32
 	level  *dailyLevel
 	minLvl uint32 // the commander level it needs
 	awards []dailyAward
+	// server/daily_awards.json: the units its chance entries give when they
+	// are tiers (1 without), and the counts of its items by battle score
+	tierCount  uint32
+	rankCounts map[uint32]map[uint32]uint32
 }
 
 // dailyAward is an award_display entry of a daily stage: count from min to
@@ -87,7 +93,8 @@ type expeditionAwardsConfig struct {
 // own). Containers and "Mystery" placeholders are drawn like a pack's
 // content (resolveContent). Entries whose amount is only a word ("Few",
 // "Numerous": the coins of every stage) have no amount in the client data
-// and are left out.
+// and are left out. server/daily_awards.json (loadDailyAwards) adds what
+// only the wiki gives: how many tier picks a clear makes, counts by rank.
 func loadDailyLevels() error {
 	var levels map[uint32]dailyLevelConfig
 	var expeditions map[uint32]expeditionAwardsConfig
@@ -112,7 +119,7 @@ func loadDailyLevels() error {
 		}
 		dailyLevels[id] = level
 		for _, entry := range row.Stages {
-			stage := &dailyStage{level: level, minLvl: entry[1]}
+			stage := &dailyStage{id: entry[0], level: level, minLvl: entry[1], tierCount: 1}
 			for _, award := range expeditions[entry[0]].AwardDisplay {
 				parsed, ok := parseDailyAward(award)
 				if !ok {
@@ -127,7 +134,75 @@ func loadDailyLevels() error {
 	if vague > 0 {
 		logger.WithFields("DailyLevel", logger.FieldValue("entries", vague)).Warn("daily stage awards without an amount (coins...) are not given")
 	}
+	return loadDailyAwards()
+}
+
+// loadDailyAwards reads server/daily_awards.json ({"stages": {"<stage>":
+// {"tier_count": n, "rank_counts": {"<item>": {"S": n, ...}}}}}), wiki
+// numbers the client data doesn't have. A tier count only applies to a
+// stage whose chance entries add up to 100, a rank count only to an item of
+// the stage's award_display and within its range (the client data wins);
+// others are logged and left out. Without the file a clear gives one unit
+// of its tiers and the award_display range whatever the rank.
+func loadDailyAwards() error {
+	raw, err := gamedata.ServerFile("daily_awards.json")
+	if err != nil {
+		return err
+	}
+	if raw == nil {
+		logger.WithFields("DailyLevel").Warn("no server/daily_awards.json: daily stages give one unit of their tiers")
+		return nil
+	}
+	var file struct {
+		Stages map[uint32]struct {
+			TierCount  uint32                       `json:"tier_count"`
+			RankCounts map[uint32]map[string]uint32 `json:"rank_counts"`
+		} `json:"stages"`
+	}
+	if err := json.Unmarshal(raw, &file); err != nil {
+		return fmt.Errorf("daily_awards.json: %w", err)
+	}
+	for id, row := range file.Stages {
+		stage := dailyStages[id]
+		if stage == nil {
+			logger.WithFields("DailyLevel", logger.FieldValue("stage", id)).Warn("daily_awards.json: not a daily stage")
+			continue
+		}
+		if row.TierCount > 0 {
+			if stage.tierChances() == 100 {
+				stage.tierCount = row.TierCount
+			} else {
+				logger.WithFields("DailyLevel", logger.FieldValue("stage", id)).Warn("daily_awards.json: tier_count for a stage without tiers adding up to 100%")
+			}
+		}
+		for item, ranks := range row.RankCounts {
+			i := slices.IndexFunc(stage.awards, func(award dailyAward) bool { return award.id == item && award.chance == 0 })
+			for letter, count := range ranks {
+				score, ok := scoreLetters[letter]
+				if i < 0 || !ok || score <= scoreC || count < stage.awards[i].min || count > stage.awards[i].max {
+					logger.WithFields("DailyLevel", logger.FieldValue("stage", id), logger.FieldValue("item", item), logger.FieldValue("rank", letter)).Warn("daily_awards.json: rank count outside the stage's award_display")
+					continue
+				}
+				if stage.rankCounts == nil {
+					stage.rankCounts = map[uint32]map[uint32]uint32{}
+				}
+				if stage.rankCounts[item] == nil {
+					stage.rankCounts[item] = map[uint32]uint32{}
+				}
+				stage.rankCounts[item][score] = count
+			}
+		}
+	}
 	return nil
+}
+
+// tierChances is what the stage's chance entries add up to.
+func (stage *dailyStage) tierChances() uint32 {
+	total := uint32(0)
+	for _, award := range stage.awards {
+		total += award.chance
+	}
+	return total
 }
 
 // parseDailyAward reads an award_display [type, id, count] entry; false when
@@ -164,8 +239,10 @@ func parseDailyAward(entry []json.RawMessage) (dailyAward, bool) {
 	return award, true
 }
 
-// roll draws one clear's drops, keeping what grantDrops can store.
-func (stage *dailyStage) roll() []*protobuf.DROPINFO {
+// roll draws the drops of one clear with score (an S for a quick battle),
+// keeping what grantDrops can store: tiers adding up to 100% are picked
+// tierCount times, an item with a count for the rank gets it.
+func (stage *dailyStage) roll(score uint32) []*protobuf.DROPINFO {
 	var drops []*protobuf.DROPINFO
 	var chances []dailyAward
 	total := uint32(0)
@@ -175,13 +252,19 @@ func (stage *dailyStage) roll() []*protobuf.DROPINFO {
 			total += award.chance
 			continue
 		}
-		if count := award.min + rand.Uint32N(award.max-award.min+1); count > 0 {
+		count := award.min + rand.Uint32N(award.max-award.min+1)
+		if ranked, ok := stage.rankCounts[award.id][score]; ok {
+			count = ranked
+		}
+		if count > 0 {
 			drops = resolveContent(drops, award.kind, award.id, count)
 		}
 	}
 	if total == 100 {
-		if i := weightedPick(rand.Uint32N, chances, func(award dailyAward) uint32 { return award.chance }); i >= 0 {
-			drops = resolveContent(drops, chances[i].kind, chances[i].id, 1)
+		for range stage.tierCount {
+			if i := weightedPick(rand.Uint32N, chances, func(award dailyAward) uint32 { return award.chance }); i >= 0 {
+				drops = resolveContent(drops, chances[i].kind, chances[i].id, 1)
+			}
 		}
 	} else {
 		for _, award := range chances {
@@ -294,22 +377,108 @@ func checkDailyBegin(ctx context.Context, queries *db.Queries, commanderID, stag
 	return nil
 }
 
+// const.lua ShipType.SubShipType (QianTing, QianMu, FengFanS): ships that
+// cost no oil to sortie (Ship:getStartBattleExpend)
+var subShipTypes = []uint32{8, 17, 22}
+
+// battleStartOil is Fleet:getStartCost, the oil the client spends when a
+// battle starts: each ship's oil_at_start, none for a submarine.
+func battleStartOil(ships map[uint32]db.Ship) uint32 {
+	oil := uint32(0)
+	for _, ship := range ships {
+		template := ownableShips[ship.TemplateID]
+		if !slices.Contains(subShipTypes, template.Type) {
+			oil += template.OilAtStart
+		}
+	}
+	return oil
+}
+
+// battleEndOil is Fleet:getEndCost, the oil the client spends on a won
+// battle (GeneralPlayerCosume): each ship's oil_at_end x its level's
+// ship_level fight_oil_ratio / 10000, floored (Ship:getEndBattleExpend; a
+// level past the table takes its last row, getConfigFromLevel1).
+func battleEndOil(ships map[uint32]db.Ship) uint32 {
+	oil := uint32(0)
+	for _, ship := range ships {
+		if len(shipFightOilRatio) == 0 || ship.Level == 0 {
+			continue
+		}
+		ratio := shipFightOilRatio[min(int(ship.Level), len(shipFightOilRatio))-1]
+		oil += ownableShips[ship.TemplateID].OilAtEnd * ratio / 10000
+	}
+	return oil
+}
+
 // finishDaily settles a daily challenge battle (BattleGateRoutine.Exit,
-// BattleGateSubRoutine.Exit): as the client does on the reply, a win (score
-// above C) spends an attempt and an S rank makes the stage quick battle
-// ready (DailyLevelProxy:AddQuickStage); a win drops the stage's awards
-// (dailyStage.roll). Ship and commander exp aren't given yet.
+// BattleGateSubRoutine.Exit; battle_cost_template rows 2 and 11 award ship
+// exp and cost oil). As the client does on the reply, a win (score above C)
+// spends an attempt and the fleet's end-of-battle oil (battleEndOil, the
+// start oil went at CS_40001), and an S rank makes the stage quick battle
+// ready (DailyLevelProxy:AddQuickStage). A win drops the stage's awards
+// (dailyStage.roll), counts for the daily challenge and enemy sunk tasks,
+// and gives the ships expedition exp x rank x morale (x MVP / flagship) and
+// affinity, as a campaign battle without its x2 (scenarioExpRate): the
+// wiki's S-rank EXP of every daily stage it lists is the stage's exp x 1.2.
+// A loss gives nothing (the wiki: no exp). Commander exp is not given (no
+// table, capture or wiki number for a daily battle), nor meowfficer exp
+// (the client's Exit never reads commander_exp).
 func (game *Game) finishDaily(client *connection.Client, req *protobuf.CS_40003) error {
 	ctx, now := context.Background(), time.Now()
 	stage := dailyStages[req.GetData()]
-	if stage == nil {
+	expedition, known := expeditionTemplates[req.GetData()]
+	if stage == nil || !known {
 		return client.Send(&protobuf.SC_40004{Result: result(errRefused)})
 	}
 	score := min(req.GetScore(), scoreS)
 	reply := &protobuf.SC_40004{Result: result(nil)}
-	err := game.tx(ctx, client, func(tx *Tx) error {
-		if score <= scoreC {
-			return nil
+	if score <= scoreC {
+		return client.Send(reply)
+	}
+	stats := req.GetStatistics()
+	statShips := make([]uint32, len(stats))
+	for i, stat := range stats {
+		statShips[i] = stat.GetShipId()
+	}
+	byID, err := shipsByID(ctx, game.DB.Queries, client.CommanderID, statShips)
+	if err != nil {
+		return err
+	}
+	endOil := battleEndOil(byID)
+	mvp := battleMVP(stats, byID)
+	reply.Mvp = proto.Uint32(mvp)
+	// the statistics follow BayProxy:getSortShipsByFleet, the main fleet's
+	// flagship first; a submarine fleet has none
+	flagship := uint32(0)
+	if req.GetSystem() == systemRoutine && len(stats) > 0 {
+		flagship = stats[0].GetShipId()
+	}
+	ships := settleBattleShips(stats, byID, func(ship db.Ship) uint32 {
+		return shipBattleExp(expedition, 1, score, ship, ship.ID == flagship, ship.ID == mvp)
+	}, true, flagship, mvp)
+	reply.ShipExpList = ships.exps
+	err = game.tx(ctx, client, func(tx *Tx) error {
+		tx.event(ships.events...)
+		tx.event(TaskEvent{SubType: TaskSubDailyStage, Target: stage.id, Count: 1})
+		if kills := uint32(len(req.GetKillIdList())); kills > 0 {
+			tx.event(TaskEvent{SubType: TaskSubDefeatEnemy, Count: kills})
+		}
+		if ships.techLevel {
+			tx.techPointsChanged()
+		}
+		for _, ship := range ships.updated {
+			if err := saveShipBattleState(ctx, tx.Queries, ship); err != nil {
+				return err
+			}
+		}
+		if err := tx.addClassProficiency(ships.proficiency, now); err != nil {
+			return err
+		}
+		// the client checked the start and end oil before the battle
+		if err := tx.SpendResource(ResourceOil, endOil); err == ErrNotEnough {
+			logger.WithFields("DailyLevel", logger.FieldValue("oil", endOil)).Warn("not enough oil left for the end of a daily battle")
+		} else if err != nil {
+			return err
 		}
 		// the battle started with an attempt left: count the win even if
 		// the period turned meanwhile
@@ -321,12 +490,12 @@ func (game *Game) finishDaily(client *connection.Client, req *protobuf.CS_40003)
 			return err
 		}
 		if score == scoreS {
-			err := tx.AddDailyQuickStage(ctx, db.AddDailyQuickStageParams{CommanderID: client.CommanderID, StageID: req.GetData()})
+			err := tx.AddDailyQuickStage(ctx, db.AddDailyQuickStageParams{CommanderID: client.CommanderID, StageID: stage.id})
 			if err != nil {
 				return err
 			}
 		}
-		reply.DropInfo = stage.roll()
+		reply.DropInfo = stage.roll(score)
 		return tx.grantDrops(reply.DropInfo)
 	})
 	if err != nil {
@@ -384,7 +553,7 @@ func (game *Game) handleDailyQuickBattle(client *connection.Client, req *protobu
 			return err
 		}
 		for range req.GetCnt() {
-			drops := stage.roll()
+			drops := stage.roll(scoreS)
 			reply.RewardList = append(reply.RewardList, &protobuf.QUICK_REWARD{DropList: drops})
 			if err := tx.grantDrops(drops); err != nil {
 				return err

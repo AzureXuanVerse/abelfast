@@ -154,16 +154,17 @@ func energyState(energy uint32) uint32 {
 	return 0
 }
 
-// shipBattleExp is the exp a ship gets for a campaign battle: expedition exp
-// x rank x scenarioExpRate x morale, x mvp_exp_percent for the MVP and
-// x flagship_exp_percent for the flagship, floored (the capture's 230 =
-// 80 x 1.2 x 2 x 1.2). A score without a rate gives none.
-func shipBattleExp(expedition expeditionTemplate, score uint32, ship db.Ship, flagship, mvp bool) uint32 {
+// shipBattleExp is the exp a ship gets for a battle: expedition exp x rank
+// x the system's rate x morale, x mvp_exp_percent for the MVP and
+// x flagship_exp_percent for the flagship, floored (a campaign battle,
+// scenarioExpRate: the capture's 230 = 80 x 1.2 x 2 x 1.2). A score without
+// a rate gives none.
+func shipBattleExp(expedition expeditionTemplate, systemRate float64, score uint32, ship db.Ship, flagship, mvp bool) uint32 {
 	rate, known := battleExp.ship[score]
 	if !known {
 		return 0
 	}
-	exp := float64(expedition.Exp) * rate * scenarioExpRate
+	exp := float64(expedition.Exp) * rate * systemRate
 	if energyRate, ok := battleExp.energy[energyState(ship.Energy)]; ok {
 		exp *= energyRate
 	}
