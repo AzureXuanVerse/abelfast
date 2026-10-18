@@ -188,6 +188,8 @@ func (game *Game) Register() {
 	packets.Handle(game.handlePutMeowfficerInCattery)
 	packets.Handle(game.handleCatteryOp)
 	packets.Handle(game.handleChangeCatteryStyle)
+	packets.Handle(game.handleSetMeowfficerPreset)
+	packets.Handle(game.handleRenameMeowfficerPreset)
 	// mail
 	packets.Handle(game.handleMailList)
 	packets.Handle(game.handleArchiveList)
