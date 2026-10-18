@@ -64,7 +64,9 @@ func (tx *Tx) retireShips(ids []uint32) error {
 	var drops []*protobuf.DROPINFO
 	for _, id := range ids {
 		ship := ships[id]
-		template, ok := shipTemplates[ship.TemplateID]
+		// its current template's type and rarity (Ship:calReturnRes reads
+		// the ship's own config), limit broken and retrofitted ones too
+		template, ok := ownableShips[ship.TemplateID]
 		if !ok || ship.IsLocked || template.unretirable || busy[id] {
 			return errRefused
 		}

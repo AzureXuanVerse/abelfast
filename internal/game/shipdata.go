@@ -517,17 +517,30 @@ func loadShipData() error {
 			}
 			pool.candidates[ship.Rarity] = append(pool.candidates[ship.Rarity], group*10+1)
 		}
+		// the first rate of each rarity: rate_tip lists the rarities first,
+		// then the rate-up ships
+		tipRates := map[uint32]float64{}
 		for _, tip := range pool.RateTip {
 			match := rateTipPattern.FindStringSubmatch(rateTipTags.ReplaceAllString(tip, ""))
 			if match == nil {
 				continue
 			}
 			rate, err := strconv.ParseFloat(match[2], 64)
-			if err != nil {
+			rarity, named := rarityByRateName[match[1]]
+			if _, seen := tipRates[rarity]; err != nil || !named || seen {
 				continue
 			}
-			rarity := rarityByRateName[match[1]]
-			if len(pool.candidates[rarity]) > 0 && !slices.ContainsFunc(pool.rates, func(r rarityRate) bool { return r.rarity == rarity }) {
+			tipRates[rarity] = rate
+		}
+		// the Ultra Rare rate of a pool without one goes to Common (the
+		// wiki's Building page, as the pools without URs show in their
+		// rate_tip: Common 30% where those with URs have 28.8%)
+		if len(pool.candidates[shipRarityUR]) == 0 {
+			tipRates[shipRarityGray] += tipRates[shipRarityUR]
+			delete(tipRates, shipRarityUR)
+		}
+		for rarity, rate := range tipRates {
+			if len(pool.candidates[rarity]) > 0 && rate > 0 {
 				pool.rates = append(pool.rates, rarityRate{rarity, rate})
 				pool.total += rate
 			}

@@ -9,21 +9,6 @@ import (
 	"context"
 )
 
-const addBuildPoints = `-- name: AddBuildPoints :exec
-INSERT INTO commander_build_states (commander_id, exchange_count) VALUES (?, ?)
-ON CONFLICT (commander_id) DO UPDATE SET exchange_count = exchange_count + excluded.exchange_count
-`
-
-type AddBuildPointsParams struct {
-	CommanderID   uint32
-	ExchangeCount uint32
-}
-
-func (q *Queries) AddBuildPoints(ctx context.Context, arg AddBuildPointsParams) error {
-	_, err := q.db.ExecContext(ctx, addBuildPoints, arg.CommanderID, arg.ExchangeCount)
-	return err
-}
-
 const createBuild = `-- name: CreateBuild :one
 INSERT INTO builds (commander_id, pool_id, template_id, duration, finish_time)
 VALUES (?, ?, ?, ?, ?)
@@ -123,5 +108,20 @@ type SetBuildFinishTimeParams struct {
 
 func (q *Queries) SetBuildFinishTime(ctx context.Context, arg SetBuildFinishTimeParams) error {
 	_, err := q.db.ExecContext(ctx, setBuildFinishTime, arg.FinishTime, arg.ID)
+	return err
+}
+
+const setBuildPoints = `-- name: SetBuildPoints :exec
+INSERT INTO commander_build_states (commander_id, exchange_count) VALUES (?, ?)
+ON CONFLICT (commander_id) DO UPDATE SET exchange_count = excluded.exchange_count
+`
+
+type SetBuildPointsParams struct {
+	CommanderID   uint32
+	ExchangeCount uint32
+}
+
+func (q *Queries) SetBuildPoints(ctx context.Context, arg SetBuildPointsParams) error {
+	_, err := q.db.ExecContext(ctx, setBuildPoints, arg.CommanderID, arg.ExchangeCount)
 	return err
 }

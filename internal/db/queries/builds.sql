@@ -15,6 +15,6 @@ DELETE FROM builds WHERE id = ?;
 -- name: GetBuildPoints :one
 SELECT exchange_count FROM commander_build_states WHERE commander_id = ?;
 
--- name: AddBuildPoints :exec
+-- name: SetBuildPoints :exec
 INSERT INTO commander_build_states (commander_id, exchange_count) VALUES (?, ?)
-ON CONFLICT (commander_id) DO UPDATE SET exchange_count = exchange_count + excluded.exchange_count;
+ON CONFLICT (commander_id) DO UPDATE SET exchange_count = excluded.exchange_count;

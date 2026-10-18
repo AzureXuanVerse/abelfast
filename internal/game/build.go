@@ -63,6 +63,44 @@ func loadBuildTimes() error {
 	return nil
 }
 
+// regularBuildExchangeID is REGULAR_BUILD_POOL_EXCHANGE_ID (const.lua): the
+// ship_data_create_exchange row of the UR exchange of the permanent pools.
+const regularBuildExchangeID = 1
+
+// regularBuildExchange is that row: the build points an exchange costs,
+// which is also as many as the client keeps
+// (BuildShipProxy:changeRegularExchangeCount clamps to it), and the ships
+// it offers.
+var regularBuildExchange buildExchange
+
+type buildExchange struct {
+	Request uint32   `json:"exchange_request"`
+	Ships   []uint32 `json:"exchange_ship_id"`
+}
+
+func loadBuildExchange() error {
+	rows, err := gamedata.Table[buildExchange]("ship_data_create_exchange")
+	if err != nil {
+		return err
+	}
+	row, ok := rows[regularBuildExchangeID]
+	if !ok || row.Request == 0 {
+		return gamedata.Missing("ship_data_create_exchange", "row %d", regularBuildExchangeID)
+	}
+	regularBuildExchange = row
+	return nil
+}
+
+// buildPoints are the commander's build points, at most the exchange's
+// request (a database from before the cap may hold more).
+func buildPoints(ctx context.Context, queries *db.Queries, commanderID uint32) (uint32, error) {
+	points, err := queries.GetBuildPoints(ctx, commanderID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+	return min(points, regularBuildExchange.Request), nil
+}
+
 // buildDocksState is SC_12024 from storage: the builds in dock order (their
 // index is the pos the client sends back) and the build points. draw_count_*
 // count gem draws (draw_data_template), never done here.
@@ -71,8 +109,8 @@ func buildDocksState(ctx context.Context, queries *db.Queries, commanderID uint3
 	if err != nil {
 		return nil, err
 	}
-	points, err := queries.GetBuildPoints(ctx, commanderID)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	points, err := buildPoints(ctx, queries, commanderID)
+	if err != nil {
 		return nil, err
 	}
 	msg := &protobuf.SC_12024{WorklistCount: proto.Uint32(buildWorkCount), ExchangeCount: proto.Uint32(points)}
@@ -135,8 +173,10 @@ func buildStart(placed []db.Build, now int64) int64 {
 // handleBuildShip starts constructions (BuildShipCommand, CS_12002): count
 // builds in pool id (ship_data_create_material), paid with use_gold gold and
 // number_1 use_item each; costtype 1 pays with an event build ticket, there
-// is none. Each build adds exchange_count build points. The client takes the
-// costs off its own state on result 0.
+// is none. Each build adds exchange_count build points (1 per Wisdom Cube in
+// the permanent pools, none in those with a limited UR), up to the UR
+// exchange's request as the client clamps them. The client takes the costs
+// off its own state on result 0.
 func (game *Game) handleBuildShip(client *connection.Client, req *protobuf.CS_12002) error {
 	ctx := context.Background()
 	now := time.Now().Unix()
@@ -180,7 +220,7 @@ func (game *Game) handleBuildShip(client *connection.Client, req *protobuf.CS_12
 			}
 			// capture: the task progress (SC_20102, SC_20202) comes before SC_12003
 			tx.event(TaskEvent{SubType: TaskSubBuild, Count: count})
-			return tx.AddBuildPoints(ctx, db.AddBuildPointsParams{CommanderID: client.CommanderID, ExchangeCount: pool.ExchangeCount * count})
+			return tx.addBuildPoints(int64(pool.ExchangeCount) * int64(count))
 		})
 	}
 	if err != nil && !refused(err) {
@@ -193,6 +233,55 @@ func (game *Game) handleBuildShip(client *connection.Client, req *protobuf.CS_12
 		}
 	}
 	return client.Send(reply)
+}
+
+// addBuildPoints changes the commander's build points by delta, kept
+// between 0 and the UR exchange's request as the client does
+// (BuildShipProxy:changeRegularExchangeCount).
+func (tx *Tx) addBuildPoints(delta int64) error {
+	points, err := buildPoints(tx.ctx, tx.Queries, tx.commanderID)
+	if err != nil {
+		return err
+	}
+	points = uint32(min(max(int64(points)+delta, 0), int64(regularBuildExchange.Request)))
+	return tx.SetBuildPoints(tx.ctx, db.SetBuildPointsParams{CommanderID: tx.commanderID, ExchangeCount: points})
+}
+
+// handleBuildExchange trades the build points for a ship of the permanent
+// pools' UR exchange (BuildPoolRegularExchangeCommand, CS_12047 {ship_tid},
+// from BuildShipRegularExchangeLayer): the client sends it once its points
+// reach ship_data_create_exchange exchange_request, with one of that row's
+// exchange_ship_id, and on result 0 takes the request off its points and
+// shows drop_list (PlayerConst.addTranDrop); the ship itself reaches the dock
+// in SC_12042, as other dropped ships. The client checks nothing else (no
+// dock space). No official capture has one: the reply is built from the Lua
+// alone.
+func (game *Game) handleBuildExchange(client *connection.Client, req *protobuf.CS_12047) error {
+	ctx := context.Background()
+	drops := []*protobuf.DROPINFO{dropInfo(dropTypeShip, req.GetShipTid(), 1)}
+	err := errRefused
+	if slices.Contains(regularBuildExchange.Ships, req.GetShipTid()) {
+		err = game.tx(ctx, client, func(tx *Tx) error {
+			points, err := buildPoints(ctx, tx.Queries, client.CommanderID)
+			if err != nil {
+				return err
+			}
+			if points < regularBuildExchange.Request {
+				return errRefused
+			}
+			if err := tx.addBuildPoints(-int64(regularBuildExchange.Request)); err != nil {
+				return err
+			}
+			return tx.grantDrops(drops)
+		})
+	}
+	if err != nil && !refused(err) {
+		return err
+	}
+	if err != nil {
+		drops = nil
+	}
+	return client.Send(&protobuf.SC_12048{Result: result(err), DropList: drops})
 }
 
 // buildsAt maps the dock positions the client sends (1-based, in build
@@ -326,6 +415,8 @@ const (
 	// PublicArg.TypePlayerName, TypeShipId (model/vo/publicarg.lua)
 	publicArgPlayerName = 1
 	publicArgShipID     = 2
+	// ShipRarity.Gray, Common
+	shipRarityGray = 2
 	// ShipRarity.Gold, Super Rare
 	shipRarityGold = 5
 )
