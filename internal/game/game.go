@@ -192,7 +192,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleExtendMailStorage)
 	packets.Handle(game.handleMailStorageWithdraw)
 	packets.Handle(game.handleMailTitles)
-	// friends
+	// friends, world chat and reports
 	packets.Handle(game.handleSearchPlayer)
 	packets.Handle(game.handleRecommendPlayers)
 	packets.Handle(game.handleBatchGetPlayers)
@@ -204,6 +204,8 @@ func (game *Game) Register() {
 	packets.Handle(game.handleBlacklist)
 	packets.Handle(game.handleBlockPlayer)
 	packets.Handle(game.handleUnblockPlayer)
+	packets.Handle(game.handleWorldChat)
+	packets.Handle(game.handleReportPlayer)
 	packets.Handle(game.handleThemeAuthor)
 	// ship comments
 	packets.Handle(game.handleFetchDiscussion)
