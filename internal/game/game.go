@@ -223,6 +223,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleGameRoomFirstCoin)
 	packets.Handle(game.handleEmojiInfo)
 	packets.Handle(game.handleLimitChallenge)
+	packets.Handle(game.handleLimitChallengeAward)
 	packets.Handle(game.handleChargeList)
 	packets.Handle(game.handleShopping)
 	packets.Handle(game.handleChangeSecretaries)

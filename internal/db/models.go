@@ -20,6 +20,12 @@ type ActivityFleetShip struct {
 	ShipID      uint32
 }
 
+type AttireFrame struct {
+	CommanderID uint32
+	DropType    uint32
+	FrameID     uint32
+}
+
 type Blacklist struct {
 	CommanderID uint32
 	BlockedID   uint32
@@ -750,6 +756,14 @@ type GuildUser struct {
 type GuildWaitTime struct {
 	CommanderID uint32
 	Until       uint32
+}
+
+type LimitChallenge struct {
+	CommanderID uint32
+	ChallengeID uint32
+	BestTime    uint32
+	PassMonth   uint32
+	Awarded     bool
 }
 
 type Mail struct {
