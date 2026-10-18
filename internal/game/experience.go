@@ -49,6 +49,10 @@ var battleExp battleExpRates
 type commanderLevelConfig struct {
 	Exp           uint32 `json:"exp"`
 	MaxCollection uint32 `json:"max_collection"`
+	// what the academy's harvests may fill gold and oil up to
+	// (Player:getLevelMaxGold / getLevelMaxOil, without a guild's bonus)
+	MaxGold uint32 `json:"max_gold"`
+	MaxOil  uint32 `json:"max_oil"`
 }
 
 var (

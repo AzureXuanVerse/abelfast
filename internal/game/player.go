@@ -100,6 +100,9 @@ func (game *Game) playerInfo(ctx context.Context, commander db.Commander, ships 
 	if err != nil {
 		return nil, err
 	}
+	if err := game.fillResourceFields(ctx, commander, time.Now()); err != nil {
+		return nil, err
+	}
 	resources, err := game.DB.ListResources(ctx, commander.ID)
 	if err != nil {
 		return nil, err
