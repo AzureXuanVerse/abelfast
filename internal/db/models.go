@@ -136,6 +136,11 @@ type CommanderFurniture struct {
 	Count       uint32
 }
 
+type CommanderGameRoom struct {
+	CommanderID uint32
+	FirstEnter  uint32
+}
+
 type CommanderHandbookFinished struct {
 	CommanderID uint32
 	PageID      uint32

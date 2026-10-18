@@ -144,6 +144,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleAuctionGameInit)
 	packets.Handle(game.handleAppreciationVersion)
 	packets.Handle(game.handleMiniGameHubs)
+	packets.Handle(game.handleGameRoomFirstCoin)
 	packets.Handle(game.handleEmojiInfo)
 	packets.Handle(game.handleLimitChallenge)
 	packets.Handle(game.handleChargeList)
@@ -223,8 +224,9 @@ var loginBurst = []loginPush{
 	func(game *Game, l *login) (proto.Message, error) {
 		return navalAcademy(l.ctx, l.queries, l.commander, l.now)
 	},
-	// GameRoomProxy: no game room coins or scores
-	empty[protobuf.SC_26120](),
+	func(game *Game, l *login) (proto.Message, error) {
+		return gameRoomInfo(l.ctx, l.queries, l.commander.ID)
+	},
 	// CommanderProxy: no cat commanders, boxes or presets
 	empty[protobuf.SC_25001](),
 	func(game *Game, l *login) (proto.Message, error) {
