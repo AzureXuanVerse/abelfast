@@ -30,5 +30,6 @@ func loadGameData() error {
 		loadMetaTacticsData,
 		loadSkillClassData,
 		loadCryptolaliaData,
+		loadMonthShops,
 	)
 }

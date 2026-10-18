@@ -184,6 +184,13 @@ type CommanderMedalShopPurchase struct {
 	Count       uint32
 }
 
+type CommanderMonthShopPurchase struct {
+	CommanderID uint32
+	GoodsID     uint32
+	Month       uint32
+	Count       uint32
+}
+
 type CommanderRandomFlagship struct {
 	CommanderID uint32
 	Mode        uint32

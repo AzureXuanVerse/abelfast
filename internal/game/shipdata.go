@@ -110,6 +110,7 @@ type equipTemplateConfig struct {
 	equipReturn
 	Base       uint32  `json:"base"`
 	Prev       uint32  `json:"prev"` // 0 for a gear's +0
+	Group      uint32  `json:"group"`
 	EquipLimit *uint32 `json:"equip_limit"`
 }
 
@@ -314,6 +315,7 @@ var (
 	itemPrices    map[uint32][2]uint32 // item_data_statistics.price: [resource, amount]
 	equipIDs      map[uint32]bool      // every equip_data_template id
 	equipReturns  map[uint32]equipReturn
+	equipGroups   map[uint32]uint32 // equip_data_template id: its group, the +0's id
 	// what retiring a ship gives (Ship:calReturnRes): gold by
 	// ship_data_statistics type, drops by rarity
 	retireGold  map[uint32]uint32
@@ -548,9 +550,11 @@ func loadShipData() error {
 	readGiftDislikes(stats)
 	equipIDs = make(map[uint32]bool, len(equips))
 	equipReturns = make(map[uint32]equipReturn, len(equips))
+	equipGroups = make(map[uint32]uint32, len(equips))
 	for id, equip := range equips {
 		equipIDs[id] = true
 		equipReturns[id] = equip.equipReturn
+		equipGroups[id] = equip.Group
 	}
 	return nil
 }
