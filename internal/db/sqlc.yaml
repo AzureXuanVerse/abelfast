@@ -43,3 +43,9 @@ sql:
           - column: commander_exercise.rivals
             go_type:
               type: IDList
+          - column: guild_users.donate_tasks
+            go_type:
+              type: IDList
+          - column: guild_capital_logs.event_target
+            go_type:
+              type: IDList

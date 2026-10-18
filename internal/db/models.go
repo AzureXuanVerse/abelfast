@@ -508,6 +508,16 @@ type GuildAssaultShip struct {
 	ChangedAt   uint32
 }
 
+type GuildCapitalLog struct {
+	ID          uint32
+	GuildID     uint32
+	MemberID    uint32
+	Name        string
+	EventType   uint32
+	EventTarget IDList
+	Time        uint32
+}
+
 type GuildChat struct {
 	ID          uint32
 	GuildID     uint32
@@ -526,12 +536,35 @@ type GuildLog struct {
 	Arg1    uint32
 }
 
+type GuildLogistic struct {
+	GuildID               uint32
+	WeeklyTaskID          uint32
+	WeeklyTaskProgress    uint32
+	WeeklyTaskWeek        uint32
+	BenefitFinishTime     uint32
+	LastBenefitFinishTime uint32
+	DonateDay             uint32
+	DonatedCapital        uint32
+	DonatedTech           uint32
+}
+
 type GuildMember struct {
 	CommanderID uint32
 	GuildID     uint32
 	Duty        uint32
 	Liveness    uint32
 	JoinTime    uint32
+}
+
+type GuildRankScore struct {
+	GuildID     uint32
+	CommanderID uint32
+	Kind        uint32
+	WeekStart   uint32
+	Week        uint32
+	MonthStart  uint32
+	Month       uint32
+	Total       uint32
 }
 
 type GuildRequest struct {
@@ -548,6 +581,17 @@ type GuildTechnology struct {
 	Progress  uint32
 	Active    bool
 	StartedAt int64
+}
+
+type GuildUser struct {
+	CommanderID    uint32
+	DonateDay      uint32
+	DonateCount    uint32
+	DonateTasks    IDList
+	ExtraDonate    uint32
+	ExtraOperation uint32
+	BenefitTime    uint32
+	WeeklyTaskWeek uint32
 }
 
 type GuildWaitTime struct {

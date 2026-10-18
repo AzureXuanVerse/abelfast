@@ -287,11 +287,3 @@ func (game *Game) handleCreateGuild(client *connection.Client, req *protobuf.CS_
 func (game *Game) guildCreated(tx *Tx, guildID uint32) error {
 	return game.guildTechnologiesCreated(tx, guildID)
 }
-
-// handleGuildUserInfo answers GuildGetUserInfoCommand: no donations or
-// benefits yet, today's donation tasks (guild_donate_task ids, captured).
-func (game *Game) handleGuildUserInfo(client *connection.Client, req *protobuf.CS_60102) error {
-	return client.Send(&protobuf.SC_60103{UserInfo: &protobuf.USER_GUILD_INFO{
-		DonateTasks: []uint32{1, 2, 20},
-	}})
-}

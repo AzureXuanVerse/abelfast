@@ -717,6 +717,7 @@ func (game *Game) claimTasks(ctx context.Context, client *connection.Client, cla
 	now := uint32(time.Now().Unix())
 	var awards []*protobuf.DROPINFO
 	var next *protobuf.SC_20003
+	var guildNotices []*guildNotices
 	err := game.tx(ctx, client, func(tx *Tx) error {
 		var nextIDs []uint32
 		for _, claim := range claims {
@@ -724,6 +725,11 @@ func (game *Game) claimTasks(ctx context.Context, client *connection.Client, cla
 				return err
 			}
 			drops := configDrops(claim.drops)
+			guildDrops, notices, err := game.guildTaskClaimed(tx, claim.task.TaskID, claim.config)
+			if err != nil {
+				return err
+			}
+			drops, guildNotices = append(drops, guildDrops...), append(guildNotices, notices)
 			if err := tx.grantDrops(drops); err != nil {
 				return err
 			}
@@ -743,6 +749,9 @@ func (game *Game) claimTasks(ctx context.Context, client *connection.Client, cla
 	})
 	if err != nil {
 		return nil, err
+	}
+	for _, notices := range guildNotices {
+		game.tellGuildNotices(client, notices)
 	}
 	if next != nil {
 		if err := client.Push(next); err != nil {
