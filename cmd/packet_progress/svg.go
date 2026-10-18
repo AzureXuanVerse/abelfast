@@ -327,14 +327,14 @@ func renderSVG(rep *report) string {
 		out.text(tx+tileWidth-12, ty+34, display, 20, 400, countColor, "end", count)
 		out.bar(tx+12, ty+tileHeight-17, tileWidth-24, 5, m.Counts, m.Total)
 
-		// one badge, attention first, then recent progress, then done
+		// one badge, attention first, then done, then recent progress
 		switch {
 		case done == 0:
 			out.diamond(tx+tileWidth-3, ty+3, 20*0.72, colorAlert, "#FFFFFF", "!")
-		case recent && h.Gains[m.ID] > 0:
-			out.pill(tx+tileWidth+6, ty-8, 15, fmt.Sprintf("+%d", h.Gains[m.ID]), colorAccent, "#FFFFFF")
 		case done == m.Total:
 			out.diamond(tx+tileWidth-3, ty+3, 20*0.72, statusColors[statusStatic], "#FFFFFF", "check")
+		case recent && h.Gains[m.ID] > 0:
+			out.pill(tx+tileWidth+6, ty-8, 15, fmt.Sprintf("+%d", h.Gains[m.ID]), colorAccent, "#FFFFFF")
 		}
 	}
 	rows := (len(rep.Modules) + 3) / 4
