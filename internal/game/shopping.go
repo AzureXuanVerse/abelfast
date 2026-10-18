@@ -28,12 +28,14 @@ const (
 	// the backyard's Expansion License and food capacity
 	genreBackyardUpgrade    = "backyard_upgrade"
 	genreBackyardFoodExtend = "backyard_food_extend"
+	// a Tactical Class room
+	genreSkillRoomUpgrade = "skill_room_upgrade"
 	// bought through SkinShoppingCommand
 	genreSkinShop          = "skin_shop"
 	genreSkinShopTimeLimit = "skin_shop_timelimit"
 )
 
-var sellableGenres = []string{genreNone, genreGemShop, genreShoppingStreet, genreArenaShop, genreBuyOil, genreGiftPackage, genreNewServerShop, genreSkinShop, genreSkinShopTimeLimit, genreBackyardUpgrade, genreBackyardFoodExtend}
+var sellableGenres = []string{genreNone, genreGemShop, genreShoppingStreet, genreArenaShop, genreBuyOil, genreGiftPackage, genreNewServerShop, genreSkinShop, genreSkinShopTimeLimit, genreBackyardUpgrade, genreBackyardFoodExtend, genreSkillRoomUpgrade}
 
 // shopTypeSkin is shop_template type of the skin goods: effect_args[1] is a
 // ship_skin_template id.
@@ -48,6 +50,7 @@ const (
 	effectDormExpPos       = "dorm_exp_pos"
 	effectDormFoodMax      = "dorm_food_max"
 	effectDormFloor        = "dorm_floor"
+	effectSkillRoomPos     = "skill_room_pos"
 )
 
 // Player.MAX_SHIP_BAG, MAX_EQUIP_BAG and MAX_COMMANDER_BAG (model/vo/player.lua)
@@ -417,6 +420,12 @@ func (tx *Tx) extend(goods shopGoods, commander db.Commander, amount uint32) err
 			return errRefused
 		}
 		return tx.AddCommanderBagMax(tx.ctx, db.AddCommanderBagMaxParams{CommanderBagMax: amount, ID: commander.ID})
+	case effectSkillRoomPos:
+		// limit_args "number": the rooms open before
+		if !goods.countAllows(commander.SkillClassNum) || commander.SkillClassNum >= maxSkillClassNum {
+			return errRefused
+		}
+		return tx.AddSkillClassNum(tx.ctx, commander.ID)
 	}
 	return errRefused
 }

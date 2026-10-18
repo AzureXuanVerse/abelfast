@@ -55,6 +55,9 @@ type Commander struct {
 	MailStoreroomLv uint32
 	Manifesto       string
 	DormFood        uint32
+	SkillClassNum   uint32
+	QuickFinishDay  int64
+	QuickFinishes   uint32
 }
 
 type CommanderActivity struct {
@@ -222,6 +225,17 @@ type CommanderShopPurchase struct {
 	ShopID      uint32
 	ExpiresAt   int64
 	Count       uint32
+}
+
+type CommanderSkillClass struct {
+	CommanderID uint32
+	RoomID      uint32
+	ShipID      uint32
+	SkillID     uint32
+	ItemID      uint32
+	StartTime   int64
+	FinishTime  int64
+	Exp         uint32
 }
 
 type CommanderSkin struct {

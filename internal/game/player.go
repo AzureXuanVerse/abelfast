@@ -151,15 +151,3 @@ func (game *Game) playerInfo(ctx context.Context, commander db.Commander, ships 
 		CdList:          cds,
 	}, nil
 }
-
-// navalAcademy is SC_22001, NavalAcademyProxy's state: oil field, merchant
-// and classroom at level 1 (their template tables start there), two skill
-// classes (captured), no lessons.
-func navalAcademy() *protobuf.SC_22001 {
-	return &protobuf.SC_22001{
-		OilWellLevel:  proto.Uint32(1),
-		GoldWellLevel: proto.Uint32(1),
-		ClassLv:       proto.Uint32(1),
-		SkillClassNum: proto.Uint32(2),
-	}
-}

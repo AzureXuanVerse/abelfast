@@ -541,6 +541,7 @@ func loadShipData() error {
 		}
 	}
 	readItemUses(items, techPackGear(equips, equipStats), gametip)
+	readLessonBooks(items)
 	equipIDs = make(map[uint32]bool, len(equips))
 	equipReturns = make(map[uint32]equipReturn, len(equips))
 	for id, equip := range equips {

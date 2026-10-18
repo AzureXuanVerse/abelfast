@@ -81,6 +81,9 @@ func (game *Game) Register() {
 	packets.Handle(game.handleMetaTactics)
 	packets.Handle(game.handleMetaTacticsUnlock)
 	packets.Handle(game.handleMetaTacticsSwitch)
+	packets.Handle(game.handleStartLesson)
+	packets.Handle(game.handleEndLesson)
+	packets.Handle(game.handleQuickFinishLesson)
 	packets.Handle(game.handleGuildInfo)
 	packets.Handle(game.handlePublicGuildTech)
 	packets.Handle(game.handleGuildUserInfo)
@@ -210,7 +213,9 @@ var loginBurst = []loginPush{
 	empty[protobuf.SC_11752](),
 	// SystemTipProxy (island delegation tips): nothing to collect
 	empty[protobuf.SC_21536](),
-	func(*Game, *login) (proto.Message, error) { return navalAcademy(), nil },
+	func(game *Game, l *login) (proto.Message, error) {
+		return navalAcademy(l.ctx, l.queries, l.commander, l.now)
+	},
 	// GameRoomProxy: no game room coins or scores
 	empty[protobuf.SC_26120](),
 	// CommanderProxy: no cat commanders, boxes or presets
