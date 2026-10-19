@@ -95,7 +95,15 @@ func generateWorldMap(randomID, templateID uint32, seed uint64) *worldMap {
 		placeFamilyEvents(m, template, family, rng)
 		return m
 	}
+	if randomID == worldForwardBase || placeArbiterZone(m, template, rng) {
+		// the Forward Base's device is the month's (refreshForwardBase)
+		return m
+	}
 	switch worldZones[randomID] {
+	case worldZoneStronghold:
+		if placeStronghold(m, template, rng) {
+			return m
+		}
 	case worldZoneObscured:
 		placeObscuredZone(m, template, rng)
 		return m
@@ -251,11 +259,17 @@ func worldWall(id uint32) bool {
 // added.
 func spawnWorldEvent(m *worldMap, template *worldTemplate, id uint32, fleets []*worldFleet, rng *rand.Rand) []*worldAttachment {
 	var added []*worldAttachment
+	var groups [][][2]uint32
 	for _, entry := range worldEvents[id].Grid {
-		cells := gridCells(template, entry)
-		if len(cells) == 0 {
-			continue
+		if cells := gridCells(template, entry); len(cells) > 0 {
+			groups = append(groups, cells)
 		}
+	}
+	// a scripted event goes to one cell of its whole grid (spawnEvents)
+	if worldScripted(id) && !worldWall(id) && len(groups) > 1 {
+		groups = [][][2]uint32{slices.Concat(groups...)}
+	}
+	for _, cells := range groups {
 		picks := [][2]uint32{spawnCell(m, template, cells, fleets, rng)}
 		if worldWall(id) {
 			picks = cells
@@ -421,7 +435,8 @@ func worldStartCells(m *worldMap, n int) [][2]uint32 {
 	var cells, port [][2]uint32
 	for _, cell := range template.Grids {
 		c := [2]uint32{cell.Row, cell.Column}
-		if !cell.Walkable || len(m.cellAttachments(cell.Row, cell.Column)) > 0 {
+		// not in a Siren fog either (an Arbiter's zone is half one)
+		if !cell.Walkable || len(m.cellAttachments(cell.Row, cell.Column)) > 0 || !m.cellAllows(c, worldObstacleArrive) {
 			continue
 		}
 		if template.isPortCell(cell.Row, cell.Column) {

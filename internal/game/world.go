@@ -44,11 +44,42 @@ func worldLoginState(l *login) (proto.Message, error) {
 // world never activated has no map (map_id 0), which sends the client to
 // the fleet selection.
 func (game *Game) handleWorldState(client *connection.Client, req *protobuf.CS_33000) error {
-	state, err := loadWorldState(context.Background(), game.DB.Queries, client.CommanderID, serverNow())
+	now := serverNow()
+	var full *protobuf.SC_33001
+	err := game.tx(context.Background(), client, func(tx *Tx) error {
+		state, err := tx.worldState(now)
+		if err != nil {
+			return err
+		}
+		changed, err := tx.updateWorldPeriods(state, now)
+		if err != nil {
+			return err
+		}
+		if changed {
+			if err := tx.saveWorldState(state); err != nil {
+				return err
+			}
+		}
+		full = state.fullState()
+		return nil
+	})
 	if err != nil {
 		return err
 	}
-	return client.Send(state.fullState())
+	return client.Send(full)
+}
+
+// updateWorldPeriods is what time brings an activated world: the month's
+// Arbiters, the Siren Strongholds due. It tells whether the world changed.
+func (tx *Tx) updateWorldPeriods(state *worldState, now time.Time) (bool, error) {
+	changed, err := tx.updateArbiter(state, now)
+	if err != nil {
+		return false, err
+	}
+	if state.updateStrongholds(tx.commanderID, now) {
+		changed = true
+	}
+	return changed, nil
 }
 
 // handleWorldActivate answers WorldActivateCommand (CS_33101, sent by
@@ -114,6 +145,9 @@ func (game *Game) handleWorldActivate(client *connection.Client, req *protobuf.C
 		tx.placeWorldFleets(state, m)
 		assignPressingAwards(state, tx.commanderID)
 		tx.respawnTaskEvents(state, now)
+		if _, err := tx.updateWorldPeriods(state, now); err != nil {
+			return err
+		}
 		if err := tx.saveWorldMap(m); err != nil {
 			return err
 		}
@@ -349,6 +383,11 @@ func (game *Game) handleWorldKill(client *connection.Client, req *protobuf.CS_33
 			}
 			return tx.saveWorldState(state.reset(now))
 		case worldKillProgress:
+			if state.updateStrongholds(tx.commanderID, now) {
+				if err := tx.saveWorldState(state); err != nil {
+					return err
+				}
+			}
 			reply.SairenChapter = state.SairenChapters
 			return nil
 		}
@@ -393,9 +432,16 @@ func (state *worldState) reset(now time.Time) *worldState {
 		Stamina:     state.Stamina,
 		GlobalFlags: state.GlobalFlags,
 		MonthBoss:   state.MonthBoss,
+		Arbiter:     state.Arbiter,
+	}
+	if state.Count.Progress >= worldSirenSettings.openStage {
+		// the reset's Strongholds (updateStrongholds, once activated)
+		next.Strongholds.Since = uint32(now.Unix())
 	}
 	for _, task := range state.Tasks {
-		if server := worldTasks[task.ID].ServerType; server == worldTaskServerPort || server == worldTaskServerCollection {
+		// the month's Arbiter tasks are the Arbiters' (updateArbiter)
+		if server := worldTasks[task.ID].ServerType; server == worldTaskServerPort || server == worldTaskServerCollection ||
+			task.ID == worldArbiterTaskNormal || task.ID == worldArbiterTaskHard {
 			next.Tasks = append(next.Tasks, task)
 		}
 	}

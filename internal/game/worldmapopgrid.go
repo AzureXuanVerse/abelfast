@@ -13,6 +13,7 @@ const (
 	worldTerrainIce    = 2
 	worldTerrainWind   = 3
 	worldTerrainFog    = 4
+	worldTerrainPoison = 6
 )
 
 // The obstacle keys (WorldConst.GetObstacleKey).
@@ -204,10 +205,16 @@ func (m *worldMap) stageEnemy(cell [2]uint32) *worldAttachment {
 
 // occupied is WorldMap:ExistAny: something alive or a fleet on the cell.
 func (m *worldMap) occupied(cell [2]uint32, fleets []*worldFleet) bool {
+	return m.occupiedBut(cell, fleets, nil)
+}
+
+// occupiedBut is occupied, but for attachment self (the event spawning
+// another on its own cell: the final node's Transference Device).
+func (m *worldMap) occupiedBut(cell [2]uint32, fleets []*worldFleet, self *worldAttachment) bool {
 	if fleetAt(cell, fleets, nil) {
 		return true
 	}
-	return slices.ContainsFunc(m.cellAttachments(cell[0], cell[1]), (*worldAttachment).alive)
+	return slices.ContainsFunc(m.cellAttachments(cell[0], cell[1]), func(a *worldAttachment) bool { return a != self && a.alive() })
 }
 
 // blankPath is the way from a cell to the nearest walkable one nothing

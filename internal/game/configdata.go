@@ -52,5 +52,6 @@ func loadGameData() error {
 		loadWorldPortData,
 		loadWorldItemData,
 		loadWorldTaskData,
+		loadWorldSirenData,
 	)
 }

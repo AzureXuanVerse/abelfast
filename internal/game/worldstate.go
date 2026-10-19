@@ -114,6 +114,10 @@ type worldState struct {
 	// MonthBoss are month_boss, the lowest hp each periodic boss was left
 	// at (World.lowestHP, key enemy id).
 	MonthBoss []worldCount `json:"month_boss,omitempty"`
+	// Arbiter is the Arbiters' months (worldarbiter.go).
+	Arbiter worldArbiter `json:"arbiter"`
+	// Strongholds is the Siren Strongholds' spawning (worldstronghold.go).
+	Strongholds worldStrongholds `json:"strongholds"`
 }
 
 // worldStamina is the world's action points (WorldStaminaManager).

@@ -63,6 +63,7 @@ const (
 	worldEffectConsumeCarry  = 19
 	worldEffectMoveFleet     = 20
 	worldEffectTrigger       = 21
+	worldEffectTerrain       = 23
 	worldEffectConsumeItem   = 24
 	worldEffectStoryOption   = 27
 	worldEffectFleetShipHP   = 30
@@ -71,13 +72,20 @@ const (
 	worldEffectCondition     = 35
 	worldEffectRandom        = 36
 	worldEffectTeleportBack  = 37
+	worldEffectReplace       = 39
 	worldEffectDeleteTask    = 40
 	worldEffectGlobalBuff    = 44
 	worldEffectMapClearFlag  = 45
 	worldEffectBrokenClean   = 48
 	worldEffectCatSalvage    = 49
 	worldEffectBossFreeCount = 50
+	worldEffectTip           = 52 // a text the client shows
 )
+
+// worldMarkerDrop is the drop of effect 410121, the only effect of the
+// walls, the Strongholds' allied fleets and the closed Arbiter device
+// (effective_num 5: the client never runs it by standing on them): nothing.
+const worldMarkerDrop = 1480001
 
 // dropTypeWorldCollection is DROP_TYPE_WORLD_COLLECTION (world_collection_*:
 // a file or record unlocked, COUNTINFO.collection_list).
@@ -127,13 +135,7 @@ func paramUints(params []json.RawMessage) []uint32 {
 // event is OpReqEvent on the event at cell: its next effect runs; chosen is
 // the effect a story option picked (act_arg_1).
 func (op *worldOp) event(cell [2]uint32, chosen uint32) error {
-	var ev *worldAttachment
-	for _, a := range op.m.cellAttachments(cell[0], cell[1]) {
-		if a.Type == worldAttachEvent && len(a.Effects) > 0 {
-			ev = a
-			break
-		}
-	}
+	ev := op.m.cellEvent(cell)
 	if ev == nil {
 		return errRefused
 	}
@@ -149,6 +151,35 @@ func (op *worldOp) event(cell [2]uint32, chosen uint32) error {
 		home.removeAttachment(ev)
 		if home == op.m {
 			op.mark([2]uint32{ev.Row, ev.Column})
+		}
+	}
+	return nil
+}
+
+// cellEvent is the event of cell whose next effect the client asks for
+// (it only sends the cell): the one WorldMap:CheckInteractive picks, an
+// event whose effect runs by itself (autoactivate) first, then one the
+// fleet runs by standing on it (effective_num 1 at most: a wall's or a
+// marker's 410121 needs 5), then any; nil for none.
+func (m *worldMap) cellEvent(cell [2]uint32) *worldAttachment {
+	var auto, interactive, other *worldAttachment
+	for _, a := range m.cellAttachments(cell[0], cell[1]) {
+		if a.Type != worldAttachEvent || len(a.Effects) == 0 {
+			continue
+		}
+		effect := worldEffects[a.Effects[0]]
+		switch {
+		case effect.AutoActivate > 0 && auto == nil:
+			auto = a
+		case effect.EffectiveNum <= 1 && interactive == nil:
+			interactive = a
+		case other == nil:
+			other = a
+		}
+	}
+	for _, a := range []*worldAttachment{auto, interactive, other} {
+		if a != nil {
+			return a
 		}
 	}
 	return nil
@@ -310,10 +341,18 @@ func (op *worldOp) runEffect(ev *worldAttachment, id, chosen uint32) error {
 		op.happened.Accepted = append(op.happened.Accepted, first())
 	case worldEffectTrigger:
 		op.happened.Triggers = append(op.happened.Triggers, paramUints(params)...)
+	case worldEffectTerrain:
+		if worldScripted(ev.ID) {
+			op.terrain(ev, params)
+		}
+	case worldEffectReplace:
+		if ids := paramUints(params); worldScripted(ev.ID) && len(ids) == 2 {
+			op.replaceEvents(ids[0], ids[1])
+		}
 	case worldEffectStory, worldEffectGuide:
 		// the client's: the story or guide played before the request
 	default:
-		if effect.EffectType < 1000 && effect.EffectType != 52 {
+		if effect.EffectType < 1000 && effect.EffectType != worldEffectTip {
 			logger.WithFields("World", logger.FieldValue("effect", id), logger.FieldValue("type", effect.EffectType)).Debug("effect type not applied")
 		}
 	}
@@ -401,6 +440,9 @@ func (op *worldOp) condition(raw json.RawMessage, ev *worldAttachment) bool {
 		return slices.Contains(op.state.Count.Collections, arg(1))
 	case "task":
 		return slices.ContainsFunc(op.state.Tasks, func(task worldTask) bool { return task.ID == arg(1) })
+	case "month":
+		// the Arbiters' rotation (worldarbiter.go)
+		return op.state.arbiterMonth(op.now) == arg(1)
 	case "max":
 		// {"max", [event ids], n}: n of those events are on the map (the
 		// promoted "Pawns"' random events, the reinforcement spawners: the
@@ -436,6 +478,7 @@ func (op *worldOp) spawnEvents(ev *worldAttachment, ids []uint32, relative bool)
 		offsets := relative || slices.ContainsFunc(config.Grid, func(entry []int32) bool {
 			return slices.ContainsFunc(entry, func(v int32) bool { return v < 0 })
 		})
+		var groups [][][2]uint32
 		for _, entry := range config.Grid {
 			var cells [][2]uint32
 			if offsets {
@@ -456,9 +499,19 @@ func (op *worldOp) spawnEvents(ev *worldAttachment, ids []uint32, relative bool)
 			} else {
 				cells = gridCells(template, entry)
 			}
-			if len(cells) == 0 {
-				continue
+			if len(cells) > 0 {
+				groups = append(groups, cells)
 			}
+		}
+		// the Strongholds' and Arbiters' structures read a grid as the
+		// cells one of the event goes to (a node's two gates, one on
+		// either half of its walls; one final boss among three cells;
+		// one Siren Crate around a retake: the wiki's single "Retake
+		// Bonus"), the counts their zones need (worldstronghold.go)
+		if worldScripted(id) && !worldWall(id) && len(groups) > 1 {
+			groups = [][][2]uint32{slices.Concat(groups...)}
+		}
+		for _, cells := range groups {
 			picks := [][2]uint32{spawnCell(op.m, template, cells, op.state.Fleets, op.rng)}
 			if worldWall(id) {
 				picks = cells
@@ -467,7 +520,7 @@ func (op *worldOp) spawnEvents(ev *worldAttachment, ids []uint32, relative bool)
 				// a rock of a structure (its offsets spawned once the map
 				// is shown, after the map's content) doesn't cover what a
 				// fleet must reach: a resource node, a "Pawn", a fleet
-				if worldObstacleMasks[config.Obstacle]&worldObstacleArrive == 0 && op.m.occupied(cell, op.state.Fleets) {
+				if worldObstacleMasks[config.Obstacle]&worldObstacleArrive == 0 && op.m.occupiedBut(cell, op.state.Fleets, ev) {
 					continue
 				}
 				if op.m.addAttachment(newWorldEvent(id, cell[0], cell[1])) {
@@ -475,6 +528,86 @@ func (op *worldOp) spawnEvents(ev *worldAttachment, ids []uint32, relative bool)
 				}
 			}
 		}
+	}
+}
+
+// worldScripted tells whether an event is one of the Siren Strongholds'
+// structures (6000000-6099999, worldstronghold.go) or the Arbiters' Forward
+// Base and battle zones (7000000-7000999, 7030000-7039999,
+// worldarbiter.go): what the server builds their zones with, whose
+// server-side effects (terrain, replacements) are applied, and whose grid
+// is the cells one of the event goes to (spawnEvents).
+func worldScripted(id uint32) bool {
+	return id >= 6000000 && id < 6100000 || id >= 7000000 && id < 7001000 || id >= 7030000 && id < 7040000
+}
+
+// terrain is effect type 23 ({[[row], [column], type, args...], ...},
+// offsets from the event): the cells' terrain becomes type, 0 clearing it
+// (the Arbiters' Siren fog lifted around the summoning box, the currents,
+// fog or poison a Stronghold device keeps until it is scanned), sent in
+// land_list. The args are a template terrain's (templateLands): a stream's
+// direction, a wind's and its strength, a fog's or poison's strength; a
+// fog the effect gives none is taken as strength 1, an ordinary fog (the
+// Siren fog, 0, can't be entered: the device under it must be reached).
+func (op *worldOp) terrain(ev *worldAttachment, params []json.RawMessage) {
+	template := worldTemplates[op.m.TemplateID]
+	for _, raw := range params {
+		var entry []json.RawMessage
+		if json.Unmarshal(raw, &entry) != nil || len(entry) < 3 {
+			continue
+		}
+		kind := rawUint(entry[2])
+		arg := func(i int) int32 {
+			if 3+i < len(entry) {
+				return int32(rawInt(entry[3+i]))
+			}
+			return 0
+		}
+		for _, dr := range rawInts(entry[0]) {
+			for _, dc := range rawInts(entry[1]) {
+				r, c := int32(ev.Row)+dr, int32(ev.Column)+dc
+				if r < 0 || c < 0 || !template.hasCell(uint32(r), uint32(c)) {
+					continue
+				}
+				cell := [2]uint32{uint32(r), uint32(c)}
+				op.m.Lands = slices.DeleteFunc(op.m.Lands, func(land worldLand) bool { return land.Row == cell[0] && land.Column == cell[1] })
+				if kind != 0 {
+					land := worldLand{Row: cell[0], Column: cell[1], Type: kind}
+					switch kind {
+					case worldTerrainStream:
+						land.DirRow, land.DirColumn = arg(0), arg(1)
+					case worldTerrainWind:
+						land.DirRow, land.DirColumn, land.Distance = arg(0), arg(1), uint32(max(arg(2), 0))
+					case worldTerrainFog, worldTerrainPoison:
+						land.Distance = uint32(max(arg(0), 0))
+						if kind == worldTerrainFog && len(entry) == 3 {
+							land.Distance = 1
+						}
+					}
+					op.m.Lands = append(op.m.Lands, land)
+				}
+				if !slices.Contains(op.lands, cell) {
+					op.lands = append(op.lands, cell)
+				}
+			}
+		}
+	}
+}
+
+// replaceEvents is effect type 39 {from, to}: every event from on the map
+// becomes event to on its cell, its effects to run (a node's walls broken
+// once it is captured, the Strongholds' node counter, a device swapped).
+func (op *worldOp) replaceEvents(from, to uint32) {
+	if _, ok := worldEvents[to]; !ok {
+		return
+	}
+	for _, a := range slices.Clone(op.m.Attachments) {
+		if a.Type != worldAttachEvent || a.ID != from {
+			continue
+		}
+		op.m.removeAttachment(a)
+		op.m.addAttachment(newWorldEvent(to, a.Row, a.Column))
+		op.mark([2]uint32{a.Row, a.Column})
 	}
 }
 
@@ -491,14 +624,19 @@ func (op *worldOp) dropAwards(params []json.RawMessage) {
 		op.drops = append(op.drops, dropInfo(dropTypeWorldCollection, file, 1))
 		return
 	}
+	if drop == worldMarkerDrop {
+		return
+	}
 	difficulty := worldTemplates[op.m.TemplateID].Difficulty
 	op.drops = append(op.drops, worldEventLoot(op.rng, drop, difficulty, worldZones[op.m.RandomID])...)
 }
 
 // teleport is EffectEventTeleport / TeleportBack ({[map, [row, column],
-// flag]}): the fleets go to that map (row -1: its start cells) through the
-// same entrance, or the one the map is the base of; map 0 (TeleportBack)
-// is the active entrance's base map.
+// flag]}, or {[map, entrance, [row, column], flag]}: a Siren Stronghold's
+// way out to Liverpool, 2 through entrance 2): the fleets go to that map
+// (row -1: its start cells) through the entrance given, else the same
+// entrance, or the one the map is the base of; map 0 (TeleportBack) is
+// the active entrance's base map.
 func (op *worldOp) teleport(params []json.RawMessage) error {
 	if len(params) == 0 {
 		return nil
@@ -509,6 +647,13 @@ func (op *worldOp) teleport(params []json.RawMessage) error {
 	}
 	randomID := rawUint(target[0])
 	entrance := op.state.EnterMapID
+	pos := 1
+	if len(target) >= 4 {
+		if id := rawUint(target[1]); worldColormasks[id].World != 0 {
+			entrance = id
+		}
+		pos = 2
+	}
 	if randomID == 0 {
 		randomID = worldColormasks[entrance].Chapter
 	}
@@ -522,9 +667,9 @@ func (op *worldOp) teleport(params []json.RawMessage) error {
 		}
 	}
 	var cell *[2]uint32
-	if len(target) >= 2 {
-		if pos := rawInts(target[1]); len(pos) == 2 && pos[0] >= 0 && pos[1] >= 0 {
-			cell = &[2]uint32{uint32(pos[0]), uint32(pos[1])}
+	if len(target) > pos {
+		if at := rawInts(target[pos]); len(at) == 2 && at[0] >= 0 && at[1] >= 0 {
+			cell = &[2]uint32{uint32(at[0]), uint32(at[1])}
 		}
 	}
 	return op.switchMap(randomID, entrance, cell, false)

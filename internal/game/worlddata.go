@@ -68,6 +68,9 @@ type worldTemplate struct {
 	IsTransfer      uint32          `json:"is_transfer"`
 	IsAuto          uint32          `json:"is_auto"`
 	IsClear         uint32          `json:"is_clear"` // leaving the map resets it (WorldMap:NeedClear)
+	// InstructionAvailable are the orders the map allows (SVOrderPanel):
+	// {submarine support, detection, maintenance}, 0 for not
+	InstructionAvailable []uint32 `json:"instruction_available"`
 
 	port       uint32 // port id, 0 for none (or one off the grid)
 	portCenter [2]uint32
@@ -89,6 +92,9 @@ type worldColormask struct {
 	// Coordinates) opens an Obscured Zone, one of the 1100xx range (Siren
 	// Coordinates, usage_arg [1]) an Abyssal Zone
 	TeasureChapter [][2]uint32 `json:"teasure_chapter"`
+	// SairenChapter is the entrance's Siren Stronghold map, shown while the
+	// entrance is in sairen_chapter (World:EntranceToReplacementMapList)
+	SairenChapter []uint32 `json:"sairen_chapter"`
 }
 
 // worldZone is what kind of zone a map is, which its content depends on.
@@ -100,6 +106,7 @@ const (
 	worldZoneSafe                 // a base map's secured version (complete_chapter)
 	worldZoneObscured             // a treasure map of Map Coordinates
 	worldZoneAbyssal              // a treasure map of Siren Coordinates
+	worldZoneStronghold           // an entrance's Siren Stronghold (sairen_chapter)
 )
 
 // worldEvent is a world_event_data row: what an event attachment
@@ -126,6 +133,11 @@ type worldEffect struct {
 	EffectType uint32          `json:"effect_type"`
 	Params     json.RawMessage `json:"effect_paramater"`
 	AutoFlag   json.RawMessage `json:"autoflag"`
+	// AutoActivate above 0 runs the effect wherever the fleets are
+	// (WorldMap:CheckInteractive); EffectiveNum above 1 keeps an event the
+	// fleet stands on from being run (the walls' and markers' 410121)
+	AutoActivate uint32 `json:"autoactivate"`
+	EffectiveNum uint32 `json:"effective_num"`
 }
 
 // world_effect_data effect types the server reads (WorldMapAttachment
@@ -150,6 +162,14 @@ type worldExpedition struct {
 	// battle (TypeBoss: the Abyssal Sirens), each hp (1/10000) a reward
 	// phase (SC_40004 hp_drop_info)
 	PhaseStory []json.RawMessage `json:"phase_story"`
+	// PhaseLimit is 1 for the bosses whose lowest hp lasts the month
+	// (WorldMapAttachment:IsPeriodEnemy, the Normal Arbiters), 2 for the
+	// Hard ones, fought from full hp each time, whose phase rewards are
+	// given once a month too
+	PhaseLimit uint32 `json:"phase_limit"`
+	// PhaseDropDisplay is {hp, [[type, id, count], ...]}: what each hp
+	// phase gives (WorldBossHPAwardPanel shows it)
+	PhaseDropDisplay []json.RawMessage `json:"phase_drop_display"`
 }
 
 // phases are the hp thresholds (1/10000) of a boss's phase_story, highest
@@ -337,6 +357,9 @@ func loadWorldData() error {
 		}
 		for _, id := range mask.CompleteChapter {
 			worldZones[id] = worldZoneSafe
+		}
+		for _, id := range mask.SairenChapter {
+			worldZones[id] = worldZoneStronghold
 		}
 		for _, treasure := range mask.TeasureChapter {
 			if treasure[0]/10000 == 11 {

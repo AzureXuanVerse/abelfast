@@ -52,6 +52,8 @@ type worldMap struct {
 	// Lands are the cells' terrain (land_list), the template's to begin
 	// with, changed by events afterwards.
 	Lands []worldLand `json:"lands,omitempty"`
+	// Stronghold is a Siren Stronghold's structures (worldstronghold.go).
+	Stronghold *worldStrongholdMap `json:"stronghold,omitempty"`
 }
 
 // worldAttachment is what stands on a cell (WORLDITEMINFO).
@@ -199,6 +201,21 @@ func (m *worldMap) landInfos() []*protobuf.LANDINFO {
 	return infos
 }
 
+// landInfo is a cell's terrain as LANDINFO, type 0 when it has none (a
+// terrain cleared: NetTerrainUpdate sets the cell's to it).
+func (m *worldMap) landInfo(cell [2]uint32) *protobuf.LANDINFO {
+	land, ok := m.land(cell)
+	if !ok {
+		return &protobuf.LANDINFO{Pos: worldCellPos(cell[0], cell[1]), Type: proto.Uint32(0), Dir: worldCellPos(1, 1), Distance: proto.Uint32(0)}
+	}
+	return &protobuf.LANDINFO{
+		Pos:      worldCellPos(land.Row, land.Column),
+		Type:     proto.Uint32(land.Type),
+		Dir:      worldCellPos(uint32(land.DirRow+1), uint32(land.DirColumn+1)),
+		Distance: proto.Uint32(land.Distance),
+	}
+}
+
 // mapID is the map as WORLDMAPID.
 func (m *worldMap) mapID() *protobuf.WORLDMAPID {
 	return &protobuf.WORLDMAPID{RandomId: proto.Uint32(m.RandomID), TemplateId: proto.Uint32(m.TemplateID)}
@@ -256,6 +273,9 @@ func (tx *Tx) worldMap(state *worldState, randomID uint32) (*worldMap, error) {
 		return nil, err
 	}
 	if m != nil && !m.outdated(state) {
+		if m.RandomID == worldForwardBase && refreshForwardBase(m, state, worldRand(worldSeed(tx.commanderID, state.Count.Activations, m.RandomID))) {
+			return m, tx.saveWorldMap(m)
+		}
 		return m, nil
 	}
 	if _, ok := worldRandomMaps[randomID]; !ok {
@@ -278,6 +298,9 @@ func (tx *Tx) worldMap(state *worldState, randomID uint32) (*worldMap, error) {
 				m.addAttachment(a)
 			}
 		}
+	}
+	if m.RandomID == worldForwardBase {
+		refreshForwardBase(m, state, worldRand(seed))
 	}
 	return m, tx.saveWorldMap(m)
 }

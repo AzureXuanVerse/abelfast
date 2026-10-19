@@ -81,6 +81,7 @@ type worldOp struct {
 	rng   *rand.Rand
 
 	cells    [][2]uint32 // cells of m that changed (pos_list)
+	lands    [][2]uint32 // cells of m whose terrain changed (land_list)
 	ships    []uint32    // ships whose hp or buffs changed (ship_update)
 	groups   []uint32    // fleets whose buffs changed (group_update)
 	salvages []uint32    // fleets whose salvage changed (cmd_collection_list)
@@ -230,10 +231,14 @@ func (op *worldOp) finish() error {
 	if exit := obscuredExit(op.m, op.rng); exit != nil {
 		op.mark([2]uint32{exit.Row, exit.Column})
 	}
+	op.strongholdStep()
 	reply := op.reply
 	reply.DropList = op.drops
 	for _, cell := range op.cells {
 		reply.PosList = append(reply.PosList, op.m.posInfo(cell[0], cell[1], state.Fleets))
+	}
+	for _, cell := range op.lands {
+		reply.LandList = append(reply.LandList, op.m.landInfo(cell))
 	}
 	for _, id := range op.ships {
 		if ship := state.worldShip(id); ship != nil {
@@ -371,6 +376,7 @@ func (op *worldOp) move(row, column uint32) error {
 	op.happened.Steps += uint32(len(path))
 	op.state.Round++
 	op.salvageStep()
+	op.retakeMove()
 	return nil
 }
 
@@ -502,7 +508,7 @@ func (op *worldOp) submarine() error {
 			sub = fleet
 		}
 	}
-	if sub == nil {
+	if sub == nil || !op.orderAvailable(worldOrderSubmarine) {
 		return errRefused
 	}
 	if err := op.order(worldReqSub, worldCDCost(worldOpSettings.submarineCost, op.state.lastCD(worldReqSub), op.now.Unix())); err != nil {
@@ -512,6 +518,20 @@ func (op *worldOp) submarine() error {
 	op.repair(sub)
 	sub.Bullet = sub.BulletMax
 	return nil
+}
+
+// The orders of a map's instruction_available (SVOrderPanel locks them).
+const (
+	worldOrderSubmarine   = 0
+	worldOrderVision      = 1
+	worldOrderMaintenance = 2
+)
+
+// orderAvailable tells whether the active map allows an order: the Hard
+// Arbiters' zones have no maintenance (the wiki's "Regroup and Rest").
+func (op *worldOp) orderAvailable(order int) bool {
+	available := worldTemplates[op.m.TemplateID].InstructionAvailable
+	return order >= len(available) || available[order] != 0
 }
 
 // repair is WorldMapShip:Repair for every ship of a fleet.
@@ -527,6 +547,9 @@ func (op *worldOp) repair(fleet *worldFleet) {
 // maintenance is OpReqMaintenance: every fleet repaired and its morale
 // damage cleared, for world_instruction_maintenance's action points.
 func (op *worldOp) maintenance() error {
+	if !op.orderAvailable(worldOrderMaintenance) {
+		return errRefused
+	}
 	if err := op.order(worldReqMaintenance, worldOpSettings.maintenanceCost[0]); err != nil {
 		return err
 	}
@@ -540,6 +563,9 @@ func (op *worldOp) maintenance() error {
 // vision is OpReqVision, the detection order: the map's attachments are
 // shown (MAPINFO state flag 2) for its action points.
 func (op *worldOp) vision() error {
+	if !op.orderAvailable(worldOrderVision) {
+		return errRefused
+	}
 	if err := op.order(worldReqVision, worldCDCost(worldOpSettings.visionCost, op.state.lastCD(worldReqVision), op.now.Unix())); err != nil {
 		return err
 	}
@@ -714,6 +740,10 @@ func (op *worldOp) transport(randomID, entrance uint32, cell [2]uint32, hasCell 
 	if coordinates != 0 && op.state.item(coordinates) == 0 {
 		return errRefused
 	}
+	// a Siren Stronghold only while its entrance shows it (sairen_chapter)
+	if worldZones[randomID] == worldZoneStronghold && (!slices.Contains(op.state.SairenChapters, entrance) || !slices.Contains(mask.SairenChapter, randomID)) {
+		return errRefused
+	}
 	var at *[2]uint32
 	if hasCell {
 		at = &cell
@@ -775,6 +805,9 @@ func (op *worldOp) switchMap(randomID, entrance uint32, cell *[2]uint32, pay boo
 		if old.needClear() {
 			op.cleared = append(op.cleared, old.RandomID)
 			state.Maps = slices.DeleteFunc(state.Maps, func(m worldMapID) bool { return m.RandomID == old.RandomID })
+			if worldZones[old.RandomID] == worldZoneStronghold {
+				state.strongholdCleared(old.RandomID, op.tx.commanderID, op.now)
+			}
 		}
 	}
 	state.enterMap(dest)
@@ -783,7 +816,7 @@ func (op *worldOp) switchMap(randomID, entrance uint32, cell *[2]uint32, pay boo
 	state.Round = 0
 	state.Submarine = false
 	op.m = dest
-	op.cells = nil
+	op.cells, op.lands = nil, nil
 	op.placeFleets(cell)
 	for _, fleet := range state.Fleets {
 		if !fleet.Submarine {

@@ -35,20 +35,24 @@ type worldLoot struct {
 
 // world items (world_item_data_template) and other ids of the loot
 const (
-	worldItemCoins      = 100  // Operation Supply Coins
-	worldItemTokens     = 101  // Special Item Tokens
-	worldItemRepair     = 201  // Emergency Repair Pack
-	worldItemLogger     = 2000 // + corrosion: R2-R6 Coordinate Logger (2002-2006)
-	worldItemSirenLog   = 2010 // + corrosion: R4-R6 Siren Coordinate Logger (2014-2016)
-	worldItemT4Part     = 2113 // T4 Random Gear Part
-	worldItemSRPlans    = 2120 // SR Gear Design Plans
-	worldItemURPlans    = 2121 // UR Gear Design Plans
-	vitemMetaCoords     = 100000
-	vitemT1Container    = 150000 // T1-T3 Development Materials Container: one material
-	itemT1Report        = 18125
-	itemT2Report        = 18126
-	worldLootPercent    = 100
-	worldLootHazardsMax = 7
+	worldItemCoins          = 100  // Operation Supply Coins
+	worldItemTokens         = 101  // Special Item Tokens
+	worldItemRepair         = 201  // Emergency Repair Pack
+	worldItemCompleteRepair = 202  // Complete Repair Pack
+	worldItemTripleRepair   = 204  // Triple Complete Repair Pack
+	worldItemLogger         = 2000 // + corrosion: R2-R6 Coordinate Logger (2002-2006)
+	worldItemSirenLog       = 2010 // + corrosion: R4-R6 Siren Coordinate Logger (2014-2016)
+	worldItemT4Part         = 2113 // T4 Random Gear Part
+	worldItemSRPlans        = 2120 // SR Gear Design Plans
+	worldItemURPlans        = 2121 // UR Gear Design Plans
+	vitemMetaCoords         = 100000
+	vitemT1Container        = 150000 // T1-T3 Development Materials Container: one material
+	itemT1Report            = 18125
+	itemT2Report            = 18126
+	itemT4MysteryPart       = 54018 // T4 Mystery Gear Part (a virtual item: one T4 part)
+	itemSRPlans             = 30914 // SR Gear Design Plans
+	worldLootPercent        = 100
+	worldLootHazardsMax     = 7
 )
 
 // by corrosion (difficulty) 0-7: an enemy fleet's coins, a resource node's
@@ -90,7 +94,7 @@ func rollWorldLoot(rng *rand.Rand, loot []worldLoot) []*protobuf.DROPINFO {
 		if n == 0 {
 			continue
 		}
-		if entry.kind == dropTypeItem && len(dropPools[entry.id]) > 0 {
+		if entry.kind == dropTypeItem {
 			drops = resolveContent(drops, entry.kind, entry.id, n)
 			continue
 		}
@@ -188,14 +192,16 @@ var worldAbyssalLoot = map[uint32][2][]worldLoot{
 
 // worldBossPhaseLoot is SC_40004 hp_drop_info for a boss whose hp went
 // from before to after (1/10000): the loot of each phase_story threshold
-// crossed, the last (0) its death's. The Abyssal Sirens' come from the
-// wiki's table by the map's corrosion (C4 below, C6 above); the other
-// bosses with phases (none on a generated map) give the C4 one.
+// crossed, the last (0) its death's. A boss with a phase_drop_display (the
+// Arbiters) gives what it shows; the Abyssal Sirens' come from the wiki's
+// table by the map's corrosion (C4 below, C6 above); the other bosses with
+// phases (none on a generated map) give the C4 one.
 func worldBossPhaseLoot(rng *rand.Rand, enemy, difficulty, before, after uint32) []*protobuf.HPDROPINFO {
 	table, ok := worldAbyssalLoot[min(max(difficulty, 4), 6)]
 	if !ok {
 		return nil
 	}
+	shown := worldExpeditions[enemy].phaseDrops()
 	var infos []*protobuf.HPDROPINFO
 	for _, hp := range worldExpeditions[enemy].phases() {
 		if hp >= before || hp < after {
@@ -204,6 +210,9 @@ func worldBossPhaseLoot(rng *rand.Rand, enemy, difficulty, before, after uint32)
 		loot := table[0]
 		if hp == 0 {
 			loot = table[1]
+		}
+		if shown != nil {
+			loot = shown[hp]
 		}
 		infos = append(infos, &protobuf.HPDROPINFO{Hp: proto.Uint32(hp), DropInfo: rollWorldLoot(rng, loot)})
 	}
@@ -236,7 +245,10 @@ const (
 	worldBranchRareCrate    = 10014
 	worldBranchOtherNode    = 10021
 	worldBranchMassProduced = 10022 // a Mass-Produced Siren Fleet once beaten
+	worldBranchReinforce    = 10023 // a Stronghold's retaking fleet, or the Siren fleet that retook a node
 	worldBranchStronghold   = 10024 // a Siren Stronghold Flagship Fleet
+	worldBranchFinal        = 10025 // a Stronghold's final boss
+	worldBranchRetake       = 10026 // the Siren Crate of a retake beaten
 	worldBranchPawnFirst    = 10027 // the Explorable "Pawns" once beaten, by fleet type
 	worldBranchPawnLast     = 10033
 )
@@ -318,20 +330,47 @@ func worldEventLoot(rng *rand.Rand, drop, difficulty uint32, zone worldZone) []*
 		})
 	case worldBranchContainer:
 		return rollWorldLoot(rng, []worldLoot{coins, {dropTypeWorldItem, worldItemTokens, 2 * h, 4 * h, 0}})
-	case worldBranchStronghold:
-		// the wiki's Siren Stronghold boss rewards
-		return rollWorldLoot(rng, []worldLoot{
-			{dropTypeWorldItem, worldItemCoins, 2056, 3984, 0},
-			{dropTypeWorldItem, worldItemTokens, 10, 20, 0},
-			{dropTypeWorldItem, worldItemT4Part, 0, 2, 0},
-			{dropTypeItem, vitemT1Container + 1, 2, 2, 0},
-			{dropTypeItem, vitemT1Container + 2, 2, 2, 0},
-		})
+	case worldBranchStronghold, worldBranchReinforce, worldBranchFinal, worldBranchRetake:
+		return rollWorldLoot(rng, worldStrongholdLoot[source.branch])
 	}
 	if source.branch >= worldBranchPawnFirst && source.branch <= worldBranchPawnLast {
 		return nil
 	}
 	return rollWorldLoot(rng, []worldLoot{coins})
+}
+
+// worldStrongholdLoot are the wiki's Siren Stronghold rewards (Bosses,
+// Reinforcement Boss, Retake Bonus, Final Boss), by the drop's branch; its
+// icons are the items the Arbiters' phase_drop_display shows for them
+// (UnknownT4Plate the T4 Mystery Gear Part 54018, the T2 / T3 containers
+// 150001 / 150002, SR_Gear_Design_Plans item 30914), the repair packs the
+// world items of their name (202, 204).
+var worldStrongholdLoot = map[uint32][]worldLoot{
+	worldBranchStronghold: {
+		{dropTypeWorldItem, worldItemCoins, 2056, 3984, 0},
+		{dropTypeWorldItem, worldItemTokens, 10, 20, 0},
+		{dropTypeItem, itemT4MysteryPart, 0, 2, 0},
+		{dropTypeItem, vitemT1Container + 1, 2, 2, 0},
+		{dropTypeItem, vitemT1Container + 2, 2, 2, 0},
+	},
+	worldBranchReinforce: {
+		{dropTypeWorldItem, worldItemCoins, 2005, 3958, 0},
+		{dropTypeWorldItem, worldItemTokens, 4, 8, 0},
+		{dropTypeWorldItem, worldItemTripleRepair, 0, 2, 0},
+		{dropTypeWorldItem, worldItemCompleteRepair, 0, 2, 0},
+		{dropTypeItem, vitemT1Container + 1, 1, 1, 0},
+		{dropTypeItem, vitemT1Container + 2, 0, 1, 0},
+	},
+	worldBranchRetake: {
+		{dropTypeWorldItem, worldItemTokens, 207, 390, 0},
+	},
+	worldBranchFinal: {
+		{dropTypeWorldItem, worldItemCoins, 4221, 7893, 0},
+		{dropTypeWorldItem, worldItemTokens, 44, 79, 0},
+		{dropTypeItem, itemT4MysteryPart, 6, 6, 0},
+		{dropTypeItem, vitemT1Container + 2, 6, 6, 0},
+		{dropTypeItem, itemSRPlans, 0, 1, 0},
+	},
 }
 
 // The meowfficer search (EffectEventCatSalvage): the fleet's meowfficers

@@ -169,6 +169,14 @@ func (game *Game) finishWorld(client *connection.Client, req *protobuf.CS_40003)
 				after = min(req.GetBossHp(), before)
 			}
 			enemy.BossHP = after
+			if worldExpeditions[enemy.ID].PhaseLimit > 0 {
+				// the Arbiters' phases reward once a month: from the
+				// lowest hp the month left it at (month_boss; the client's
+				// SetHP does so for the Normal ones, IsPeriodEnemy), the
+				// Hard ones fought from full hp each time
+				before = min(before, state.monthBossHP(enemy.ID))
+				state.setMonthBossHP(enemy.ID, min(before, after))
+			}
 			reply.HpDropInfo = worldBossPhaseLoot(rng, enemy.ID, difficulty, before, after)
 		}
 		if win {
@@ -214,7 +222,9 @@ func (game *Game) finishWorld(client *connection.Client, req *protobuf.CS_40003)
 			if expedition.isBoss() {
 				tx.event(TaskEvent{SubType: TaskSubDefeatBoss, Count: 1})
 			}
-			reply.DropInfo = worldBattleLoot(rng, enemy.ID, difficulty)
+			if worldBattleOwnLoot(m, enemy.ID) {
+				reply.DropInfo = worldBattleLoot(rng, enemy.ID, difficulty)
+			}
 		}
 
 		if ships.techLevel {
