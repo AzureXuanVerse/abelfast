@@ -28,9 +28,11 @@ const (
 // their default equipment, skills and archive entry, pushed in SC_12042), and
 // backyard furniture, virtual items (the Specialized Core is stored as its
 // link item, the cruise pass points as their task counter, the Handover
-// Permits by expiry, the rest as virtual item counters) and ship skins (for good or for a time, as the
-// client adds them: Drop's DROP_TYPE_SKIN and DROP_TYPE_SKIN_TIMELIMIT
-// cases, model/vo/drop.lua) and meowfficers (grantMeowfficers, pushed in
+// Permits by expiry, the META Showdown coordinates with their daily caps,
+// the rest as virtual item counters), META Sync Points (by group) and ship
+// skins (for good or for a time, as the client adds them: Drop's
+// DROP_TYPE_SKIN and DROP_TYPE_SKIN_TIMELIMIT cases, model/vo/drop.lua) and
+// meowfficers (grantMeowfficers, pushed in
 // SC_25039), recording the task progress they cause. Gear skins, frames...
 // have no storage yet and are only logged.
 func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
@@ -84,6 +86,15 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 		case kind == dropTypeVItem && chapterTicketItems[id].kind != 0:
 			// Handover Permits, kept by expiry as the client adds them
 			if err := tx.addChapterTickets(id, count, time.Now()); err != nil {
+				return err
+			}
+		case kind == dropTypeVItem && (id == vitemWorldBossPt || id == vitemWorldBossPastPt):
+			// the META Showdown coordinates, kept with their daily caps
+			if err := tx.addWorldBossSummonPt(id, count); err != nil {
+				return err
+			}
+		case kind == dropTypeMetaPt:
+			if err := tx.addMetaPt(id, count); err != nil {
 				return err
 			}
 		case kind == dropTypeVItem:

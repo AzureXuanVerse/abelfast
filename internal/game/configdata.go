@@ -18,6 +18,7 @@ func loadGameData() error {
 		loadTaskData,
 		loadJuusData,
 		loadLimitChallengeData,
+		loadWorldBossData,
 		loadArenaShop,
 		loadArenaRanks,
 		loadCommissionData,

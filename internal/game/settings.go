@@ -55,12 +55,6 @@ func (game *Game) handleClientReport(client *connection.Client, req *protobuf.CS
 	return nil
 }
 
-// handleWorldBoss answers GetWorldBossCommand (Operation Siren's world
-// boss): no boss summoned or fought, own boss level 1.
-func (game *Game) handleWorldBoss(client *connection.Client, req *protobuf.CS_34501) error {
-	return client.Send(&protobuf.SC_34502{SelfBossLv: proto.Uint32(1)})
-}
-
 // handleWorldState answers WorldConst.ReqWorldCheck (type 0: entering mail,
 // compensation or Operation Siren scenes, or a ship status check while the
 // world is still the SC_33114 base one) and ReqWorldForServer (type 1, after
@@ -89,14 +83,4 @@ func (game *Game) handleWorldState(client *connection.Client, req *protobuf.CS_3
 			ActivateCount: proto.Uint32(0),
 		},
 	})
-}
-
-// handleMetaPTData answers MetaPTDataRequestCommand, the META ship points of
-// the groups the client asks for: none earned.
-func (game *Game) handleMetaPTData(client *connection.Client, req *protobuf.CS_34001) error {
-	reply := &protobuf.SC_34002{}
-	for _, group := range req.GetGroupId() {
-		reply.MetaShipList = append(reply.MetaShipList, &protobuf.META_SHIP_INFO{GroupId: proto.Uint32(group)})
-	}
-	return client.Send(reply)
 }

@@ -847,6 +847,18 @@ type MeowfficerState struct {
 	CleanTime    int64
 }
 
+type MetaPt struct {
+	CommanderID uint32
+	GroupID     uint32
+	Pt          uint32
+}
+
+type MetaPtAward struct {
+	CommanderID uint32
+	GroupID     uint32
+	Target      uint32
+}
+
 type Notice struct {
 	ID         uint32
 	Kind       string
@@ -953,4 +965,35 @@ type Spweapon struct {
 	AttrTemp1   uint32
 	AttrTemp2   uint32
 	Pt          uint32
+}
+
+type WorldBoss struct {
+	CommanderID         uint32
+	SummonPt            uint32
+	SummonPtOld         uint32
+	SummonPtDailyAcc    uint32
+	SummonPtOldDailyAcc uint32
+	AccDay              int64
+	SummonFree          uint32
+	ArchivesID          uint32
+	SelfBossLv          uint32
+	SelfBossTemplateID  uint32
+	BossTemplateID      uint32
+	BossLv              uint32
+	BossHp              uint32
+	BossLastTime        int64
+	BossKillTime        int64
+	BossFightCount      uint32
+	BossDamage          uint32
+	AutoFightFinishTime int64
+	AutoFightMaxDamage  uint32
+	GuildSupport        int64
+	FriendSupport       int64
+	WorldSupport        int64
+}
+
+type WorldBossShip struct {
+	CommanderID uint32
+	Pos         uint32
+	ShipID      uint32
 }
