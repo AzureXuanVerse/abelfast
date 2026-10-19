@@ -11,8 +11,8 @@ import (
 // The world map generator. What stands on a world map (enemies, events,
 // boxes) is the official server's content: no client table lists it and
 // nothing of the mode was captured, so belfast makes it up from the
-// tables, deterministically (the same commander, activation and map always
-// give the same map):
+// tables and the wiki, deterministically (the same commander, activation
+// and map always give the same map):
 //
 //   - the template a map is played on is drawn among its
 //     world_chapter_random.template_id entries whose progress range holds the
@@ -26,19 +26,21 @@ import (
 //     the cells around it 20007 and the way out 20005; the rest of the
 //     script (stories, the battle with 314001, the teleport to 201) comes
 //     from their effects as the fleet triggers them (CS_33103);
-//   - the other maps start with their template's controller event
-//     (worldMapController), whose effects (CS_33103, run as soon as the
-//     client shows the map) spread the map's Siren content: the zone is
-//     secured once the events with an infection_value are all gone;
-//   - the maps without one (none of the open sea zones lacks one) that
-//     have a hazard level and no port get enemies from
-//     world_expedition_data: the ones numbered (20 + the template's
-//     difficulty) * 10000 + n that aren't bosses (expedition_data_template
-//     type 99), about one per 15 walkable cells plus the hazard level, 3 to
-//     10, at least a cell apart, away from the map's edge rows/columns
-//     fleets arrive on; and a supply chest (box_data_template "Supply
-//     Chest") per 50 walkable cells, 1 to 3. Ports and safe zones (hazard 0)
-//     get nothing;
+//   - the Explorable zones and their Safe Zones start with their template
+//     family's controller event (worldMapController), whose effects
+//     (CS_33103, run as soon as the client shows the map) spread the map's
+//     Siren content: the zone is secured once the events with an
+//     infection_value are all gone;
+//   - the Obscured and Abyssal zones (the Coordinate Loggers' treasure
+//     maps) have no controller: their content is placed from the wiki's
+//     description (placeObscuredZone, placeAbyssalZone);
+//   - the other maps without one that have a hazard level and no port get
+//     enemies from world_expedition_data: the ones numbered (20 + the
+//     template's difficulty) * 10000 + n that aren't bosses
+//     (expedition_data_template type 99), about one per 15 walkable cells
+//     plus the hazard level, 3 to 10, and a supply chest per 50 walkable
+//     cells, 1 to 3 (no zone a fleet can reach today is one). Ports and
+//     hazard 0 maps get nothing;
 //   - the template's terrain becomes the map's land_list;
 //   - a map whose template is always in sight (map_sight 1) starts
 //     discovered, the others discover the cells around the fleets.
@@ -93,7 +95,16 @@ func generateWorldMap(randomID, templateID uint32, seed uint64) *worldMap {
 		placeFamilyEvents(m, template, family, rng)
 		return m
 	}
-	if id, ok := worldMapController(templateID); ok {
+	switch worldZones[randomID] {
+	case worldZoneObscured:
+		placeObscuredZone(m, template, rng)
+		return m
+	case worldZoneAbyssal:
+		if placeAbyssalZone(m, template, rng) {
+			return m
+		}
+	}
+	if id, ok := worldMapController(randomID, templateID); ok {
 		if len(spawnWorldEvent(m, template, id, nil, rng)) > 0 {
 			return m
 		}
@@ -134,26 +145,57 @@ func templateLands(template *worldTemplate) []worldLand {
 }
 
 // worldMapGeneration is the generator's version (worldMap.Generation): 1
-// is the maps started by their template's controller event.
-const worldMapGeneration = 1
+// is the maps started by their template's controller event, 2 the safe
+// zones started by their own controller and the Obscured and Abyssal
+// zones' content.
+const worldMapGeneration = 2
+
+// The controllers' offsets in a template family's events (family * 10000
+// + offset): the Explorable zone's content (0), the Safe Zone's (400),
+// the Zone Control Reward that appears once an Explorable zone is secured
+// (300, it spawns 301 around itself) and the event that ends a cleared
+// Safe Zone (401: EffectEventMapClearFlag, the zone starts over once left).
+const (
+	worldControllerSafe       = 400
+	worldControllerSecured    = 300
+	worldControllerSafeClosed = 401
+)
 
 // worldMapController is the event a map on templateID starts with, the
 // rest of its content coming from that event's effects: world_event_data
-// has one per template family (template id / 1000 * 10000, 10440000 for
-// 1044001 and 1044002), on cell (0, 0) and spawned by no effect, whose
-// effects all run by themselves (autoactivate, WorldMap:CheckInteractive:
-// the client asks for them as soon as the map is shown): edge placeholders
-// on the rows and columns fleets arrive on, then resource nodes, "Pawn"
-// enemy fleets (their infection_value is the zone's Siren infection,
-// WorldMap:GetEventPoisonRate, which must fall to 0 before the zone is
-// secured: WorldMap:CheckMapPressing) and the other events of the family
-// spread over the map, then the placeholders removed. That the official
-// server starts its maps this way is a reading of the tables (nothing of
-// the mode was captured).
-func worldMapController(templateID uint32) (uint32, bool) {
+// has a set per template family (template id / 1000 * 10000, 10440000 for
+// 1044001 and 1044002), on cell (0, 0) or (1, 1) and spawned by no effect,
+// whose effects all run by themselves (autoactivate, WorldMap:
+// CheckInteractive: the client asks for them as soon as the map is shown):
+// edge placeholders on the rows and columns fleets arrive on, then
+// resource nodes, "Pawn" enemy fleets (their infection_value is the zone's
+// Siren infection, WorldMap:GetEventPoisonRate, which must fall to 0
+// before the zone is secured: WorldMap:CheckMapPressing) and the other
+// events of the family spread over the map, then the placeholders removed.
+// The Explorable zone (the entrance's base map) starts with family * 10000
+// (C4: 8 "Pawns", 2 Promoted "Pawns", 3 + 1 hidden resource nodes, a
+// meowfficer search point), its Safe Zone (complete_chapter, a template of
+// the same family) with family * 10000 + 400 (C4: 3 "Pawns", 4 resource
+// nodes + 1 hidden cache, a search point): the counts the wiki's
+// Explorable / Secured tables give for every corrosion level. That the
+// official server starts its maps this way is a reading of the tables
+// (nothing of the mode was captured).
+func worldMapController(randomID, templateID uint32) (uint32, bool) {
 	id := templateID / 1000 * 10000
+	if worldZones[randomID] == worldZoneSafe {
+		id += worldControllerSafe
+	}
 	_, ok := worldEvents[id]
 	return id, ok && id != 0 && !worldSpawnedEvents[id]
+}
+
+// worldFamilyEvent is event offset of templateID's family, 0 for none.
+func worldFamilyEvent(templateID, offset uint32) uint32 {
+	id := templateID/1000*10000 + offset
+	if _, ok := worldEvents[id]; !ok || templateID < 1000000 {
+		return 0
+	}
+	return id
 }
 
 // worldEventFamily are a story map's own events (map id * 100 + n), by id.
@@ -402,6 +444,17 @@ func worldStartCells(m *worldMap, n int) [][2]uint32 {
 	if len(cells) == 0 {
 		return nil
 	}
+	if worldZones[m.RandomID] == worldZoneAbyssal {
+		// the Siren on the top rows, the fleets come in at the bottom
+		// middle, its corners on either side of them
+		bottom, middle := uint32(0), uint32(0)
+		for _, cell := range template.Grids {
+			bottom, middle = max(bottom, cell.Row), max(middle, cell.Column)
+		}
+		entry := [2]uint32{bottom, middle / 2}
+		slices.SortStableFunc(cells, func(a, b [2]uint32) int { return chebyshev(a, entry) - chebyshev(b, entry) })
+		return cells[:min(n, len(cells))]
+	}
 	first, best := cells[0], -1
 	for _, cell := range cells {
 		nearest := 1 << 30
@@ -439,4 +492,173 @@ func discoverAround(m *worldMap, row, column uint32) {
 		}
 	}
 	m.discover(cells...)
+}
+
+// The Obscured Zones (the Map Coordinates' treasure maps, "Hidden
+// Zones"): the wiki gives R2 1 Siren Rally Point, R3 and R4 2, R5 and R6
+// 3, each guarded by a fleet (its own effects: the battle, then the
+// rally's drop), fleets around them from the start that give exp and
+// rewards (world_event_data's "Mass-Produced Siren Fleet" 1009001-1009003,
+// what the root Rally Points 1000105... spawn around themselves), and once
+// every Rally Point is destroyed the rewards and the way out (a Siren
+// Transference Device by the map's size: Resource Crates around it, then
+// the story option that teleports the fleets back, EffectEventTeleportBack).
+// The rally variants are the weather (1000200), fog (1000300) and current
+// (1000400) ones, at the rally grid's cells. What the official server
+// runs besides (the trigger effects 25/26/31 that bring reinforcements and
+// the control devices) isn't in the client's tables: no reinforcement
+// spawns here, the rallies are reachable from the start.
+var (
+	obscuredRallyCount  = map[uint32]int{1: 1, 2: 1, 3: 2, 4: 2, 5: 3, 6: 3}
+	obscuredRallyEvents = []uint32{1000200, 1000300, 1000400}
+	obscuredFleetEvents = []uint32{1009001, 1009002, 1009003}
+	// by map size: up to 9, 15, 21 rows (grids [2, 2, 6, 6], [2, 2, 12, 12],
+	// [2, 2, 18, 18])
+	obscuredExitEvents = []uint32{1000032, 1000033, 1000034}
+)
+
+const worldRallyName = "Siren Rally Point"
+
+func placeObscuredZone(m *worldMap, template *worldTemplate, rng *rand.Rand) {
+	n := obscuredRallyCount[worldRandomMaps[m.RandomID].HazardLevel]
+	if n == 0 {
+		n = 1
+	}
+	var slots [][2]uint32
+	for _, entry := range worldEvents[obscuredRallyEvents[0]].Grid {
+		for _, cell := range gridCells(template, entry) {
+			if template.isWalkable(cell[0], cell[1]) {
+				slots = append(slots, cell)
+			}
+		}
+	}
+	rng.Shuffle(len(slots), func(i, j int) { slots[i], slots[j] = slots[j], slots[i] })
+	if len(slots) < n {
+		cells := slices.DeleteFunc(freeWorldCells(m, template), func(cell [2]uint32) bool { return edgeCell(template, cell) })
+		rng.Shuffle(len(cells), func(i, j int) { cells[i], cells[j] = cells[j], cells[i] })
+		for _, cell := range cells {
+			if len(slots) == n {
+				break
+			}
+			if !slices.ContainsFunc(slots, func(other [2]uint32) bool { return chebyshev(cell, other) < 4 }) {
+				slots = append(slots, cell)
+			}
+		}
+	}
+	events := slices.Clone(obscuredRallyEvents)
+	rng.Shuffle(len(events), func(i, j int) { events[i], events[j] = events[j], events[i] })
+	for i, cell := range slots[:min(n, len(slots))] {
+		rally := newWorldEvent(events[i%len(events)], cell[0], cell[1])
+		rally.Effects = slices.DeleteFunc(rally.Effects, inertSpawn)
+		if !m.addAttachment(rally) {
+			continue
+		}
+		for _, id := range obscuredFleetEvents {
+			spawnRelative(m, template, rally, id, nil, rng)
+		}
+	}
+}
+
+// inertSpawn tells whether an effect only spawns placeholders (unnamed
+// events without effects, on the map's edges), which the official
+// server's triggers take away again: left alone they would stay.
+func inertSpawn(id uint32) bool {
+	effect, ok := worldEffects[id]
+	if !ok || effect.EffectType != worldEffectSpawnEvents {
+		return false
+	}
+	ids := paramUints(effectParams(effect))
+	return len(ids) > 0 && !slices.ContainsFunc(ids, func(id uint32) bool {
+		ev := worldEvents[id]
+		return ev.Name != "" || len(ev.Effect) > 0 || len(ev.EventOp) > 0
+	})
+}
+
+// spawnRelative adds event id at one cell of its grid, read as offsets
+// from the event from (a free cell first, spawnCell); nil when none fits.
+func spawnRelative(m *worldMap, template *worldTemplate, from *worldAttachment, id uint32, fleets []*worldFleet, rng *rand.Rand) *worldAttachment {
+	var cells [][2]uint32
+	for _, entry := range worldEvents[id].Grid {
+		if len(entry) == 2 {
+			entry = []int32{entry[0], entry[1], entry[0], entry[1]}
+		}
+		if len(entry) != 4 {
+			continue
+		}
+		for dr := min(entry[0], entry[2]); dr <= max(entry[0], entry[2]); dr++ {
+			for dc := min(entry[1], entry[3]); dc <= max(entry[1], entry[3]); dc++ {
+				r, c := int32(from.Row)+dr, int32(from.Column)+dc
+				if r >= 0 && c >= 0 && template.hasCell(uint32(r), uint32(c)) {
+					cells = append(cells, [2]uint32{uint32(r), uint32(c)})
+				}
+			}
+		}
+	}
+	if len(cells) == 0 {
+		return nil
+	}
+	cell := spawnCell(m, template, cells, fleets, rng)
+	attachment := newWorldEvent(id, cell[0], cell[1])
+	if !m.addAttachment(attachment) {
+		return nil
+	}
+	return attachment
+}
+
+// obscuredExit spawns an Obscured Zone's way out once its Siren Rally
+// Points are all destroyed (their events done), unless it is there; it
+// returns the attachment added.
+func obscuredExit(m *worldMap, rng *rand.Rand) *worldAttachment {
+	template := worldTemplates[m.TemplateID]
+	if worldZones[m.RandomID] != worldZoneObscured || template == nil {
+		return nil
+	}
+	for _, a := range m.Attachments {
+		if a.Type == worldAttachEvent && (worldEvents[a.ID].Name == worldRallyName || slices.Contains(obscuredExitEvents, a.ID)) {
+			return nil
+		}
+	}
+	rows := uint32(0)
+	for _, cell := range template.Grids {
+		rows = max(rows, cell.Row+1)
+	}
+	exit := obscuredExitEvents[0]
+	switch {
+	case rows > 15:
+		exit = obscuredExitEvents[2]
+	case rows > 9:
+		exit = obscuredExitEvents[1]
+	}
+	if added := spawnWorldEvent(m, template, exit, nil, rng); len(added) > 0 {
+		return added[0]
+	}
+	return nil
+}
+
+// The Abyssal Zones (the Siren Coordinates' treasure maps, templates
+// 140004-140006): world_event_data 4100000 (cell (4, 6)) spawns the
+// Abyssal Siren of the map's difficulty (one of five, 4100052... for C4),
+// whose death spawns the way out (4100002, then 4100001); 4100010 and
+// 4100011 a fleet each in the fog of the bottom corners, the fleets the
+// wiki says clear the Low Resolve the Siren can't be fought with. The
+// zone's walls and blockade devices (4100101-4100106, 4100200...) need the
+// server's triggers to be lifted: they are left out, the corners open.
+var abyssalRootEvents = []uint32{4100000, 4100010, 4100011}
+
+func placeAbyssalZone(m *worldMap, template *worldTemplate, rng *rand.Rand) bool {
+	if !template.hasCell(4, 6) {
+		return false
+	}
+	for _, id := range abyssalRootEvents {
+		// one each: the corners' grids are two rectangles of one corner
+		var cells [][2]uint32
+		for _, entry := range worldEvents[id].Grid {
+			cells = append(cells, gridCells(template, entry)...)
+		}
+		if len(cells) > 0 {
+			cell := spawnCell(m, template, cells, nil, rng)
+			m.addAttachment(newWorldEvent(id, cell[0], cell[1]))
+		}
+	}
+	return true
 }

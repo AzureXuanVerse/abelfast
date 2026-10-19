@@ -81,7 +81,26 @@ type worldColormask struct {
 	PortMapIcon uint32 `json:"port_map_icon"` // its port (world_port_data), 0 for none
 	World       uint32 `json:"world"`         // the atlas (WorldConst.DefaultAtlas 1)
 	Regions     uint32 `json:"regions"`
+	// CompleteChapter is the base map's secured version (the "Safe Zone"
+	// map World:ReplacementMapType shows once the base map is secured)
+	CompleteChapter []uint32 `json:"complete_chapter"`
+	// TeasureChapter are the treasure maps of the entrance, {coordinates
+	// item, map}: a usage_world_map item of the 1000xx range (Map
+	// Coordinates) opens an Obscured Zone, one of the 1100xx range (Siren
+	// Coordinates, usage_arg [1]) an Abyssal Zone
+	TeasureChapter [][2]uint32 `json:"teasure_chapter"`
 }
+
+// worldZone is what kind of zone a map is, which its content depends on.
+type worldZone uint8
+
+const (
+	worldZoneOther      worldZone = iota
+	worldZoneExplorable           // an entrance's base map with a hazard level
+	worldZoneSafe                 // a base map's secured version (complete_chapter)
+	worldZoneObscured             // a treasure map of Map Coordinates
+	worldZoneAbyssal              // a treasure map of Siren Coordinates
+)
 
 // worldEvent is a world_event_data row: what an event attachment
 // (WorldMapAttachment.TypeEvent) is and where it appears.
@@ -127,6 +146,35 @@ type worldExpedition struct {
 	// award_display_world: {difficulty, [[type, id], ...]}, what the
 	// enemy may drop
 	AwardDisplayWorld []json.RawMessage `json:"award_display_world"`
+	// phase_story: {hp, story} for the bosses whose hp lasts from battle to
+	// battle (TypeBoss: the Abyssal Sirens), each hp (1/10000) a reward
+	// phase (SC_40004 hp_drop_info)
+	PhaseStory []json.RawMessage `json:"phase_story"`
+}
+
+// phases are the hp thresholds (1/10000) of a boss's phase_story, highest
+// first, nil for an enemy beaten in one battle.
+func (expedition worldExpedition) phases() []uint32 {
+	var hps []uint32
+	for _, raw := range expedition.PhaseStory {
+		var entry []json.RawMessage
+		if json.Unmarshal(raw, &entry) == nil && len(entry) >= 1 {
+			var hp float64
+			if json.Unmarshal(entry[0], &hp) == nil && hp >= 0 {
+				hps = append(hps, uint32(hp))
+			}
+		}
+	}
+	slices.SortFunc(hps, func(a, b uint32) int { return int(b) - int(a) })
+	return hps
+}
+
+// worldCatSearchNode is a world_catsearch_node row: a find of a
+// meowfficer search (CMDCOLLECTION progress_list).
+type worldCatSearchNode struct {
+	Step        uint32 `json:"step"`  // 1-3, how good it is
+	Score       uint32 `json:"score"` // added up into the search's rarity
+	SpecialDrop uint32 `json:"special_drop"`
 }
 
 // worldPort is a world_port_data row.
@@ -163,9 +211,20 @@ var (
 	worldStages      map[uint32]worldStage
 	boxTemplates     map[uint32]boxTemplate
 
+	worldCatSearchNodes map[uint32]worldCatSearchNode
+
+	// worldCollectionDrops are the record files' drops: 102000GF is file F
+	// (1-6) of the G-th world_collection_file_group (by id), what the
+	// "Collection - File" events (100000-100071, 12 folders of 6) give
+	worldCollectionDrops map[uint32]uint32
+
 	// worldSpawnedEvents are the events some effect adds to a map
 	// (worldEffectSpawnEvents) rather than the map starting with them
 	worldSpawnedEvents map[uint32]bool
+
+	// worldZones are the maps' zone kinds, read from the entrances
+	// (worldZoneOther for the maps none names)
+	worldZones map[uint32]worldZone
 
 	// worldSettings are the gameset values the world reads
 	worldSettings struct {
@@ -186,6 +245,9 @@ var (
 func loadWorldData() error {
 	var templates map[uint32]worldTemplate
 	var gameset map[string]uint32
+	var fileGroups map[uint32]struct {
+		Child []uint32 `json:"child"`
+	}
 	err := gamedata.LoadAll(
 		gamedata.Load("world_chapter_random", &worldRandomMaps),
 		gamedata.Load("world_chapter_template", &templates),
@@ -196,6 +258,8 @@ func loadWorldData() error {
 		gamedata.Load("world_port_data", &worldPorts),
 		gamedata.Load("world_stage_template", &worldStages),
 		gamedata.Load("box_data_template", &boxTemplates),
+		gamedata.Load("world_catsearch_node", &worldCatSearchNodes),
+		gamedata.Load("world_collection_file_group", &fileGroups),
 		func() (err error) {
 			gameset, err = gamedata.Gameset()
 			return err
@@ -225,6 +289,13 @@ func loadWorldData() error {
 	}
 	if len(worldSettings.supplyValues) == 0 || len(worldSettings.supplyValues) != len(worldSettings.supplyPrices) {
 		return gamedata.Missing("gameset", "world_supply_value / world_supply_price")
+	}
+	loadWorldDropSources()
+	worldCollectionDrops = map[uint32]uint32{}
+	for g, id := range slices.Sorted(maps.Keys(fileGroups)) {
+		for f, file := range fileGroups[id].Child[:min(len(fileGroups[id].Child), 9)] {
+			worldCollectionDrops[10200000+uint32(g+1)*10+uint32(f+1)] = file
+		}
 	}
 	worldSpawnedEvents = map[uint32]bool{}
 	for _, effect := range worldEffects {
@@ -258,6 +329,22 @@ func loadWorldData() error {
 			}
 		}
 		worldTemplates[id] = &template
+	}
+	worldZones = map[uint32]worldZone{}
+	for _, mask := range worldColormasks {
+		if worldRandomMaps[mask.Chapter].HazardLevel > 0 && mask.PortMapIcon == 0 {
+			worldZones[mask.Chapter] = worldZoneExplorable
+		}
+		for _, id := range mask.CompleteChapter {
+			worldZones[id] = worldZoneSafe
+		}
+		for _, treasure := range mask.TeasureChapter {
+			if treasure[0]/10000 == 11 {
+				worldZones[treasure[1]] = worldZoneAbyssal
+			} else {
+				worldZones[treasure[1]] = worldZoneObscured
+			}
+		}
 	}
 	// some maps name templates the client doesn't have either (world map
 	// 720's 7200): they are never drawn

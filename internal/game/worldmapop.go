@@ -2,6 +2,8 @@ package game
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"maps"
 	"math/rand/v2"
 	"slices"
@@ -225,6 +227,9 @@ func (op *worldOp) finish() error {
 	if err := tx.grantWorldDrops(state, drops); err != nil {
 		return err
 	}
+	if exit := obscuredExit(op.m, op.rng); exit != nil {
+		op.mark([2]uint32{exit.Row, exit.Column})
+	}
 	reply := op.reply
 	reply.DropList = op.drops
 	for _, cell := range op.cells {
@@ -365,7 +370,41 @@ func (op *worldOp) move(row, column uint32) error {
 	op.state.Count.Step += uint32(len(path))
 	op.happened.Steps += uint32(len(path))
 	op.state.Round++
+	op.salvageStep()
 	return nil
+}
+
+// salvageStep is a turn of movement for the meowfficer searches under way
+// on the map: each finds its next node (progress, the client's
+// UpdateCatSalvage; a search of another map stays as it is, the client
+// ends it).
+func (op *worldOp) salvageStep() {
+	for _, fleet := range op.state.Fleets {
+		salvage := &fleet.Salvage
+		if salvage.RandomID == op.m.RandomID && salvage.Progress < uint32(len(salvage.List)) {
+			salvage.Progress++
+			if !slices.Contains(op.salvages, fleet.ID) {
+				op.salvages = append(op.salvages, fleet.ID)
+			}
+		}
+	}
+}
+
+// salvageSet is the world_catsearch_node set (1-4: ids 101-120...) a
+// fleet's meowfficers search with: their best rarity (2 N to 5 SSR).
+func (op *worldOp) salvageSet(fleet *worldFleet) (uint32, error) {
+	best := uint32(2)
+	for _, commander := range fleet.Commanders {
+		cat, err := op.tx.GetMeowfficer(op.tx.ctx, db.GetMeowfficerParams{CommanderID: op.tx.commanderID, ID: commander.ID})
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return 0, err
+		}
+		best = max(best, meowfficerTemplates[cat.TemplateID].Rarity)
+	}
+	return min(max(best, 2), 5) - 1, nil
 }
 
 // round is OpReqRound: the turn after the player's (World:GetRound odd).
@@ -524,6 +563,7 @@ func (op *worldOp) pressing(randomID uint32) error {
 	}
 	op.state.CleanChapters = append(op.state.CleanChapters, randomID)
 	op.happened.Pressed = append(op.happened.Pressed, randomID)
+	op.securedEvents()
 	for i := range op.state.ChapterAwards {
 		award := &op.state.ChapterAwards[i]
 		if worldColormasks[award.ID].Chapter != randomID || award.Flag != 1 {
@@ -537,6 +577,26 @@ func (op *worldOp) pressing(randomID uint32) error {
 		}
 	}
 	return nil
+}
+
+// securedEvents puts on a map just secured what its family has for it: an
+// Explorable zone the Zone Control Reward (family + 300, which spawns its
+// box, family + 301, around itself: a drop by difficulty, "Sector has
+// been secured. Let us quickly collect the spoils of war."), a Safe Zone
+// the event that flags it clear (family + 401, EffectEventMapClearFlag:
+// the zone starts over once left).
+func (op *worldOp) securedEvents() {
+	offset := uint32(worldControllerSecured)
+	if worldZones[op.m.RandomID] == worldZoneSafe {
+		offset = worldControllerSafeClosed
+	}
+	id := worldFamilyEvent(op.m.TemplateID, offset)
+	if id == 0 || slices.ContainsFunc(op.m.Attachments, func(a *worldAttachment) bool { return a.Type == worldAttachEvent && a.ID == id }) {
+		return
+	}
+	for _, a := range spawnWorldEvent(op.m, worldTemplates[op.m.TemplateID], id, op.state.Fleets, op.rng) {
+		op.mark([2]uint32{a.Row, a.Column})
+	}
 }
 
 // assignPressingAwards hands out the zone securing rewards of an activation
@@ -571,13 +631,16 @@ func assignPressingAwards(state *worldState, commanderID uint32) {
 	}
 }
 
-// catSalvage is OpReqCatSalvage: a meowfficer salvage (EffectEventCatSalvage)
-// ends; the fleet's cmd_collection empties. The salvage nodes' rewards
-// (world_catsearch_node) aren't given.
+// catSalvage is OpReqCatSalvage: a meowfficer search (EffectEventCatSalvage)
+// ends, done (progress at the end of its list), called off or left
+// behind (WorldMap:CheckFleetSalvage): the nodes reached give their loot
+// (salvageLoot), the fleet's cmd_collection empties.
 func (op *worldOp) catSalvage() error {
 	if op.fleet == nil || op.fleet.Salvage.RandomID == 0 {
 		return errRefused
 	}
+	salvage := op.fleet.Salvage
+	op.drops = append(op.drops, salvageLoot(op.rng, salvage.List[:min(salvage.Progress, uint32(len(salvage.List)))])...)
 	op.fleet.Salvage = worldSalvage{}
 	op.salvages = append(op.salvages, op.fleet.ID)
 	op.happened.Salvaged = append(op.happened.Salvaged, op.fleet.ID)
@@ -725,10 +788,13 @@ func (m *worldMap) infection() uint32 {
 
 // needClear is WorldMap:NeedClear: a map that starts over once left (a
 // Siren map with no infection left, one flagged clear by an event, or a
-// template that always does).
+// template that always does), and a Safe Zone cleared (the wiki:
+// "Clearing a Secured zone and leaving will reset it"; its closing event
+// flags it, but only on the visit it is secured on).
 func (m *worldMap) needClear() bool {
 	template := worldTemplates[m.TemplateID]
-	return template != nil && template.IsSairen > 0 && m.infection() == 0 || m.Clear || template != nil && template.IsClear > 0
+	return template != nil && template.IsSairen > 0 && m.infection() == 0 || m.Clear || template != nil && template.IsClear > 0 ||
+		worldZones[m.RandomID] == worldZoneSafe && m.infection() == 0
 }
 
 // placeFleets puts the normal fleets on the active map: the acting fleet

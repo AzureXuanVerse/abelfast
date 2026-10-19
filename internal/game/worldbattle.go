@@ -2,7 +2,6 @@ package game
 
 import (
 	"context"
-	"encoding/json"
 	"math/rand/v2"
 	"slices"
 
@@ -159,6 +158,19 @@ func (game *Game) finishWorld(client *connection.Client, req *protobuf.CS_40003)
 		if subAid && sub.Bullet > 0 {
 			sub.Bullet--
 		}
+		difficulty := worldTemplates[m.TemplateID].Difficulty
+		rng := rand.New(rand.NewPCG(uint64(now.UnixNano()), uint64(client.CommanderID)))
+		if enemy.Type == worldAttachBoss {
+			// the boss's hp lasts: what the battle left of it (boss_hp, its
+			// highest hp rate left, the client's SetHP on a loss), each
+			// phase_story threshold crossed a reward (hp_drop_info)
+			before, after := enemy.BossHP, uint32(0)
+			if !win {
+				after = min(req.GetBossHp(), before)
+			}
+			enemy.BossHP = after
+			reply.HpDropInfo = worldBossPhaseLoot(rng, enemy.ID, difficulty, before, after)
+		}
 		if win {
 			worldEnemyBeaten(state, fleet, enemy)
 			if subAid {
@@ -171,8 +183,9 @@ func (game *Game) finishWorld(client *connection.Client, req *protobuf.CS_40003)
 			happened.Losses = append(happened.Losses, enemy.ID)
 		}
 
-		// exp: the enemy's exp_world for the map's difficulty
-		difficulty := worldTemplates[m.TemplateID].Difficulty
+		// exp: the enemy's exp_world for the map's difficulty (the wiki:
+		// by the zone's corrosion, the same for every fleet of it; none
+		// for the story's enemies and the reinforcements)
 		world := expedition
 		world.Exp = 0
 		for _, entry := range worldExpeditions[enemy.ID].ExpWorld {
@@ -201,8 +214,9 @@ func (game *Game) finishWorld(client *connection.Client, req *protobuf.CS_40003)
 			if expedition.isBoss() {
 				tx.event(TaskEvent{SubType: TaskSubDefeatBoss, Count: 1})
 			}
-			reply.DropInfo = worldBattleDrops(enemy.ID, difficulty)
+			reply.DropInfo = worldBattleLoot(rng, enemy.ID, difficulty)
 		}
+
 		if ships.techLevel {
 			tx.techPointsChanged()
 		}
@@ -216,6 +230,13 @@ func (game *Game) finishWorld(client *connection.Client, req *protobuf.CS_40003)
 		}
 		if err := tx.grantWorldDrops(state, reply.DropInfo); err != nil {
 			return err
+		}
+		// the boss's phase rewards, which the client adds itself too
+		// (WorldMap:WriteBack, PlayerConst.addTranDrop)
+		for _, phase := range reply.HpDropInfo {
+			if err := tx.grantWorldDrops(state, phase.DropInfo); err != nil {
+				return err
+			}
 		}
 		if err := tx.addClassProficiency(ships.proficiency, now); err != nil {
 			return err
@@ -247,6 +268,16 @@ func (game *Game) finishWorld(client *connection.Client, req *protobuf.CS_40003)
 	return client.PushAfterReply(push)
 }
 
+// newWorldEnemy is the attachment of enemy id on a cell: a TypeBoss with
+// its hp (boss_hp, 1/10000) when the enemy is fought over several battles
+// (a phase_story: the Abyssal Sirens), else a TypeEnemy.
+func newWorldEnemy(id, row, column uint32) *worldAttachment {
+	if len(worldExpeditions[id].phases()) > 0 {
+		return &worldAttachment{Row: row, Column: column, Type: worldAttachBoss, ID: id, Data: 1, BossHP: fullHP}
+	}
+	return &worldAttachment{Row: row, Column: column, Type: worldAttachEnemy, ID: id, Data: 1}
+}
+
 // worldEnemyBeaten is a won battle's WriteBack on the world: the enemy is
 // gone (flag 1, hp 0), the fleet counts a kill, every fleet's morale damage
 // clears.
@@ -257,34 +288,4 @@ func worldEnemyBeaten(state *worldState, fleet *worldFleet, enemy *worldAttachme
 	for _, f := range state.Fleets {
 		f.Damage = 0
 	}
-}
-
-// worldBattleDrops is a won world battle's loot: one of the enemy's
-// award_display_world entries for the map's difficulty (the first listed
-// when it has none for it), the drop tables being the server's.
-func worldBattleDrops(enemy, difficulty uint32) []*protobuf.DROPINFO {
-	var pool [][]uint32
-	for _, raw := range worldExpeditions[enemy].AwardDisplayWorld {
-		var entry []json.RawMessage
-		if json.Unmarshal(raw, &entry) != nil || len(entry) != 2 {
-			continue
-		}
-		var awards [][]uint32
-		if json.Unmarshal(entry[1], &awards) != nil {
-			continue
-		}
-		if rawUint(entry[0]) == difficulty || pool == nil {
-			pool = awards
-		}
-	}
-	pool = slices.DeleteFunc(pool, func(award []uint32) bool { return len(award) < 2 })
-	if len(pool) == 0 {
-		return nil
-	}
-	award := pool[rand.IntN(len(pool))]
-	count := uint32(1)
-	if len(award) >= 3 && award[2] > 0 {
-		count = award[2]
-	}
-	return []*protobuf.DROPINFO{dropInfo(award[0], award[1], count)}
 }

@@ -16,13 +16,6 @@ type worldTemplateReset struct {
 	TransportColormask uint32   `json:"transport_colormask"` // the entrance jumped out to
 }
 
-// expeditionAwards is expedition_data_template's award_display: {type, id}
-// entries, what a world drop effect (EffectEventDrop, the expedition id)
-// may give.
-type expeditionAwards struct {
-	AwardDisplay [][]uint32 `json:"award_display"`
-}
-
 // worldEventCompleteCount is world_event_complete's chapter_num: how many
 // entrances an activation gives that zone securing reward.
 type worldEventCompleteCount struct {
@@ -32,7 +25,6 @@ type worldEventCompleteCount struct {
 var (
 	worldEventCompleteCounts map[uint32]uint32
 	worldTemplateResets      map[uint32]worldTemplateReset
-	worldDropAwards          map[uint32]expeditionAwards
 
 	worldOpSettings struct {
 		deathHPFix  uint32 // world_death_hpfix: a sunk ship's hp_rant after the battle
@@ -55,7 +47,6 @@ func loadWorldOpData() error {
 	err := gamedata.LoadAll(
 		gamedata.Load("world_event_complete", &completes),
 		gamedata.Load("world_chapter_template_reset", &worldTemplateResets),
-		gamedata.Load("expedition_data_template", &worldDropAwards),
 		func() (err error) {
 			gameset, err = gamedata.Gameset()
 			return err

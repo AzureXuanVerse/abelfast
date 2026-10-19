@@ -27,9 +27,10 @@ import (
 // meowfficer salvages ended, and the events of a world_event_data name
 // started (their first effect run: resource nodes, merchants, switches,
 // weather control devices, energy matrices, record files, data logging
-// devices, promoted "Pawn" fleets). The others (reconnaissance in
-// anomalous zones, the scanning facility, ambushes repelled, sources from
-// enhanced fleets) aren't counted.
+// devices, promoted "Pawn" fleets, weather anomaly nodes, the scanning
+// facility). The others (ambushes repelled, sources from enhanced fleets)
+// aren't counted. Nothing done in an Obscured or Abyssal zone, a
+// Stronghold or the Arbiter's (hazard 7) counts.
 
 // worldTriggerKind is what a trigger counts.
 type worldTriggerKind uint8
@@ -60,6 +61,8 @@ var worldTriggerPatterns = []struct {
 	{regexp.MustCompile(`(?i)record file`), worldTriggerEvent, "Collection - File"},
 	{regexp.MustCompile(`(?i)data logging`), worldTriggerEvent, "Siren Data Logging Device"},
 	{regexp.MustCompile(`(?i)defeat .*promoted`), worldTriggerEvent, `Promoted "Pawn"`},
+	{regexp.MustCompile(`(?i)reconnaissance .*anomalous`), worldTriggerEvent, "Weather Anomaly Node"},
+	{regexp.MustCompile(`(?i)scanning facility`), worldTriggerEvent, "Siren Scanning Facility"},
 }
 
 // worldTargetConfig is a world_target_data row.
@@ -199,6 +202,11 @@ func worldTriggerCounts(happened *worldHappenings) (map[worldTriggerKind]uint32,
 // that changed, whole (WorldAchievement:NetUpdate reads every trigger it
 // is sent, which must be one of its conditions).
 func (tx *Tx) worldTargetsUpdated(state *worldState, happened *worldHappenings) []*protobuf.WORLDTARGET {
+	// the wiki: only the Explorable and Secured zones count, not the
+	// Obscured, Abyssal ones or the Strongholds
+	if zone := worldZones[state.MapID]; zone == worldZoneObscured || zone == worldZoneAbyssal || worldRandomMaps[state.MapID].HazardLevel == 7 {
+		return nil
+	}
 	kinds, events := worldTriggerCounts(happened)
 	var changed []*protobuf.WORLDTARGET
 	for _, id := range worldEntranceTargetIDs[state.EnterMapID] {

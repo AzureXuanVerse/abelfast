@@ -200,7 +200,7 @@ func (op *worldOp) runEffect(ev *worldAttachment, id, chosen uint32) error {
 			if old := op.m.attachment(ev.Row, ev.Column, worldAttachEnemy, enemy); old != nil {
 				op.m.removeAttachment(old)
 			}
-			op.m.addAttachment(&worldAttachment{Row: ev.Row, Column: ev.Column, Type: worldAttachEnemy, ID: enemy, Data: 1})
+			op.m.addAttachment(newWorldEnemy(enemy, ev.Row, ev.Column))
 			op.mark([2]uint32{ev.Row, ev.Column})
 		}
 	case worldEffectRemoveEnemies:
@@ -293,8 +293,15 @@ func (op *worldOp) runEffect(ev *worldAttachment, id, chosen uint32) error {
 			}
 		}
 	case worldEffectCatSalvage:
-		if op.fleet != nil {
-			op.fleet.Salvage = worldSalvage{RandomID: op.m.RandomID}
+		// the client asks for it only for a fleet with a meowfficer and no
+		// search under way (WorldMap:CheckEventAutoTrigger)
+		if op.fleet != nil && op.fleet.Salvage.RandomID == 0 && len(op.fleet.Commanders) > 0 {
+			set, err := op.salvageSet(op.fleet)
+			if err != nil {
+				return err
+			}
+			hazard := worldRandomMaps[op.m.RandomID].HazardLevel
+			op.fleet.Salvage = worldSalvage{RandomID: op.m.RandomID, List: drawSalvage(op.rng, set, hazard)}
 			op.salvages = append(op.salvages, op.fleet.ID)
 		}
 	case worldEffectBossFreeCount:
@@ -394,6 +401,21 @@ func (op *worldOp) condition(raw json.RawMessage, ev *worldAttachment) bool {
 		return slices.Contains(op.state.Count.Collections, arg(1))
 	case "task":
 		return slices.ContainsFunc(op.state.Tasks, func(task worldTask) bool { return task.ID == arg(1) })
+	case "max":
+		// {"max", [event ids], n}: n of those events are on the map (the
+		// promoted "Pawns"' random events, the reinforcement spawners: the
+		// effect after it runs instead of spawning one more)
+		var ids []uint32
+		if len(parts) < 3 || json.Unmarshal(parts[1], &ids) != nil {
+			return false
+		}
+		n := uint32(0)
+		for _, a := range op.m.Attachments {
+			if a.Type == worldAttachEvent && slices.Contains(ids, a.ID) {
+				n++
+			}
+		}
+		return n >= max(arg(2), 1)
 	}
 	return false
 }
@@ -442,6 +464,12 @@ func (op *worldOp) spawnEvents(ev *worldAttachment, ids []uint32, relative bool)
 				picks = cells
 			}
 			for _, cell := range picks {
+				// a rock of a structure (its offsets spawned once the map
+				// is shown, after the map's content) doesn't cover what a
+				// fleet must reach: a resource node, a "Pawn", a fleet
+				if worldObstacleMasks[config.Obstacle]&worldObstacleArrive == 0 && op.m.occupied(cell, op.state.Fleets) {
+					continue
+				}
 				if op.m.addAttachment(newWorldEvent(id, cell[0], cell[1])) {
 					op.mark(cell)
 				}
@@ -450,29 +478,21 @@ func (op *worldOp) spawnEvents(ev *worldAttachment, ids []uint32, relative bool)
 	}
 }
 
-// dropAwards is EffectEventDrop's drop: one of what its expedition shows
-// (expedition_data_template award_display, the server's drop tables being
-// unknown), drawn at random.
+// dropAwards is EffectEventDrop's / DropTreasure's drop: its drop id
+// (params[0]) is a server-side drop table, read by worldEventLoot (the
+// branch it ends and the map's difficulty), a record file's
+// (worldCollectionDrops) a world collection unlock.
 func (op *worldOp) dropAwards(params []json.RawMessage) {
 	if len(params) == 0 {
 		return
 	}
-	awards := worldDropAwards[rawUint(params[0])].AwardDisplay
-	var usable [][]uint32
-	for _, award := range awards {
-		if len(award) >= 2 && award[0] != 0 {
-			usable = append(usable, award)
-		}
-	}
-	if len(usable) == 0 {
+	drop := rawUint(params[0])
+	if file, ok := worldCollectionDrops[drop]; ok {
+		op.drops = append(op.drops, dropInfo(dropTypeWorldCollection, file, 1))
 		return
 	}
-	award := usable[op.rng.IntN(len(usable))]
-	count := uint32(1)
-	if len(award) >= 3 && award[2] > 0 {
-		count = award[2]
-	}
-	op.drops = append(op.drops, dropInfo(award[0], award[1], count))
+	difficulty := worldTemplates[op.m.TemplateID].Difficulty
+	op.drops = append(op.drops, worldEventLoot(op.rng, drop, difficulty, worldZones[op.m.RandomID])...)
 }
 
 // teleport is EffectEventTeleport / TeleportBack ({[map, [row, column],
