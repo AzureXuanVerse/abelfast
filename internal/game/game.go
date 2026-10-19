@@ -99,13 +99,6 @@ func (game *Game) Register() {
 	packets.Handle(game.handleStartLesson)
 	packets.Handle(game.handleEndLesson)
 	packets.Handle(game.handleQuickFinishLesson)
-	packets.Handle(game.handleMetaTacticsInfo)
-	packets.Handle(game.handleMetaTactics)
-	packets.Handle(game.handleMetaTacticsUnlock)
-	packets.Handle(game.handleMetaTacticsSwitch)
-	packets.Handle(game.handleStartLesson)
-	packets.Handle(game.handleEndLesson)
-	packets.Handle(game.handleQuickFinishLesson)
 	// Fleet Technology
 	packets.Handle(game.handleStartFleetTech)
 	packets.Handle(game.handleFinishFleetTech)
