@@ -3,7 +3,9 @@ package game
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
 	"math"
 	"math/rand/v2"
@@ -15,6 +17,7 @@ import (
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/gamedata"
+	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -66,11 +69,20 @@ var (
 	worldPortOpens map[uint32]worldPortOpen
 	worldEntrances map[uint32]worldTreasureEntrance
 
-	// worldGoodsGroups are the world_goods_data ids by group (id / 100: the
-	// same goods at a few prices or counts), for the shops of the ports of
-	// a realm (ids below worldTempGoods) and of the temporary ports
-	// (port_camp 0, the "mingshi" shop of WorldPortLayer:GetPaintingInfo).
-	worldGoodsGroups, worldTempGoodsGroups [][]uint32
+	// worldTempGoodsGroups are the world_goods_data ids of the temporary
+	// ports (port_camp 0, the Mysterious Merchant, the "mingshi" shop of
+	// WorldPortLayer:GetPaintingInfo) by group (id / 100: the same goods
+	// at a few prices or counts).
+	worldTempGoodsGroups [][]uint32
+
+	// worldPortPools are the goods each Azur Lane port's shop draws from
+	// until the monthly reset (world_goods_data ids by port), server
+	// content: server/world_port_pools.json ({"<port id>": [goods ids]}),
+	// made from the wiki's "Supply Shop Before First Reset" lists by
+	// internal/tools/wiki_world_shops.py (every goods below worldTempGoods
+	// is in exactly one port's pool). Without the file every port of a
+	// world_newshop_data port_id draws from all of them.
+	worldPortPools map[uint32][]uint32
 
 	worldPortSettings struct {
 		// world_port_service_1_interval / _2_interval: {level difference,
@@ -136,17 +148,46 @@ func loadWorldPortData() error {
 		return gamedata.Missing("gameset", "world_port_service_2_price / world_death_buff")
 	}
 	groups := map[uint32][]uint32{}
+	var realmGoods []uint32
 	for id := range worldPortGoods {
-		groups[id/100] = append(groups[id/100], id)
+		if id >= worldTempGoods {
+			groups[id/100] = append(groups[id/100], id)
+		} else {
+			realmGoods = append(realmGoods, id)
+		}
 	}
-	worldGoodsGroups, worldTempGoodsGroups = nil, nil
+	slices.Sort(realmGoods)
+	worldTempGoodsGroups = nil
 	for _, group := range slices.Sorted(maps.Keys(groups)) {
 		ids := groups[group]
 		slices.Sort(ids)
-		if ids[0] >= worldTempGoods {
-			worldTempGoodsGroups = append(worldTempGoodsGroups, ids)
-		} else {
-			worldGoodsGroups = append(worldGoodsGroups, ids)
+		worldTempGoodsGroups = append(worldTempGoodsGroups, ids)
+	}
+	return loadWorldPortPools(realmGoods)
+}
+
+// loadWorldPortPools reads server/world_port_pools.json (worldPortPools).
+func loadWorldPortPools(realmGoods []uint32) error {
+	worldPortPools = map[uint32][]uint32{}
+	raw, err := gamedata.ServerFile("world_port_pools.json")
+	if err != nil {
+		return err
+	}
+	if raw == nil {
+		logger.WithFields("World").Warn("no server/world_port_pools.json: every port shop draws from all the goods")
+		for _, goods := range worldNewGoods {
+			worldPortPools[goods.PortID] = realmGoods
+		}
+		return nil
+	}
+	if err := json.Unmarshal(raw, &worldPortPools); err != nil {
+		return fmt.Errorf("world port pools: %w", err)
+	}
+	for port, ids := range worldPortPools {
+		for _, id := range ids {
+			if _, ok := worldPortGoods[id]; !ok || id >= worldTempGoods {
+				return fmt.Errorf("world port pools: port %d: no world_goods_data %d", port, id)
+			}
 		}
 	}
 	return nil
@@ -196,14 +237,44 @@ func (state *worldState) usesNewShop() bool {
 	return activations > 0 && int64(state.ActivateTime) >= worldPortSettings.newShopDate.Unix()
 }
 
+// The port shops' sizes and rotation (the wiki's Operation Siren page: an
+// Azur Lane port shows 8 goods of its pool and rotates every 3 days, the
+// Mysterious Merchant always has 6).
+const (
+	worldPortShopSize     = 8
+	worldMerchantShopSize = 6
+	worldPortRotationDays = 3
+)
+
+// worldPortRotation is the port shops' rotation now is in: 3 days from the
+// 1st of the month (the reset's day, so a month has at least 9 refills),
+// the last one cut short by the next month.
+func worldPortRotation(now time.Time) (start, end time.Time) {
+	month := startOfMonth(now)
+	n := (now.In(gamedata.Zone).Day() - 1) / worldPortRotationDays
+	start = month.AddDate(0, 0, n*worldPortRotationDays)
+	end = start.AddDate(0, 0, worldPortRotationDays)
+	if next := nextMonth(now); end.After(next) {
+		end = next
+	}
+	return start, end
+}
+
 // portOffer is a port's offer at now: the one saved until its
-// next_refresh_time, then a new one. The tables don't say which goods a
-// port sells (the official server picks them): each port offers one goods
-// of every world_goods_data group, drawn for the commander, the port and
-// the day, temporary ports (port_camp 0) from the groups of ids 200000 and
-// up. Offers refresh at the server's midnight, when the client asks again
-// anyway (WorldMapPort:IsValid's zeroHourTime). Its tasks (task_list) are
-// the world's portTasks at the time.
+// next_refresh_time (the end of the rotation; the client asks again at
+// midnight too, WorldMapPort:IsValid's zeroHourTime, and gets the same
+// one), then a new one, drawn for the commander, the port and the
+// rotation:
+//   - an Azur Lane port with a pool (worldPortPools) shows 8 goods of its
+//     pool not bought since the reset, each once (frequency 1); a world
+//     that uses the new port shop (World:UsePortNShop, world_newshop_data
+//     in goods_list) has none here;
+//   - a temporary port (port_camp 0, the Mysterious Merchant) shows 6 of
+//     the world_goods_data groups of ids 200000 and up at one of their
+//     counts, for as long as the world stays on the map it was drawn on;
+//   - the other ports (the Crimson Axis', the Forward Bases) sell nothing.
+//
+// Its tasks (task_list) are the world's portTasks at the time.
 func (state *worldState) portOffer(commanderID, portID uint32, now time.Time) *worldPortState {
 	port := state.port(portID)
 	if port == nil {
@@ -211,21 +282,31 @@ func (state *worldState) portOffer(commanderID, portID uint32, now time.Time) *w
 		state.Ports = append(state.Ports, port)
 	}
 	port.Tasks = state.portTasks(portID)
-	if port.NextRefresh > uint32(now.Unix()) {
+	temp := worldPorts[portID].PortCamp == 0
+	if port.NextRefresh > uint32(now.Unix()) && (!temp || port.MapID == state.MapID) {
 		return port
 	}
-	day := startOfDay(now).Unix()
-	rng := rand.New(rand.NewPCG(uint64(commanderID)<<32|uint64(portID), uint64(day)))
-	groups := worldGoodsGroups
-	if worldPorts[portID].PortCamp == 0 {
-		groups = worldTempGoodsGroups
-	}
+	start, end := worldPortRotation(now)
+	rng := rand.New(rand.NewPCG(uint64(commanderID)<<32|uint64(portID), uint64(start.Unix())^uint64(state.MapID)<<40))
 	port.Goods = nil
-	for _, ids := range groups {
-		id := ids[rng.IntN(len(ids))]
-		port.Goods = append(port.Goods, worldCount{ID: id, Count: max(worldPortGoods[id].Frequency, 1)})
+	switch {
+	case temp:
+		for _, i := range rng.Perm(len(worldTempGoodsGroups))[:min(worldMerchantShopSize, len(worldTempGoodsGroups))] {
+			ids := worldTempGoodsGroups[i]
+			id := ids[rng.IntN(len(ids))]
+			port.Goods = append(port.Goods, worldCount{ID: id, Count: max(worldPortGoods[id].Frequency, 1)})
+		}
+		port.MapID = state.MapID
+	case !state.usesNewShop():
+		left := slices.DeleteFunc(slices.Clone(worldPortPools[portID]), func(id uint32) bool { return slices.Contains(port.Bought, id) })
+		rng.Shuffle(len(left), func(i, j int) { left[i], left[j] = left[j], left[i] })
+		left = left[:min(worldPortShopSize, len(left))]
+		slices.Sort(left)
+		for _, id := range left {
+			port.Goods = append(port.Goods, worldCount{ID: id, Count: max(worldPortGoods[id].Frequency, 1)})
+		}
 	}
-	port.NextRefresh = uint32(nextDay(now).Unix())
+	port.NextRefresh = uint32(end.Unix())
 	state.markPort(port)
 	return port
 }
@@ -317,6 +398,9 @@ func (game *Game) handleWorldPortShopping(client *connection.Client, req *protob
 			}
 			goods = worldPortGoods[req.GetShopId()]
 			port.Goods[i].Count -= count
+			if !slices.Contains(port.Bought, req.GetShopId()) {
+				port.Bought = append(port.Bought, req.GetShopId())
+			}
 			state.markPort(port)
 		case worldShopNew:
 			var ok bool

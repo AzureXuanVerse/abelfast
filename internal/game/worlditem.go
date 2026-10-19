@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/gamedata"
@@ -42,8 +44,16 @@ const (
 // worldItemConfig is a world_item_data_template row.
 type worldItemConfig struct {
 	Name     string          `json:"name"`
+	Display  string          `json:"display"`
 	Usage    string          `json:"usage"`
 	UsageArg json.RawMessage `json:"usage_arg"`
+	// what the monthly reset turns it into: every TransformNum held give
+	// TransformNumber of {TransformType, TransformID} (Supply Shop
+	// Vouchers, resource 3002, for most; worldResetDrops)
+	TransformType   uint32 `json:"item_transform_item_type"`
+	TransformID     uint32 `json:"item_transform_item_id"`
+	TransformNum    uint32 `json:"item_transform_num"`
+	TransformNumber uint32 `json:"item_transform_item_number"`
 }
 
 // worldEventComplete is a world_event_complete row: a zone securing reward
@@ -59,7 +69,15 @@ type itemName struct {
 	Name string `json:"name"`
 }
 
+// worldResource is WorldConst.ResourceID, the Supply Shop Vouchers (a
+// player resource) the monthly reset turns world items into.
+const worldResource = 3002
+
 var (
+	// worldResourceMax is gameset world_resource_max, the most vouchers a
+	// commander holds
+	worldResourceMax uint32
+
 	worldItems          map[uint32]worldItemConfig
 	worldEventCompletes map[uint32]worldEventComplete
 
@@ -75,10 +93,42 @@ var (
 )
 
 // worldLoggerPattern reads a coordinate logger ("R2 Coordinate Logger", "R4
-// Siren Coordinate Logger"): it opens into one of the coordinates items
+// Siren Coordinate Logger", or "Coordinate Logger" / "Siren Coordinate
+// Logger" with the corrosion level, or range, in its display text: "a
+// Corrosion level of 4-6"): it opens into one of the coordinates items
 // (usage_world_map, Siren ones with usage_arg [1]) of the treasure maps
 // (world_chapter_colormask teasure_chapter) of that hazard level.
-var worldLoggerPattern = regexp.MustCompile(`^R(\d+) (Siren )?Coordinate Logger$`)
+var (
+	worldLoggerPattern      = regexp.MustCompile(`^(?:R(\d+) )?(Siren )?Coordinate Logger$`)
+	worldLoggerLevelPattern = regexp.MustCompile(`Corrosion level of (\d+)(?:-(\d+))?`)
+)
+
+// worldLoggerLevels overrides a logger's levels where its text is wrong:
+// the wiki's Operation Siren page has Coordinate Logger 2100001, whose
+// text says "Corrosion level of 4", open R3 and R4 zones.
+var worldLoggerLevels = map[uint32][2]uint64{2100001: {3, 4}}
+
+// loggerLevels are the hazard levels coordinate logger id opens (match is
+// its worldLoggerPattern match).
+func loggerLevels(id uint32, item worldItemConfig, match []string) (low, high uint64) {
+	if match[1] != "" {
+		low, _ = strconv.ParseUint(match[1], 10, 32)
+		return low, low
+	}
+	if levels, ok := worldLoggerLevels[id]; ok {
+		return levels[0], levels[1]
+	}
+	text := worldLoggerLevelPattern.FindStringSubmatch(item.Display)
+	if text == nil {
+		return 0, 0
+	}
+	low, _ = strconv.ParseUint(text[1], 10, 32)
+	high = low
+	if text[2] != "" {
+		high, _ = strconv.ParseUint(text[2], 10, 32)
+	}
+	return low, high
+}
 
 // worldGearPartPattern reads "T4 Random Gear Part": one of the bag's "T4
 // ... Part" items (General, Main Gun, Torpedo, Anti-Air Gun, Aircraft).
@@ -90,14 +140,22 @@ var (
 // loadWorldItemData reads the world items' tables.
 func loadWorldItemData() error {
 	var bag, virtual map[uint32]itemName
+	var gameset map[string]uint32
 	err := gamedata.LoadAll(
 		gamedata.Load("world_item_data_template", &worldItems),
 		gamedata.Load("world_event_complete", &worldEventCompletes),
 		gamedata.Load("item_data_statistics", &bag),
 		gamedata.Load("item_virtual_data_statistics", &virtual),
+		func() (err error) {
+			gameset, err = gamedata.Gameset()
+			return err
+		},
 	)
 	if err != nil {
 		return err
+	}
+	if worldResourceMax = gameset["world_resource_max"]; worldResourceMax == 0 {
+		return gamedata.Missing("gameset", "world_resource_max")
 	}
 	worldBagNames, worldVirtualNames, worldGearParts = map[string]uint32{}, map[string]uint32{}, map[uint32][]uint32{}
 	for _, id := range slices.Sorted(maps.Keys(bag)) {
@@ -124,14 +182,14 @@ func (item worldItemConfig) args() []uint32 {
 	return gamedata.IDs(item.UsageArg)
 }
 
-// worldItemDrops draws what count of a usage_drop world item give, nil when
+// worldItemDrops draws what count of usage_drop world item id give, nil when
 // it can't be read (worldBagNames...).
-func worldItemDrops(item worldItemConfig, count uint32) []*protobuf.DROPINFO {
+func worldItemDrops(id uint32, item worldItemConfig, count uint32) []*protobuf.DROPINFO {
 	name := strings.TrimSpace(item.Name)
 	var pool []dropRef
 	switch match := worldLoggerPattern.FindStringSubmatch(name); {
 	case match != nil:
-		hazard, _ := strconv.ParseUint(match[1], 10, 32)
+		low, high := loggerLevels(id, item, match)
 		siren := match[2] != ""
 		for _, entrance := range worldEntrances {
 			for _, treasure := range entrance.TeasureChapter {
@@ -139,7 +197,7 @@ func worldItemDrops(item worldItemConfig, count uint32) []*protobuf.DROPINFO {
 				if !ok || coordinates.Usage != "usage_world_map" || (len(coordinates.args()) > 0) != siren {
 					continue
 				}
-				if row, ok := worldRandomMaps[treasure[1]]; ok && row.HazardLevel == uint32(hazard) {
+				if row, ok := worldRandomMaps[treasure[1]]; ok && uint64(row.HazardLevel) >= low && uint64(row.HazardLevel) <= high {
 					ref := dropRef{dropTypeWorldItem, treasure[0]}
 					if !slices.Contains(pool, ref) {
 						pool = append(pool, ref)
@@ -338,7 +396,7 @@ func (game *Game) handleWorldItemUse(client *connection.Client, req *protobuf.CS
 				}
 			}
 		case worldUsageDrop:
-			if drops = worldItemDrops(item, count); len(drops) == 0 {
+			if drops = worldItemDrops(id, item, count); len(drops) == 0 {
 				return errRefused
 			}
 		case worldUsageDropAppointed:
@@ -371,4 +429,44 @@ func (game *Game) handleWorldItemUse(client *connection.Client, req *protobuf.CS
 		drops = nil
 	}
 	return client.Send(&protobuf.SC_33302{Result: result(err), DropList: drops})
+}
+
+// resetDrops are what the monthly reset turns the world inventory into
+// (the rest is lost): every item_transform_num of an item gives
+// item_transform_item_number of its transform (Operation Supply Coins 100
+// to 1 voucher, Special Item Tokens 1 to 1, Energy Storage Devices 1 to 5,
+// the coordinates and loggers 10 to 800, the Gear Design Plans their bag
+// item), the vouchers up to world_resource_max held.
+func (tx *Tx) worldResetDrops(state *worldState) ([]*protobuf.DROPINFO, error) {
+	var drops []*protobuf.DROPINFO
+	for _, item := range state.Items {
+		config := worldItems[item.ID]
+		if config.TransformType == 0 || config.TransformID == 0 || config.TransformNum == 0 {
+			continue
+		}
+		if n := item.Count / config.TransformNum * config.TransformNumber; n > 0 {
+			drops = mergeDrop(drops, config.TransformType, config.TransformID, n)
+		}
+	}
+	rows, err := tx.ListResources(tx.ctx, tx.commanderID)
+	if err != nil {
+		return nil, err
+	}
+	held := uint32(0)
+	for _, row := range rows {
+		if row.ResourceID == worldResource {
+			held = row.Amount
+		}
+	}
+	room := worldResourceMax - min(held, worldResourceMax)
+	for i := 0; i < len(drops); i++ {
+		if drops[i].GetType() != dropTypeResource || drops[i].GetId() != worldResource {
+			continue
+		}
+		if drops[i].Number = proto.Uint32(min(drops[i].GetNumber(), room)); drops[i].GetNumber() == 0 {
+			drops = slices.Delete(drops, i, i+1)
+			i--
+		}
+	}
+	return drops, tx.grantDrops(drops)
 }

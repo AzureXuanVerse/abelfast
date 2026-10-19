@@ -76,9 +76,13 @@ type worldTaskConfig struct {
 	ServerType           uint32     `json:"server_type"` // worldTaskServerPort: offered by the ports
 }
 
-// worldTaskServerPort is the world_task_data server_type of the tasks the
-// ports offer (portTasks).
-const worldTaskServerPort = 2
+// world_task_data server_type values: worldTaskServerPort the tasks the
+// ports offer (portTasks, the "Investigate Siren Research Facility" ones),
+// worldTaskServerCollection the collection file missions.
+const (
+	worldTaskServerPort       = 2
+	worldTaskServerCollection = 4
+)
 
 // worldDailyPoolEntry is a world_daily_task_pool entry.
 type worldDailyPoolEntry struct {
@@ -92,9 +96,9 @@ var (
 
 	worldTaskSettings struct {
 		dailyPool  []worldDailyPoolEntry // world_daily_task_pool
-		dailyNum   []uint32              // world_daily_task_num: dailies offered, Monday first
-		dailyLimit uint32                // world_daily_task_limit: dailies accepted a day
-		doingMax   uint32                // world_port_taskmax: tasks under way at once
+		dailyNum   []uint32              // world_daily_task_num: dailies added a day, Monday first
+		dailyLimit uint32                // world_daily_task_limit: dailies queued at most
+		doingMax   uint32                // world_port_taskmax: tasks under way at once (the Mission Hub)
 	}
 )
 
@@ -137,11 +141,10 @@ func loadWorldTaskData() error {
 	return nil
 }
 
-// worldDaily is the day's daily task offer (SC_33414).
+// worldDaily is the daily task queue (SC_33414).
 type worldDaily struct {
-	Tasks    []uint32 `json:"tasks,omitempty"` // offered, not accepted yet
-	Refresh  uint32   `json:"refresh,omitempty"`
-	Accepted uint32   `json:"accepted,omitempty"` // accepted today
+	Tasks   []uint32 `json:"tasks,omitempty"` // queued, not accepted yet
+	Refresh uint32   `json:"refresh,omitempty"`
 }
 
 // task is the task id of the world, nil for none.
@@ -248,7 +251,7 @@ func (tx *Tx) acceptWorldTask(state *worldState, id uint32, now time.Time, rng *
 	}
 	*task = worldTask{ID: id, AcceptTime: uint32(now.Unix()), EventMapID: state.pickTaskEntrance(config, rng)}
 	if len(config.TaskEvent) > 0 {
-		tx.spawnTaskEvents(state, config, task.EventMapID, rng)
+		tx.spawnTaskEvents(state, config, task.EventMapID, rng, true)
 	}
 	return state.task(id)
 }
@@ -256,11 +259,11 @@ func (tx *Tx) acceptWorldTask(state *worldState, id uint32, now time.Time, rng *
 // spawnTaskEvents adds a task's task_event events to the map it leads to
 // (following_random, else its entrance's base map) unless the map has them
 // already. It runs once the request's other changes are saved (a map
-// operation saves its maps last), the active map's new cells pushed in an
+// operation saves its maps last), the active map's new cells pushed (push) in an
 // SC_33105. Storing the map doesn't put it in chapter_list: entering it
 // still costs its enter_cost. Where the official server puts them isn't known: their grids
 // are read like the effects' spawns.
-func (tx *Tx) spawnTaskEvents(state *worldState, config worldTaskConfig, entrance uint32, rng *rand.Rand) {
+func (tx *Tx) spawnTaskEvents(state *worldState, config worldTaskConfig, entrance uint32, rng *rand.Rand, push bool) {
 	randomID := uint32(0)
 	if len(config.FollowingRandom) > 0 {
 		randomID = config.FollowingRandom[0]
@@ -303,15 +306,29 @@ func (tx *Tx) spawnTaskEvents(state *worldState, config worldTaskConfig, entranc
 		if err := tx.saveWorldMap(m); err != nil {
 			return err
 		}
-		if m.RandomID == state.MapID {
-			push := &protobuf.SC_33105{}
+		if push && m.RandomID == state.MapID {
+			cells := &protobuf.SC_33105{}
 			for _, a := range added {
-				push.PosList = append(push.PosList, m.posInfo(a.Row, a.Column, state.Fleets))
+				cells.PosList = append(cells.PosList, m.posInfo(a.Row, a.Column, state.Fleets))
 			}
-			tx.push(push)
+			tx.push(cells)
 		}
 		return nil
 	})
+}
+
+// respawnTaskEvents puts back the task_event events of the tasks under way
+// on maps that lack them: the monthly reset drops the maps but keeps the
+// Siren research and collection missions, whose events are on them
+// (spawnTaskEvents skips the maps that have them already). Run by the
+// activation, whose reply brings the active map anyway: nothing is pushed.
+func (tx *Tx) respawnTaskEvents(state *worldState, now time.Time) {
+	rng := rand.New(rand.NewPCG(uint64(now.UnixNano()), uint64(tx.commanderID)))
+	for _, task := range state.Tasks {
+		if config := worldTasks[task.ID]; task.alive() && len(config.TaskEvent) > 0 {
+			tx.spawnTaskEvents(state, config, task.EventMapID, rng, false)
+		}
+	}
 }
 
 // recountWorldTasks counts what happened for the tasks under way; it
@@ -560,38 +577,48 @@ func (game *Game) handleWorldSubmitTask(client *connection.Client, req *protobuf
 	return nil
 }
 
-// dailyOffer is the day's daily tasks, drawn again once the day is over:
-// world_daily_task_num[week day] of world_daily_task_pool ({task, weight,
-// lowest progress, highest progress}), by weight among those the progress
-// is in range of and not under way, none before the daily tasks open
-// (SystemDailyTask). How the official server draws them isn't known.
+// dailyOffer is the daily task queue at now. Every server midnight adds
+// world_daily_task_num[week day] tasks (5 on weekdays, 6 at the weekend)
+// to the queue, which holds world_daily_task_limit (12) at most: once full
+// no more are added (the wiki's Operation Siren page: "Up to 12 daily
+// missions can be queued, after which new daily missions will not spawn").
+// They are drawn from world_daily_task_pool ({task, weight, lowest
+// progress, highest progress}) by weight, among those the progress is in
+// range of, neither queued nor under way; none before the daily tasks open
+// (SystemDailyTask). The days the world wasn't asked about add theirs too
+// (at most until the queue is full); the first ask adds the day's only.
+// How the official server draws them isn't known.
 func (state *worldState) dailyOffer(commanderID uint32, now time.Time) {
 	daily := &state.Daily
 	if daily.Refresh > uint32(now.Unix()) {
 		return
 	}
+	day := startOfDay(now)
+	if daily.Refresh != 0 {
+		day = startOfDay(time.Unix(int64(daily.Refresh), 0))
+	}
 	daily.Refresh = uint32(nextDay(now).Unix())
-	daily.Accepted = 0
-	daily.Tasks = nil
 	progress := state.Count.Progress
 	if !state.activated() || !worldSystemOpen(worldSystemDailyTask, progress) {
 		return
 	}
-	var pool []worldDailyPoolEntry
-	for _, entry := range worldTaskSettings.dailyPool {
-		task := state.task(entry.task)
-		if entry.minStage <= progress && progress <= entry.maxStage && (task == nil || !task.alive()) {
-			pool = append(pool, entry)
+	for ; !day.After(now) && uint32(len(daily.Tasks)) < worldTaskSettings.dailyLimit; day = day.AddDate(0, 0, 1) {
+		var pool []worldDailyPoolEntry
+		for _, entry := range worldTaskSettings.dailyPool {
+			task := state.task(entry.task)
+			if entry.minStage <= progress && progress <= entry.maxStage && (task == nil || !task.alive()) && !slices.Contains(daily.Tasks, entry.task) {
+				pool = append(pool, entry)
+			}
 		}
-	}
-	rng := rand.New(rand.NewPCG(uint64(commanderID), uint64(startOfDay(now).Unix())))
-	for n := worldTaskSettings.dailyNum[serverWeekday(now)-1]; n > 0 && len(pool) > 0; n-- {
-		i := weightedPick(func(n uint32) uint32 { return rng.Uint32N(n) }, pool, func(e worldDailyPoolEntry) uint32 { return e.weight })
-		if i < 0 {
-			break
+		rng := rand.New(rand.NewPCG(uint64(commanderID), uint64(day.Unix())))
+		for n := worldTaskSettings.dailyNum[serverWeekday(day)-1]; n > 0 && len(pool) > 0 && uint32(len(daily.Tasks)) < worldTaskSettings.dailyLimit; n-- {
+			i := weightedPick(func(n uint32) uint32 { return rng.Uint32N(n) }, pool, func(e worldDailyPoolEntry) uint32 { return e.weight })
+			if i < 0 {
+				break
+			}
+			daily.Tasks = append(daily.Tasks, pool[i].task)
+			pool = slices.Delete(pool, i, i+1)
 		}
-		daily.Tasks = append(daily.Tasks, pool[i].task)
-		pool = slices.Delete(pool, i, i+1)
 	}
 }
 
@@ -623,10 +650,11 @@ func (game *Game) handleWorldDailyTasks(client *connection.Client, req *protobuf
 // handleWorldTriggerDailyTask answers WorldTriggerDailyTaskCommand
 // (CS_33415): daily tasks of the offer are accepted (the panel's accept
 // button, or accept all); the client adds task_list and takes them off
-// its offer. Result 6 is "world_task_refuse1" (world_daily_task_limit
-// accepted today, or world_port_taskmax under way), 20
-// "world_sametask_tip" (one is under way already). Accepting all stops
-// at the limits, refused only when none could be.
+// its queue. Result 6 is "world_task_refuse1" (the Mission Hub full:
+// world_port_taskmax tasks under way, as WorldTaskProxy:canAcceptDailyTask
+// counts them), 20 "world_sametask_tip" (one is under way already).
+// Accepting all stops once the hub is full, refused only when none could
+// be.
 func (game *Game) handleWorldTriggerDailyTask(client *connection.Client, req *protobuf.CS_33415) error {
 	ctx := context.Background()
 	now := serverNow()
@@ -647,7 +675,7 @@ func (game *Game) handleWorldTriggerDailyTask(client *connection.Client, req *pr
 				refusedWith = refusal{"daily task under way", 20}
 				continue
 			}
-			if state.Daily.Accepted >= worldTaskSettings.dailyLimit || state.doingTasks() >= worldTaskSettings.doingMax {
+			if state.doingTasks() >= worldTaskSettings.doingMax {
 				refusedWith = refusal{"too many daily tasks", 6}
 				break
 			}
@@ -655,7 +683,6 @@ func (game *Game) handleWorldTriggerDailyTask(client *connection.Client, req *pr
 			if task == nil {
 				continue
 			}
-			state.Daily.Accepted++
 			state.Daily.Tasks = slices.DeleteFunc(state.Daily.Tasks, func(t uint32) bool { return t == id })
 			reply.TaskList = append(reply.TaskList, task.info())
 		}

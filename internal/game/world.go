@@ -113,6 +113,7 @@ func (game *Game) handleWorldActivate(client *connection.Client, req *protobuf.C
 		state.enterMap(m)
 		tx.placeWorldFleets(state, m)
 		assignPressingAwards(state, tx.commanderID)
+		tx.respawnTaskEvents(state, now)
 		if err := tx.saveWorldMap(m); err != nil {
 			return err
 		}
@@ -301,11 +302,11 @@ func (game *Game) handleWorldStaminaExchange(client *connection.Client, req *pro
 //   - type 1, the monthly reset is due (World:CheckReset(true): activated
 //     and last_change_group_timestamp passed): time is the new due date
 //     while it isn't, or while the progress is below world_resetting_stage
-//     (the reset waits for chapter 4, gametip world_reset_tip); time 0 is
-//     the reset: the maps, fleets, items, tasks and ports go, the
-//     formation (TransDefaultFleets), camp, achievements, counters and
-//     progress stay, the action points start again at the max. The items
-//     the official server converts into vouchers (drop_list) aren't;
+//     (the reset waits for the story's end, gametip world_reset_tip);
+//     time 0 is the reset (state.reset), its drop_list the Supply Shop
+//     Vouchers and items the world inventory turned into
+//     (worldResetDrops), which the client adds itself
+//     (PlayerConst.addTranDrop) and shows in its reset window;
 //   - type 2, the reset stage reached: the Siren zones (sairen_chapter).
 func (game *Game) handleWorldKill(client *connection.Client, req *protobuf.CS_33112) error {
 	ctx := context.Background()
@@ -338,6 +339,11 @@ func (game *Game) handleWorldKill(client *connection.Client, req *protobuf.CS_33
 				reply.Time = proto.Uint32(state.ExpiredTime)
 				return tx.saveWorldState(state)
 			}
+			drops, err := tx.worldResetDrops(state)
+			if err != nil {
+				return err
+			}
+			reply.DropList = drops
 			if err := tx.DeleteWorldMaps(tx.ctx, tx.commanderID); err != nil {
 				return err
 			}
@@ -357,13 +363,28 @@ func (game *Game) handleWorldKill(client *connection.Client, req *protobuf.CS_33
 
 // reset is the world after the monthly reset (World:Dispose with inherit:
 // realm, default fleets, achievements, activate count, progress, stamina
-// manager and collections carry over).
+// manager and collections carry over). The wiki's Operation Siren page
+// ("Reset") lists what goes: the zones and map travel (maps, secured and
+// Siren zones, transports), the world inventory (worldResetDrops turned
+// part of it into vouchers), the action points (set to the max, 200), the
+// adaptive tuning (global buffs), the fleets' damage (the next activation
+// deploys them at full hp), the unfinished daily missions (the queue and
+// the dailies under way) and the uncompleted Siren Strongholds; and what
+// stays: the exploration rewards and progress (targets), the unlocked
+// ports, the META Showdown, the vouchers (a player resource), the
+// collection, the unfinished "Investigate Siren Research" missions and the
+// week's oil purchases of action points. The Siren research missions
+// (server_type 2) and the collection file missions (4) stay, finished or
+// not (a finished one isn't offered again); the port shops' pools start
+// again (Ports), as do the new port shop's purchases (goods_list) and the
+// voucher shop's (out_shop_buy_list).
 func (state *worldState) reset(now time.Time) *worldState {
 	next := &worldState{
-		Camp:          state.Camp,
-		DefaultFleets: state.DefaultFleets,
-		Targets:       state.Targets,
-		TargetFetches: state.TargetFetches,
+		Camp:            state.Camp,
+		DefaultFleets:   state.DefaultFleets,
+		Targets:         state.Targets,
+		TargetFetches:   state.TargetFetches,
+		TaskFinishCount: state.TaskFinishCount,
 		Count: worldCountInfo{
 			Progress:    state.Count.Progress,
 			Activations: state.Count.Activations,
@@ -372,6 +393,11 @@ func (state *worldState) reset(now time.Time) *worldState {
 		Stamina:     state.Stamina,
 		GlobalFlags: state.GlobalFlags,
 		MonthBoss:   state.MonthBoss,
+	}
+	for _, task := range state.Tasks {
+		if server := worldTasks[task.ID].ServerType; server == worldTaskServerPort || server == worldTaskServerCollection {
+			next.Tasks = append(next.Tasks, task)
+		}
 	}
 	next.Stamina.Power, next.Stamina.Extra = worldSettings.maxStamina, 0
 	next.Stamina.LastRecover = uint32(now.Unix())

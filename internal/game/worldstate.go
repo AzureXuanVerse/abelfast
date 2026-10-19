@@ -226,6 +226,11 @@ type worldPortState struct {
 	Tasks       []uint32     `json:"tasks,omitempty"`
 	Goods       []worldCount `json:"goods,omitempty"`
 	NextRefresh uint32       `json:"next_refresh"`
+	// Bought are the goods of the port's pool bought since the monthly
+	// reset (worldPortPools), never offered again until it
+	Bought []uint32 `json:"bought,omitempty"`
+	// MapID is the map a temporary port's offer was drawn on
+	MapID uint32 `json:"map_id,omitempty"`
 }
 
 // worldTarget is a WORLDTARGET: an achievement's trigger counts.
