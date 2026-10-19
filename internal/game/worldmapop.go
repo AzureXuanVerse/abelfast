@@ -698,11 +698,33 @@ func (op *worldOp) transport(randomID, entrance uint32, cell [2]uint32, hasCell 
 	if len(random.OpenStage) > 0 && random.OpenStage[0] > op.state.Count.Progress || mask.World == 0 {
 		return errRefused
 	}
+	// a treasure map (teasure_chapter: an Obscured or Abyssal Zone) costs
+	// its coordinates item, which the client takes off itself once in
+	// (WorldMapOp:Apply, TreasureMap2ItemId then RemoveItem(item, 1)); it
+	// only offers the map while one is held (EntranceToReplacementMapList).
+	// Its templates all have is_clear, so the zone starts over once left
+	// (needClear) and only another item opens it again.
+	var coordinates uint32
+	for _, treasure := range mask.TeasureChapter {
+		if treasure[1] == randomID {
+			coordinates = treasure[0]
+			break
+		}
+	}
+	if coordinates != 0 && op.state.item(coordinates) == 0 {
+		return errRefused
+	}
 	var at *[2]uint32
 	if hasCell {
 		at = &cell
 	}
-	return op.switchMap(randomID, entrance, at, true)
+	if err := op.switchMap(randomID, entrance, at, true); err != nil {
+		return err
+	}
+	if coordinates != 0 {
+		op.state.addItem(coordinates, -1)
+	}
+	return nil
 }
 
 // jumpOut is OpReqJumpOut: the fleets leave a map of
