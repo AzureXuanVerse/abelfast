@@ -25,11 +25,16 @@ const (
 // up to a maximum of 15" (gametip world_boss_help_meta).
 const worldBossMaxLevel = 15
 
-// worldBossKillPt is the Sync Points of a boss killed at level: no client
-// table holds them (the boss's drop_show_self only names the Sync Point
-// resource). The players' figure for a level 15 kill is 375, so 25 a level.
+// worldBossKillPts are the Sync Points of one's own boss killed at each level
+// (from 1): no client table holds them (the boss's drop_show_self only names
+// the Sync Point resource), these are the wiki's (META Showdown, "Summon
+// Defeat Sync Points"): 150 at level 1, 15 more a level, 375 at level 15 (a
+// Dossier boss, always level 15).
+var worldBossKillPts = [worldBossMaxLevel]uint32{150, 165, 180, 195, 210, 225, 240, 255, 270, 285, 300, 315, 330, 345, 375}
+
+// worldBossKillPt is the Sync Points of a boss killed at level.
 func worldBossKillPt(level uint32) uint32 {
-	return 25 * level
+	return worldBossKillPts[min(max(level, 1), worldBossMaxLevel)-1]
 }
 
 // world_joint_boss_template row: a META ship's boss. state is the season of
@@ -61,12 +66,14 @@ var (
 	worldBossCurrent   worldBossTicket // curr_boss_ticket
 	worldBossPast      worldBossTicket // past_joint_boss_ticket
 	// joint_boss_oil_consume: the oil of the n-th battle against one's own
-	// boss, the last value for any later one (GetBossOilConsume)
+	// boss, the last value for any later one (GetBossOilConsume): 0, 40,
+	// 20 x2, 10 x4, 5 x8, 1 x40, then 0, 200 in all, which is why the wiki's
+	// Dossier auto-deploy never costs more than 200
 	worldBossOil []uint32
 	// gameset values, in seconds
 	worldBossLifetime    uint32 // joint_boss_bonus_time: a boss lasts 24 hours
-	worldBossSupportTime uint32 // joint_boss_world_time: a support request
-	worldBossAutoTime    uint32 // past_joint_boss_autofight_time: Dossier auto-deploy
+	worldBossSupportTime uint32 // joint_boss_world_time: a support request, 30 minutes
+	worldBossAutoTime    uint32 // past_joint_boss_autofight_time: Dossier auto-deploy, 15 minutes
 )
 
 func loadWorldBossData() error {

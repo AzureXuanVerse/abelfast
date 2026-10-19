@@ -107,7 +107,10 @@ func (boss *worldBoss) clearSelfBoss() {
 }
 
 // damage takes amount off the commander's boss; a kill raises the level of
-// the next boss of the season (up to worldBossMaxLevel).
+// the next boss of the season (up to worldBossMaxLevel): "after defeating a
+// META boss, the difficulty of subsequent META Showdowns will increase by 1
+// level" (gametip world_boss_help_meta, the CN text alike), where the wiki
+// has every summon raise it.
 func (boss *worldBoss) damage(amount uint32) {
 	amount = min(amount, boss.BossHp)
 	boss.BossHp -= amount
