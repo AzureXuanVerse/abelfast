@@ -47,5 +47,10 @@ func loadGameData() error {
 		loadChallengeData,
 		loadDockyardData,
 		loadGuildData,
+		loadWorldData,
+		loadWorldOpData,
+		loadWorldPortData,
+		loadWorldItemData,
+		loadWorldTaskData,
 	)
 }

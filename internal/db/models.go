@@ -997,3 +997,14 @@ type WorldBossShip struct {
 	Pos         uint32
 	ShipID      uint32
 }
+
+type WorldMap struct {
+	CommanderID uint32
+	RandomID    uint32
+	State       []byte
+}
+
+type WorldState struct {
+	CommanderID uint32
+	State       []byte
+}

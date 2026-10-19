@@ -1,0 +1,374 @@
+package game
+
+import (
+	"context"
+	"encoding/json"
+	"maps"
+	"math"
+	"math/rand/v2"
+	"regexp"
+	"slices"
+	"strconv"
+	"strings"
+
+	"github.com/ggmolly/belfast/internal/connection"
+	"github.com/ggmolly/belfast/internal/db"
+	"github.com/ggmolly/belfast/internal/gamedata"
+	"github.com/ggmolly/belfast/internal/protobuf"
+)
+
+// Operation Siren's inventory: using world items (CS_33301). Built from the
+// client's Lua and the world_* tables alone (no capture has the mode):
+// controller/command/world/inventory/worlditemusecommand.lua,
+// view/world/worldinventorylayer.lua, worldallocatelayer.lua,
+// worldassigneditemview.lua, WorldMediator's WORLD_ITEM_USE_DONE; check on
+// the device first.
+
+// world_item_data_template usages (WorldItem.Usage*) the client sends
+// CS_33301 for. usage_world_map (coordinates, WorldInventoryMediator.OnMap)
+// and usage_undefined (coins, crates) are never used through it.
+const (
+	worldUsageBuff          = "usage_world_buff"          // [quota, ship buff]: a buff stack per item on each ship picked
+	worldUsageHeal          = "usage_world_healing"       // [quota, hp_rant]: hp in 1/10000 per item
+	worldUsageHealValue     = "usage_world_healing_value" // [quota, hp]: hp points per item
+	worldUsageRecoverAP     = "usage_world_recoverAP"     // [points]: action points per item
+	worldUsageDrop          = "usage_drop"                // a server-side drop table id
+	worldUsageDropAppointed = "usage_drop_appointed"      // [[type, id, count]...]: the one picked
+	worldUsageClean         = "usage_world_clean"         // every zone securing reward at once
+	worldUsageSLGBuff       = "usage_worldSLGbuff"        // [global buff, floors] per item
+	worldUsageFlag          = "usage_world_flag"          // [World.gobalFlag index]
+)
+
+// worldItemConfig is a world_item_data_template row.
+type worldItemConfig struct {
+	Name     string          `json:"name"`
+	Usage    string          `json:"usage"`
+	UsageArg json.RawMessage `json:"usage_arg"`
+}
+
+// worldEventComplete is a world_event_complete row: a zone securing reward
+// (CHAPTERAWARDINFO.award).
+type worldEventComplete struct {
+	RewardItems [][]uint32 `json:"event_reward_item"`    // [type, id, count]
+	RewardBuff  []uint32   `json:"event_reward_slgbuff"` // [global buff, floors]
+}
+
+// itemName is the name of an item_data_statistics or
+// item_virtual_data_statistics row.
+type itemName struct {
+	Name string `json:"name"`
+}
+
+var (
+	worldItems          map[uint32]worldItemConfig
+	worldEventCompletes map[uint32]worldEventComplete
+
+	// usage_drop's drop tables are the server's; what an item gives is read
+	// from its name: a bag item of the same name (Nanoceramic Alloy, T1
+	// Ordnance Testing Report...), else a container virtual item of the
+	// same name whose display_icon lists what it turns into (T1
+	// Development Materials Container, dropPools), and the patterns of
+	// worldLoggerPattern / worldGearPartPattern.
+	worldBagNames     map[string]uint32 // lower-cased item_data_statistics name to id
+	worldVirtualNames map[string]uint32 // lower-cased item_virtual_data_statistics name to id
+	worldGearParts    map[uint32][]uint32
+)
+
+// worldLoggerPattern reads a coordinate logger ("R2 Coordinate Logger", "R4
+// Siren Coordinate Logger"): it opens into one of the coordinates items
+// (usage_world_map, Siren ones with usage_arg [1]) of the treasure maps
+// (world_chapter_colormask teasure_chapter) of that hazard level.
+var worldLoggerPattern = regexp.MustCompile(`^R(\d+) (Siren )?Coordinate Logger$`)
+
+// worldGearPartPattern reads "T4 Random Gear Part": one of the bag's "T4
+// ... Part" items (General, Main Gun, Torpedo, Anti-Air Gun, Aircraft).
+var (
+	worldGearPartPattern = regexp.MustCompile(`^T(\d+) Random Gear Part$`)
+	bagGearPartPattern   = regexp.MustCompile(`^T(\d+) .+ Part$`)
+)
+
+// loadWorldItemData reads the world items' tables.
+func loadWorldItemData() error {
+	var bag, virtual map[uint32]itemName
+	err := gamedata.LoadAll(
+		gamedata.Load("world_item_data_template", &worldItems),
+		gamedata.Load("world_event_complete", &worldEventCompletes),
+		gamedata.Load("item_data_statistics", &bag),
+		gamedata.Load("item_virtual_data_statistics", &virtual),
+	)
+	if err != nil {
+		return err
+	}
+	worldBagNames, worldVirtualNames, worldGearParts = map[string]uint32{}, map[string]uint32{}, map[uint32][]uint32{}
+	for _, id := range slices.Sorted(maps.Keys(bag)) {
+		name := strings.TrimSpace(bag[id].Name)
+		if _, ok := worldBagNames[strings.ToLower(name)]; !ok {
+			worldBagNames[strings.ToLower(name)] = id
+		}
+		if match := bagGearPartPattern.FindStringSubmatch(name); match != nil && !strings.Contains(name, "Random") {
+			tier, _ := strconv.ParseUint(match[1], 10, 32)
+			worldGearParts[uint32(tier)] = append(worldGearParts[uint32(tier)], id)
+		}
+	}
+	for _, id := range slices.Sorted(maps.Keys(virtual)) {
+		name := strings.ToLower(strings.TrimSpace(virtual[id].Name))
+		if _, ok := worldVirtualNames[name]; !ok {
+			worldVirtualNames[name] = id
+		}
+	}
+	return nil
+}
+
+// worldItemArgs is a usage_arg read as numbers.
+func (item worldItemConfig) args() []uint32 {
+	return gamedata.IDs(item.UsageArg)
+}
+
+// worldItemDrops draws what count of a usage_drop world item give, nil when
+// it can't be read (worldBagNames...).
+func worldItemDrops(item worldItemConfig, count uint32) []*protobuf.DROPINFO {
+	name := strings.TrimSpace(item.Name)
+	var pool []dropRef
+	switch match := worldLoggerPattern.FindStringSubmatch(name); {
+	case match != nil:
+		hazard, _ := strconv.ParseUint(match[1], 10, 32)
+		siren := match[2] != ""
+		for _, entrance := range worldEntrances {
+			for _, treasure := range entrance.TeasureChapter {
+				coordinates, ok := worldItems[treasure[0]]
+				if !ok || coordinates.Usage != "usage_world_map" || (len(coordinates.args()) > 0) != siren {
+					continue
+				}
+				if row, ok := worldRandomMaps[treasure[1]]; ok && row.HazardLevel == uint32(hazard) {
+					ref := dropRef{dropTypeWorldItem, treasure[0]}
+					if !slices.Contains(pool, ref) {
+						pool = append(pool, ref)
+					}
+				}
+			}
+		}
+	case worldGearPartPattern.MatchString(name):
+		tier, _ := strconv.ParseUint(worldGearPartPattern.FindStringSubmatch(name)[1], 10, 32)
+		for _, id := range worldGearParts[uint32(tier)] {
+			pool = append(pool, dropRef{dropTypeItem, id})
+		}
+	default:
+		if id, ok := worldBagNames[strings.ToLower(name)]; ok {
+			return []*protobuf.DROPINFO{dropInfo(dropTypeItem, id, count)}
+		}
+		if id, ok := worldVirtualNames[strings.ToLower(name)]; ok {
+			pool = dropPools[id]
+		}
+	}
+	if len(pool) == 0 {
+		return nil
+	}
+	slices.SortFunc(pool, func(a, b dropRef) int { return int(a.id) - int(b.id) })
+	var drops []*protobuf.DROPINFO
+	for range count {
+		ref := pool[rand.IntN(len(pool))]
+		drops = mergeDrop(drops, ref.kind, ref.id, 1)
+	}
+	return drops
+}
+
+// grantWorldDrops gives drops: world items (drop type 12) into the world
+// inventory, everything else through grantDrops.
+func (tx *Tx) grantWorldDrops(state *worldState, drops []*protobuf.DROPINFO) error {
+	var others []*protobuf.DROPINFO
+	for _, drop := range drops {
+		if drop.GetType() == dropTypeWorldItem {
+			state.addItem(drop.GetId(), int64(drop.GetNumber()))
+		} else {
+			others = append(others, drop)
+		}
+	}
+	if len(others) == 0 {
+		return nil
+	}
+	return tx.grantDrops(others)
+}
+
+// addWorldBuff adds floors to a buff of a list (WorldBuff:AddFloor, 0 to
+// 999), dropping it at 0.
+func addWorldBuff(buffs []worldBuff, id uint32, floors int64) []worldBuff {
+	i := slices.IndexFunc(buffs, func(buff worldBuff) bool { return buff.ID == id })
+	if i < 0 {
+		buffs = append(buffs, worldBuff{ID: id})
+		i = len(buffs) - 1
+	}
+	stack := min(max(int64(buffs[i].Stack)+floors, 0), 999)
+	if stack == 0 {
+		return slices.Delete(buffs, i, i+1)
+	}
+	buffs[i].Stack = uint32(stack)
+	return buffs
+}
+
+// worldShipMaxHP is a ship's durability at its level, without gear or
+// bonuses (the client's getProperties adds them: WorldMapShip:
+// RegenerateValue's hp_rant is an estimate here).
+func (tx *Tx) worldShipMaxHP(id uint32) (float64, error) {
+	ship, err := tx.GetShip(tx.ctx, db.GetShipParams{ID: id, CommanderID: tx.commanderID})
+	if err != nil {
+		return 0, err
+	}
+	return guildShipAttr(db.GuildOperationShip{TemplateID: ship.TemplateID, Level: ship.Level}, 1), nil
+}
+
+// handleWorldItemUse answers WorldItemUseCommand (CS_33301): use count of a
+// world item, arg naming the ships (buff and repair items, picked in
+// WorldAllocateLayer up to usage_arg[1] of them) or the pick of a selection
+// (usage_drop_appointed, the [type, id, count] entry). On result 0 the
+// client removes the items, then by usage: adds the ship buffs, heals the
+// ships, adds the action points (ExchangeStamina, past the max), sets the
+// global flag (usage_world_flag 1: treasure_flag) or adds the global buff
+// (WorldMediator), claims every zone securing reward (usage_world_clean,
+// WorldScene:GetAllPessingAward: the rewards' slgbuffs; their zones count
+// as secured from then on), and adds drop_list
+// (PlayerConst.addTranDrop, world items into the world inventory) for the
+// others. Errors show "Operation Siren item usage failure:" result.
+func (game *Game) handleWorldItemUse(client *connection.Client, req *protobuf.CS_33301) error {
+	ctx := context.Background()
+	now := serverNow()
+	var drops []*protobuf.DROPINFO
+	err := game.tx(ctx, client, func(tx *Tx) error {
+		state, err := tx.worldState(now)
+		if err != nil {
+			return err
+		}
+		id, count, arg := req.GetId(), req.GetCount(), req.GetArg()
+		item, ok := worldItems[id]
+		if !state.activated() || !ok || count == 0 {
+			return errRefused
+		}
+		if state.item(id) < count {
+			return ErrNotEnough
+		}
+		args := item.args()
+		ships := func() ([]*worldShip, error) {
+			if len(args) < 2 || len(arg) == 0 || uint32(len(arg)) > args[0] {
+				return nil, errRefused
+			}
+			var list []*worldShip
+			for i, shipID := range arg {
+				ship := state.worldShip(shipID)
+				if ship == nil || slices.Contains(arg[:i], shipID) {
+					return nil, errRefused
+				}
+				list = append(list, ship)
+			}
+			return list, nil
+		}
+		switch item.Usage {
+		case worldUsageBuff:
+			list, err := ships()
+			if err != nil {
+				return err
+			}
+			for _, ship := range list {
+				ship.Buffs = addWorldBuff(ship.Buffs, args[1], int64(count))
+			}
+		case worldUsageHeal:
+			list, err := ships()
+			if err != nil {
+				return err
+			}
+			for _, ship := range list {
+				ship.HPRant = min(10000, ship.HPRant+args[1]*count)
+			}
+		case worldUsageHealValue:
+			list, err := ships()
+			if err != nil {
+				return err
+			}
+			for _, ship := range list {
+				hp, err := tx.worldShipMaxHP(ship.ID)
+				if err != nil {
+					return err
+				}
+				if hp <= 0 {
+					return errRefused
+				}
+				ship.HPRant = uint32(min(10000, float64(ship.HPRant)+math.Floor(float64(args[1]*count)/hp*10000)))
+			}
+		case worldUsageRecoverAP:
+			if len(args) == 0 {
+				return errRefused
+			}
+			state.Stamina.Power += args[0] * count
+		case worldUsageSLGBuff:
+			if len(args) < 2 {
+				return errRefused
+			}
+			state.Buffs = addWorldBuff(state.Buffs, args[0], int64(args[1]*count))
+		case worldUsageFlag:
+			if len(args) == 0 || args[0] == 0 {
+				return errRefused
+			}
+			for uint32(len(state.GlobalFlags)) < args[0] {
+				state.GlobalFlags = append(state.GlobalFlags, 0)
+			}
+			state.GlobalFlags[args[0]-1] = 1
+		case worldUsageClean:
+			// a CHAPTERAWARDINFO with flag 1 is still to take
+			// (WorldProxy:NetUpdateWorldPressingAward)
+			for i, award := range state.ChapterAwards {
+				if award.Flag != 1 {
+					continue
+				}
+				state.ChapterAwards[i].Flag = 0
+				// WorldScene:GetAllPessingAward also opens the
+				// entrance's transfers (MarkMapTransport), which after a
+				// reload only a secured base map gives
+				// (WorldAtlas:BuildTransportDic): the base map goes in
+				// clean_chapter ("all normal zones will remain scouted
+				// until the next reset", story GWORLDS06)
+				if base := worldColormasks[award.ID].Chapter; base != 0 && !slices.Contains(state.CleanChapters, base) {
+					state.CleanChapters = append(state.CleanChapters, base)
+				}
+				reward := worldEventCompletes[award.Award]
+				for _, entry := range reward.RewardItems {
+					if len(entry) >= 3 {
+						drops = mergeDrop(drops, entry[0], entry[1], entry[2])
+					}
+				}
+				if len(reward.RewardBuff) >= 2 {
+					state.Buffs = addWorldBuff(state.Buffs, reward.RewardBuff[0], int64(reward.RewardBuff[1]))
+				}
+			}
+		case worldUsageDrop:
+			if drops = worldItemDrops(item, count); len(drops) == 0 {
+				return errRefused
+			}
+		case worldUsageDropAppointed:
+			var choices [][]uint32
+			if json.Unmarshal(item.UsageArg, &choices) != nil || len(arg) < 3 || !slices.ContainsFunc(choices, func(choice []uint32) bool { return slices.Equal(choice, arg) }) {
+				return errRefused
+			}
+			drops = []*protobuf.DROPINFO{dropInfo(arg[0], arg[1], arg[2]*count)}
+		default:
+			return errRefused
+		}
+		for _, drop := range drops {
+			if drop.GetType() != dropTypeWorldItem && !storableDrop(drop.GetType(), drop.GetId()) {
+				return errRefused
+			}
+			if _, ok := worldItems[drop.GetId()]; drop.GetType() == dropTypeWorldItem && !ok {
+				return errRefused
+			}
+		}
+		state.addItem(id, -int64(count))
+		if err := tx.grantWorldDrops(state, drops); err != nil {
+			return err
+		}
+		return tx.saveWorldState(state)
+	})
+	if err != nil && !refused(err) {
+		return err
+	}
+	if err != nil {
+		drops = nil
+	}
+	return client.Send(&protobuf.SC_33302{Result: result(err), DropList: drops})
+}

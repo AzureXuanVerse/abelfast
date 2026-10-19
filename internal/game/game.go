@@ -76,7 +76,26 @@ func (game *Game) Register() {
 	packets.Handle(game.handleSecondaryPassword)
 	packets.Handle(game.handleChangeChatRoom)
 	packets.Handle(game.handleClientReport)
+	// Operation Siren: state, activation, maps, stamina
 	packets.Handle(game.handleWorldState)
+	packets.Handle(game.handleWorldActivate)
+	packets.Handle(game.handleWorldMapReq)
+	packets.Handle(game.handleWorldStaminaExchange)
+	packets.Handle(game.handleWorldKill)
+	// Operation Siren: map ops
+	packets.Handle(game.handleWorldMapOp)
+	// Operation Siren: ports and items
+	packets.Handle(game.handleWorldPortReq)
+	packets.Handle(game.handleWorldPortShopping)
+	packets.Handle(game.handleWorldShipRepair)
+	packets.Handle(game.handleWorldFleetRedeploy)
+	packets.Handle(game.handleWorldItemUse)
+	// Operation Siren: tasks and achievements
+	packets.Handle(game.handleWorldTriggerTask)
+	packets.Handle(game.handleWorldSubmitTask)
+	packets.Handle(game.handleWorldDailyTasks)
+	packets.Handle(game.handleWorldTriggerDailyTask)
+	packets.Handle(game.handleWorldAchieve)
 	// META Showdown (world boss) and META Sync Points
 	packets.Handle(game.handleMetaPTData)
 	packets.Handle(game.handleMetaPTAward)
@@ -416,10 +435,8 @@ var loginBurst = []loginPush{
 	func(game *Game, l *login) (proto.Message, error) {
 		return monthShopInfo(l.ctx, l.queries, l.commander.ID, l.now)
 	},
-	// WorldProxy: Operation Siren open, not started (captured)
-	func(*Game, *login) (proto.Message, error) {
-		return &protobuf.SC_33114{IsWorldOpen: proto.Uint32(1)}, nil
-	},
+	// WorldProxy: Operation Siren's base state
+	func(game *Game, l *login) (proto.Message, error) { return worldLoginState(l) },
 	func(game *Game, l *login) (proto.Message, error) {
 		return equipmentDepot(l.ctx, l.queries, l.commander.ID)
 	},
