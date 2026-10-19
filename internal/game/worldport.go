@@ -203,6 +203,33 @@ func (state *worldState) activePort() uint32 {
 	return template.port
 }
 
+// shopPort is the port whose shop the active map opens: its port, else the
+// temporary port (port_camp 0, world_port_data 100 "Future Content") its
+// template's port_id names off the grid. WorldMap:SetupPort sets the map's
+// port up from port_id whatever its cell, and the Mysterious Merchant
+// (world_event_data 1901/1902, spawned by the zones' controllers, effect
+// 1905/1911's option 1910, EffectEventShowPort) opens it: the "mingshi"
+// shop of WorldPortLayer, with no port button (WSMapRight) and no
+// services. 0 for none.
+func (state *worldState) shopPort() uint32 {
+	if id := state.activePort(); id != 0 {
+		return id
+	}
+	template := worldTemplates[state.mapTemplate(state.MapID)]
+	if !state.activated() || template == nil {
+		return 0
+	}
+	var port []json.RawMessage
+	var id uint32
+	if json.Unmarshal(template.PortID, &port) != nil || len(port) != 2 || json.Unmarshal(port[0], &id) != nil {
+		return 0
+	}
+	if config, ok := worldPorts[id]; !ok || config.PortCamp != 0 {
+		return 0
+	}
+	return id
+}
+
 // port is the saved offer of a port, nil for none yet.
 func (state *worldState) port(id uint32) *worldPortState {
 	for _, port := range state.Ports {
@@ -335,7 +362,7 @@ func (game *Game) handleWorldPortReq(client *connection.Client, req *protobuf.CS
 		if err != nil {
 			return err
 		}
-		portID := state.activePort()
+		portID := state.shopPort()
 		if req.GetMapId() != state.MapID || portID == 0 {
 			return errRefused
 		}
@@ -387,7 +414,7 @@ func (game *Game) handleWorldPortShopping(client *connection.Client, req *protob
 		var goods worldGoods
 		switch req.GetShopType() {
 		case worldShopPort:
-			portID := state.activePort()
+			portID := state.shopPort()
 			port := state.port(portID)
 			if portID == 0 || port == nil || port.NextRefresh <= uint32(now.Unix()) {
 				return errRefused
