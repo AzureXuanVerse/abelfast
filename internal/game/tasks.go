@@ -104,6 +104,12 @@ var taskActivityTypes = map[uint32]bool{
 	activityTypeTaskRyza: true, activityTypeHotspring2: true, activityTypeNotTraceable: true,
 }
 
+// normalTaskActivityTypes are the taskActivityTypes whose tasks TaskProxy
+// holds (normal_task_type): what CS_20207 and CS_20209 are about.
+var normalTaskActivityTypes = map[uint32]bool{
+	activityTypeTasks: true, activityTypeCruise: true, activityTypePtHei5: true, activityTypeBossRushDalCollab: true,
+}
+
 // TaskEvent is something that happened that tasks count.
 type TaskEvent struct {
 	SubType uint32 // task_data_template.sub_type, see TaskSub*
@@ -184,21 +190,28 @@ const (
 // TYPE_NEW_WEEKLY tasks open at level (the capture drew 7307 and 7310 out of
 // 7304, 7306, 7307, 7310; weekly_fixed_task 7311 is level 80).
 func starterTasks(level uint32) []uint32 {
-	var tasks, bonus []uint32
+	var tasks []uint32
 	for id, config := range taskConfigs {
-		if config.Level > level {
-			continue
-		}
-		switch {
-		case config.Type == taskTypeScenario && config.IsHead == 1:
+		if config.Level <= level && config.Type == taskTypeScenario && config.IsHead == 1 {
 			tasks = append(tasks, id)
-		case config.Type == taskTypeNewWeekly:
-			bonus = append(bonus, id)
 		}
 	}
 	slices.Sort(tasks)
+	return append(tasks, weeklyBonusDraw(level)...)
+}
+
+// weeklyBonusDraw draws the weeklyBonusTasks TYPE_NEW_WEEKLY tasks a
+// commander at level is offered for a week.
+func weeklyBonusDraw(level uint32) []uint32 {
+	var bonus []uint32
+	for id, config := range taskConfigs {
+		if config.Level <= level && config.Type == taskTypeNewWeekly {
+			bonus = append(bonus, id)
+		}
+	}
+	slices.Sort(bonus)
 	rand.Shuffle(len(bonus), func(i, j int) { bonus[i], bonus[j] = bonus[j], bonus[i] })
-	return append(tasks, bonus[:min(int(weeklyBonusTasks), len(bonus))]...)
+	return bonus[:min(int(weeklyBonusTasks), len(bonus))]
 }
 
 // grantTasksStarter gives a new commander the capture's SC_20001 tasks: the
@@ -655,7 +668,7 @@ func (game *Game) handleSubmitTask(client *connection.Client, req *protobuf.CS_2
 		logger.WithFields("Task", logger.FieldValue("id", req.GetId()), logger.FieldValue("progress", claim.task.Progress), logger.FieldValue("target", claim.config.TargetNum)).Warn("claim refused")
 		return client.Send(&protobuf.SC_20006{Result: result(errRefused)})
 	}
-	awards, err := game.claimTasks(ctx, client, []taskClaimed{claim})
+	awards, err := game.claimTasks(ctx, client, []taskClaimed{claim}, nil)
 	if err != nil {
 		return err
 	}
@@ -680,7 +693,7 @@ func (game *Game) handleSubmitTasks(client *connection.Client, req *protobuf.CS_
 			reply.IdList = append(reply.IdList, id)
 		}
 	}
-	awards, err := game.claimTasks(ctx, client, claims)
+	awards, err := game.claimTasks(ctx, client, claims, nil)
 	if err != nil {
 		return err
 	}
@@ -712,13 +725,19 @@ func (game *Game) taskClaim(ctx context.Context, commanderID, id uint32) (taskCl
 // claimTasks submits claims in one unit of work: their drops, the commander
 // manual progress they make, then the tasks they lead to (next_task), which
 // start from the counters the claims updated and are pushed before the
-// reply.
-func (game *Game) claimTasks(ctx context.Context, client *connection.Client, claims []taskClaimed) ([]*protobuf.DROPINFO, error) {
+// reply. pay, when not nil, runs first in the same unit of work (the
+// vouchers of a quick finish); its error, a refusal too, is returned as is.
+func (game *Game) claimTasks(ctx context.Context, client *connection.Client, claims []taskClaimed, pay func(tx *Tx) error) ([]*protobuf.DROPINFO, error) {
 	now := uint32(time.Now().Unix())
 	var awards []*protobuf.DROPINFO
 	var next *protobuf.SC_20003
 	var guildNotices []*guildNotices
 	err := game.tx(ctx, client, func(tx *Tx) error {
+		if pay != nil {
+			if err := pay(tx); err != nil {
+				return err
+			}
+		}
 		var nextIDs []uint32
 		for _, claim := range claims {
 			if _, err := tx.SubmitTask(ctx, db.SubmitTaskParams{SubmitTime: now, CommanderID: client.CommanderID, TaskID: claim.task.TaskID}); err != nil {
@@ -805,20 +824,10 @@ func (game *Game) handleSubmitActivityTasks(client *connection.Client, req *prot
 		}
 	}
 	reply := &protobuf.SC_20206{Result: result(nil)}
-	removed := &protobuf.ACT_TASK_LIST{ActId: proto.Uint32(req.GetActId())}
-	err = game.tx(ctx, client, func(tx *Tx) error {
-		for _, task := range claimed {
-			if err := tx.FinishActivityTask(ctx, db.FinishActivityTaskParams{CommanderID: client.CommanderID, ActID: req.GetActId(), TaskID: task.taskID, Progress: task.progress}); err != nil {
-				return err
-			}
-			awards := configDrops(taskConfigs[task.taskID].awards)
-			if err := tx.grantDrops(awards); err != nil {
-				return err
-			}
-			reply.AwardList = append(reply.AwardList, awards...)
-			removed.Tasks = append(removed.Tasks, &protobuf.ACT_TASK{Id: proto.Uint32(task.taskID), Progress: proto.Uint32(task.progress)})
-		}
-		return nil
+	var removed *protobuf.ACT_TASK_LIST
+	err = game.tx(ctx, client, func(tx *Tx) (err error) {
+		reply.AwardList, removed, err = tx.finishActivityTasks(req.GetActId(), claimed)
+		return err
 	})
 	if err != nil {
 		return err
@@ -827,4 +836,44 @@ func (game *Game) handleSubmitActivityTasks(client *connection.Client, req *prot
 		return err
 	}
 	return client.Send(reply)
+}
+
+// finishActivityTasks claims an activity's tasks: they are stored finished
+// and their drops given. It returns the drops and the tasks as SC_20204
+// lists them.
+func (tx *Tx) finishActivityTasks(actID uint32, tasks []activityTask) ([]*protobuf.DROPINFO, *protobuf.ACT_TASK_LIST, error) {
+	var drops []*protobuf.DROPINFO
+	removed := &protobuf.ACT_TASK_LIST{ActId: proto.Uint32(actID)}
+	for _, task := range tasks {
+		if err := tx.FinishActivityTask(tx.ctx, db.FinishActivityTaskParams{CommanderID: tx.commanderID, ActID: actID, TaskID: task.taskID, Progress: task.progress}); err != nil {
+			return nil, nil, err
+		}
+		awards := configDrops(taskConfigs[task.taskID].awards)
+		if err := tx.grantDrops(awards); err != nil {
+			return nil, nil, err
+		}
+		drops = append(drops, awards...)
+		removed.Tasks = append(removed.Tasks, &protobuf.ACT_TASK{Id: proto.Uint32(task.taskID), Progress: proto.Uint32(task.progress)})
+	}
+	return drops, removed, nil
+}
+
+// openActivityTask is one of the commander's tasks of an activity running
+// at now, false when the activity isn't running or hasn't the task.
+func (game *Game) openActivityTask(ctx context.Context, commanderID, actID, taskID uint32, now time.Time) (activityTask, bool, error) {
+	activities, err := game.activityTaskLists(ctx, game.DB.Queries, commanderID, now)
+	if err != nil {
+		return activityTask{}, false, err
+	}
+	for _, activity := range activities {
+		if activity.id != actID {
+			continue
+		}
+		for _, task := range activity.tasks {
+			if task.taskID == taskID {
+				return task, true, nil
+			}
+		}
+	}
+	return activityTask{}, false, nil
 }

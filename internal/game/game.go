@@ -203,6 +203,10 @@ func (game *Game) Register() {
 	packets.Handle(game.handleSubmitWeeklyProgress)
 	packets.Handle(game.handleClientTaskEvent)
 	packets.Handle(game.handleSubmitActivityTasks)
+	packets.Handle(game.handleUpdateTaskProgress)
+	packets.Handle(game.handleUpdateActivityTaskProgress)
+	packets.Handle(game.handleQuickTask)
+	packets.Handle(game.handleQuickActivityTask)
 	packets.Handle(game.handleHandbookGetTasks)
 	packets.Handle(game.handleHandbookPtAward)
 	packets.Handle(game.handleActivityOperation)
@@ -469,6 +473,9 @@ func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.
 	if err := game.syncTechPoints(ctx, commander.ID); err != nil {
 		return err
 	}
+	if _, err := game.resetWeekIfDue(ctx, commander.ID, now); err != nil {
+		return err
+	}
 	ships, err := game.DB.ListShipsByCommander(ctx, commander.ID)
 	if err != nil {
 		return err
@@ -483,5 +490,6 @@ func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.
 			return err
 		}
 	}
+	game.watchDays(client)
 	return game.connect(ctx, client)
 }

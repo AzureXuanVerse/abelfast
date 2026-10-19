@@ -441,6 +441,7 @@ type CommanderVirtualItem struct {
 type CommanderWeekly struct {
 	CommanderID uint32
 	RewardLv    uint32
+	WeekStart   uint32
 }
 
 type CommanderWeeklyTask struct {
