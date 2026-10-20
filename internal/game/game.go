@@ -25,6 +25,8 @@ type Game struct {
 	auctions auctionHall
 	// the play room lobby and its games, see playroom.go
 	playRooms playRooms
+	// who is on which island (the life-sim), see island_enter.go
+	islands islandWorld
 }
 
 // StartCommander creates what a new commander starts with (CS_10024), in
@@ -501,6 +503,8 @@ func (game *Game) Register() {
 	packets.Handle(game.handleNewEducateGiveUpEntryUp)
 	packets.Handle(game.handleNewEducateGetChoose)
 	packets.Handle(game.handleEducateEndings)
+	// the Island life-sim (protocol module 21), see island_enter.go
+	game.registerIsland()
 	// Project Identity: TB (educate)
 	packets.HandleLenient(game.handleEducatePlans) // an empty schedule is sent as one byte
 	packets.Handle(game.handleEducateRunPlans)

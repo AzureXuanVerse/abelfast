@@ -32,6 +32,8 @@ type Tx struct {
 	mailSent bool // SendMail queued the SC_30001 push
 
 	techPoints bool // techPointsChanged: count the Fleet Technology points again
+
+	ownIsland *islandState // the commander's island once Tx.island loaded it
 }
 
 // tx runs fn in a transaction. Once fn succeeds the task events it recorded
@@ -59,7 +61,7 @@ func (game *Game) tx(ctx context.Context, client *connection.Client, fn func(tx 
 				return err
 			}
 		}
-		return nil
+		return tx.saveOwnIsland()
 	})
 	if err != nil {
 		return err

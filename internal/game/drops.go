@@ -35,14 +35,19 @@ const (
 // gear skins (the gear skin box) and meowfficers (grantMeowfficers, pushed
 // in SC_25039), the Private Quarters' furniture, gifts and outfits,
 // Atelier materials, augment modules (pushed in SC_14200),
-// activities' own items (in their virtual bag), recording the task progress
+// activities' own items (in their virtual bag), the island's rewards
+// (addIslandDrops), recording the task progress
 // they cause. Frames, emojis...
 // have no storage yet and are only logged.
 func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 	var cats []*protobuf.COMMANDERINFO
+	var island []*protobuf.DROPINFO
 	for _, entry := range drops {
 		kind, id, count := entry.GetType(), entry.GetId(), entry.GetNumber()
 		switch {
+		case isIslandDrop(kind):
+			// the island's own rewards (addIslandDrops)
+			island = append(island, entry)
 		case kind == dropTypeResource:
 			if err := tx.AddResource(id, count); err != nil {
 				return err
@@ -154,6 +159,11 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 			cats = append(cats, added...)
 		default:
 			logger.WithFields("Drops", logger.FieldValue("type", kind), logger.FieldValue("id", id)).Warn("drop not stored")
+		}
+	}
+	if len(island) > 0 {
+		if err := tx.addIslandDrops(island); err != nil {
+			return err
 		}
 	}
 	if len(cats) > 0 {

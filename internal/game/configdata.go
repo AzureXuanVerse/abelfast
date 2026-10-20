@@ -30,6 +30,7 @@ func loadGameData() error {
 		loadEducateData,
 		loadNewEducateData,
 		loadApartmentData,
+		loadIslandLifeData,
 		loadNewCommander,
 		loadStarterFurniture,
 		loadDormData,

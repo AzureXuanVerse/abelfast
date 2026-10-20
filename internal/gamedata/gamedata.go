@@ -159,11 +159,13 @@ func Gameset() (map[string]uint32, error) {
 
 // Setting is a row of a settings table keyed by name (guildset...): a
 // key_value, or key_args for the settings that hold a list; dorm3d_set
-// writes its values as key_value_int.
+// writes its values as key_value_int, island_set as key_value_int and
+// key_value_varchar (a list, or "" when unused).
 type Setting struct {
-	KeyValue    uint32          `json:"key_value"`
-	KeyArgs     json.RawMessage `json:"key_args"`
-	KeyValueInt uint32          `json:"key_value_int"`
+	KeyValue        uint32          `json:"key_value"`
+	KeyArgs         json.RawMessage `json:"key_args"`
+	KeyValueInt     uint32          `json:"key_value_int"`
+	KeyValueVarchar json.RawMessage `json:"key_value_varchar"`
 }
 
 // Settings reads a settings table, by setting name.

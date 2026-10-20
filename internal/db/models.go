@@ -603,6 +603,14 @@ type CommanderHandbookPage struct {
 	Award       uint32
 }
 
+type CommanderIsland struct {
+	CommanderID uint32
+	Island      []byte
+	Position    []byte
+	Extra       string
+	InviteCode  string
+}
+
 type CommanderIslandNode struct {
 	CommanderID uint32
 	ActivityID  uint32
