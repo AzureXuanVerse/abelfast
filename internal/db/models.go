@@ -201,6 +201,12 @@ type CommanderActivityTask struct {
 	Finished    bool
 }
 
+type CommanderAppreciation struct {
+	CommanderID uint32
+	Kind        uint32
+	ItemID      uint32
+}
+
 type CommanderBuildState struct {
 	CommanderID   uint32
 	ExchangeCount uint32
@@ -401,6 +407,12 @@ type CommanderMonthShopPurchase struct {
 	GoodsID     uint32
 	Month       uint32
 	Count       uint32
+}
+
+type CommanderMusicPlayer struct {
+	CommanderID uint32
+	MusicNo     uint32
+	MusicMode   uint32
 }
 
 type CommanderRandomFlagship struct {

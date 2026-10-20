@@ -142,40 +142,47 @@ func (game *Game) playerInfo(ctx context.Context, commander db.Commander, ships 
 	if err != nil {
 		return nil, err
 	}
+	appreciation, mangaRead, mangaLiked, err := appreciationLogin(ctx, game.DB.Queries, commander.ID)
+	if err != nil {
+		return nil, err
+	}
 	characters := make([]*protobuf.KVDATA, len(secretaries))
 	for i, secretary := range secretaries {
 		characters[i] = &protobuf.KVDATA{Key: proto.Uint32(secretary.ShipID), Value: proto.Uint32(secretary.PhantomID)}
 	}
 	return &protobuf.SC_11003{
-		Id:              proto.Uint32(commander.ID),
-		Name:            proto.String(commander.Name),
-		Level:           proto.Uint32(commander.Level),
-		Exp:             proto.Uint32(commander.Exp),
-		ResourceList:    resourceList(resources),
-		Adv:             proto.String(commander.Manifesto),
-		Character:       characters,
-		ShipBagMax:      proto.Uint32(commander.ShipBagMax),
-		EquipBagMax:     proto.Uint32(commander.EquipBagMax),
-		Rank:            proto.Uint32(commander.Rank),
-		GuideIndex:      proto.Uint32(commander.GuideIndex),
-		ChatRoomId:      proto.Uint32(commander.ChatRoomID),
-		RegisterTime:    proto.Uint32(uint32(commander.RegisteredAt)),
-		ShipCount:       proto.Uint32(uint32(len(ships))),
-		CommanderBagMax: proto.Uint32(commander.CommanderBagMax),
-		Display:         game.displayInfo(commander),
-		MailStoreroomLv: proto.Uint32(commander.MailStoreroomLv),
-		BattleUi:        proto.Uint32(0), // item_data_battleui "Standard"
-		NewGuideIndex:   proto.Uint32(commander.NewGuideIndex),
-		StoryList:       stories,
-		FlagList:        flags,
-		BuyOilCount:     proto.Uint32(oilBought(purchases)),
-		RandomShipMode:  proto.Uint32(randomShipMode),
-		CdList:          cds,
-		Soundstory:      cryptolalia,
-		GuildWaitTime:   proto.Uint32(guildWait),
-		IconFrameList:   iconFrames,
-		ChatFrameList:   chatFrames,
-		MarryShip:       proto.Uint32(commander.MarryShip),
-		MedalId:         medals,
+		Id:                 proto.Uint32(commander.ID),
+		Name:               proto.String(commander.Name),
+		Level:              proto.Uint32(commander.Level),
+		Exp:                proto.Uint32(commander.Exp),
+		ResourceList:       resourceList(resources),
+		Adv:                proto.String(commander.Manifesto),
+		Character:          characters,
+		ShipBagMax:         proto.Uint32(commander.ShipBagMax),
+		EquipBagMax:        proto.Uint32(commander.EquipBagMax),
+		Rank:               proto.Uint32(commander.Rank),
+		GuideIndex:         proto.Uint32(commander.GuideIndex),
+		ChatRoomId:         proto.Uint32(commander.ChatRoomID),
+		RegisterTime:       proto.Uint32(uint32(commander.RegisteredAt)),
+		ShipCount:          proto.Uint32(uint32(len(ships))),
+		CommanderBagMax:    proto.Uint32(commander.CommanderBagMax),
+		Display:            game.displayInfo(commander),
+		MailStoreroomLv:    proto.Uint32(commander.MailStoreroomLv),
+		BattleUi:           proto.Uint32(0), // item_data_battleui "Standard"
+		NewGuideIndex:      proto.Uint32(commander.NewGuideIndex),
+		StoryList:          stories,
+		FlagList:           flags,
+		BuyOilCount:        proto.Uint32(oilBought(purchases)),
+		RandomShipMode:     proto.Uint32(randomShipMode),
+		CdList:             cds,
+		Soundstory:         cryptolalia,
+		GuildWaitTime:      proto.Uint32(guildWait),
+		IconFrameList:      iconFrames,
+		ChatFrameList:      chatFrames,
+		MarryShip:          proto.Uint32(commander.MarryShip),
+		MedalId:            medals,
+		Appreciation:       appreciation,
+		CartoonReadMark:    mangaRead,
+		CartoonCollectMark: mangaLiked,
 	}, nil
 }

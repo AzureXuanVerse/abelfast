@@ -283,6 +283,13 @@ func (game *Game) Register() {
 	// minigames, shops, exercises, TB
 	packets.Handle(game.handleAuctionGameInit)
 	packets.Handle(game.handleAppreciationVersion)
+	packets.Handle(game.handleGalleryUnlock)
+	packets.Handle(game.handleMusicUnlock)
+	packets.Handle(game.handleGalleryLike)
+	packets.Handle(game.handleMusicLike)
+	packets.Handle(game.handleMangaRead)
+	packets.Handle(game.handleMangaLike)
+	packets.Handle(game.handleMusicPlayer)
 	packets.Handle(game.handleMiniGameHubs)
 	packets.Handle(game.handleGameRoomFirstCoin)
 	packets.Handle(game.handleEmojiInfo)
