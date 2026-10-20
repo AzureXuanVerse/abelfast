@@ -63,6 +63,7 @@ func loadGameData() error {
 		loadAppreciationData,
 		loadAttireData,
 		loadVoteData,
+		gamedata.Load("survey_data_template", &surveys),
 		loadExchangeCodes,
 	)
 }

@@ -344,7 +344,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleLimitChallenge)
 	packets.Handle(game.handleLimitChallengeAward)
 	packets.Handle(game.handleChargeList)
-	// purchases with money (always refused), Akashi, redeem codes
+	// purchases with money (always refused), Akashi, redeem codes, surveys
 	packets.Handle(game.handleCharge)
 	packets.Handle(game.handleRefundCharge)
 	packets.Handle(game.handleChargeConfirm)
@@ -352,6 +352,8 @@ func (game *Game) Register() {
 	packets.Handle(game.handleRefundInfo)
 	packets.Handle(game.handleClickMingShi)
 	packets.Handle(game.handleExchangeCode)
+	packets.Handle(game.handleSurvey)
+	packets.Handle(game.handleSurveyState)
 	packets.Handle(game.handleShopping)
 	packets.Handle(game.handleChangeSecretaries)
 	packets.Handle(game.handleRandomFlagship)
