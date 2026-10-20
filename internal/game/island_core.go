@@ -136,9 +136,9 @@ var (
 		// screen's buttons, island_main_btns ability_id), scenes and
 		// production sites as the story goes, by rules no client table
 		// holds (no reward lists those abilities); belfast opens every one
-		// from the start: the island_ability_template rows of
-		// IslandAblityAgency.TYPE_SYSTEM (but the event ones, effect
-		// 990000+), TYPE_PLACE and TYPE_MAP.
+		// from the start: the buttons' abilities and the
+		// island_ability_template rows of IslandAblityAgency.TYPE_SYSTEM
+		// (but the event ones, effect 990000+), TYPE_PLACE and TYPE_MAP.
 		abilities []uint32
 	}
 	islandAbilities map[uint32]islandAbilityConfig
@@ -201,14 +201,27 @@ func loadIslandCoreData() error {
 		}
 	}
 	islandStart.abilities = nil
+	var buttons map[uint32]struct {
+		Ability uint32 `json:"ability_id"`
+	}
+	if err := gamedata.Load("island_main_btns", &buttons)(); err != nil {
+		return err
+	}
+	for _, button := range buttons {
+		if _, ok := islandAbilities[button.Ability]; ok && !slices.Contains(islandStart.abilities, button.Ability) {
+			islandStart.abilities = append(islandStart.abilities, button.Ability)
+		}
+	}
 	for _, id := range slices.Sorted(maps.Keys(islandAbilities)) {
 		switch ability := islandAbilities[id]; ability.Type {
 		case islandAbilitySystem:
-			if ability.Effect < 990000 {
+			if ability.Effect < 990000 && !slices.Contains(islandStart.abilities, id) {
 				islandStart.abilities = append(islandStart.abilities, id)
 			}
 		case islandAbilityPlace, islandAbilityMap:
-			islandStart.abilities = append(islandStart.abilities, id)
+			if !slices.Contains(islandStart.abilities, id) {
+				islandStart.abilities = append(islandStart.abilities, id)
+			}
 		}
 	}
 	islandStart.season = islandSetInt("season_now")
