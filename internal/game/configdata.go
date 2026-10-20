@@ -37,6 +37,7 @@ func loadGameData() error {
 		loadMetaTacticsData,
 		loadSkillClassData,
 		loadFleetTechData,
+		loadResearchData,
 		loadCryptolaliaData,
 		loadLoveLetterData,
 		loadMonthShops,

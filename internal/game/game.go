@@ -137,6 +137,15 @@ func (game *Game) Register() {
 	packets.Handle(game.handleStartLesson)
 	packets.Handle(game.handleEndLesson)
 	packets.Handle(game.handleQuickFinishLesson)
+	// Research Academy projects
+	packets.Handle(game.handleStartResearch)
+	packets.Handle(game.handleFinishResearch)
+	packets.Handle(game.handleStopResearch)
+	packets.Handle(game.handleRefreshResearch)
+	packets.Handle(game.handleResearchFocus)
+	packets.Handle(game.handleResearchCatchup)
+	packets.Handle(game.handleJoinResearchQueue)
+	packets.Handle(game.handleFinishResearchQueue)
 	// Fleet Technology
 	packets.Handle(game.handleStartFleetTech)
 	packets.Handle(game.handleFinishFleetTech)
@@ -464,8 +473,8 @@ var loginBurst = []loginPush{
 	func(game *Game, l *login) (proto.Message, error) {
 		return skinList(l.ctx, l.queries, l.commander.ID, l.now)
 	},
-	// TechnologyProxy: nothing started, no catch-up research
-	empty[protobuf.SC_63000](),
+	// TechnologyProxy: the research projects, queue and catch-up
+	func(game *Game, l *login) (proto.Message, error) { return game.researchLoginPush(l) },
 	// TechnologyProxy blueprints (PR ships): none
 	empty[protobuf.SC_63100](),
 	// TechnologyNationProxy: Fleet Technology

@@ -264,7 +264,8 @@ func addShipExp(ship *db.Ship, gained uint32) {
 // holds more commission teams (user_level max_collection, which EventProxy
 // only learns from SC_13002) the commissions are sent again: the client
 // levels the commander itself from player_exp, nothing else is pushed in
-// the capture.
+// the capture. Reaching the Research Academy's level pushes its projects
+// (researchUnlocked).
 func addCommanderExp(tx *Tx, gained uint32) error {
 	if gained == 0 {
 		return nil
@@ -289,6 +290,9 @@ func addCommanderExp(tx *Tx, gained uint32) error {
 		return nil
 	}
 	tx.event(TaskEvent{SubType: TaskSubLevel, Count: level})
+	if err := tx.researchUnlocked(commander.Level, level); err != nil {
+		return err
+	}
 	if commanderLevels[level].MaxCollection == commanderLevels[commander.Level].MaxCollection {
 		return nil
 	}

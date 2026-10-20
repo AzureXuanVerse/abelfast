@@ -1126,6 +1126,36 @@ type Spweapon struct {
 	Pt          uint32
 }
 
+type TechnologyCatchup struct {
+	CommanderID uint32
+	Version     uint32
+	ShipGroup   uint32
+	Number      uint32
+}
+
+type TechnologyOffer struct {
+	CommanderID uint32
+	Pos         uint32
+	PoolID      uint32
+	TechID      uint32
+	FinishAt    int64
+}
+
+type TechnologyQueue struct {
+	ID          uint32
+	CommanderID uint32
+	TechID      uint32
+	FinishAt    int64
+}
+
+type TechnologyState struct {
+	CommanderID    uint32
+	RefreshedAt    int64
+	Focus          uint32
+	CatchupVersion uint32
+	CatchupTarget  uint32
+}
+
 type WorldBoss struct {
 	CommanderID         uint32
 	SummonPt            uint32
