@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"maps"
 	"math/rand/v2"
 	"slices"
 	"time"
@@ -123,7 +124,8 @@ type TaskEvent struct {
 // keeps as finished (initTaskInfo's finishData): the Dev. Dock reads a
 // research's state from them (ShipBluePrint:getTaskStateById,
 // isFinishPrevTask). So are the claimed tasks of a running mini-event's task
-// list (Activity:canPermanentFinish).
+// list (Activity:canPermanentFinish) and of a running returning player
+// campaign (RefluxTaskView).
 func taskList(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobuf.SC_20001, error) {
 	tasks, err := queries.ListTasks(ctx, commanderID)
 	if err != nil {
@@ -133,6 +135,11 @@ func taskList(ctx context.Context, queries *db.Queries, commanderID uint32) (*pr
 	if err != nil {
 		return nil, err
 	}
+	reflux, err := refluxClaimedTasks(ctx, queries, commanderID, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	maps.Copy(kept, reflux)
 	msg := &protobuf.SC_20001{Info: make([]*protobuf.TASKINFO, len(tasks))}
 	for i, task := range tasks {
 		msg.Info[i] = &protobuf.TASKINFO{
@@ -756,7 +763,15 @@ func (game *Game) taskClaim(ctx context.Context, commanderID, id uint32) (taskCl
 	// a "Gather" task's progress is what the commander owns, paid on claim
 	reached := task.Progress >= config.TargetNum || taskGiveCost(config) != nil
 	ok = ok && task.SubmitTime == 0 && reached
-	return taskClaimed{task: task, config: config, drops: config.awards}, ok, nil
+	drops := config.awards
+	refluxDrops, isReflux, unlocked, err := refluxTaskClaim(ctx, game.DB.Queries, commanderID, id, time.Now())
+	if err != nil {
+		return taskClaimed{}, false, err
+	}
+	if isReflux {
+		drops, ok = refluxDrops, ok && unlocked
+	}
+	return taskClaimed{task: task, config: config, drops: drops}, ok, nil
 }
 
 // claimTasks submits claims in one unit of work: their drops, the commander
@@ -778,6 +793,9 @@ func (game *Game) claimTasks(ctx context.Context, client *connection.Client, cla
 		var nextIDs []uint32
 		for _, claim := range claims {
 			if _, err := tx.SubmitTask(ctx, db.SubmitTaskParams{SubmitTime: now, CommanderID: client.CommanderID, TaskID: claim.task.TaskID}); err != nil {
+				return err
+			}
+			if err := tx.refluxTaskClaimed(claim.task.TaskID); err != nil {
 				return err
 			}
 			if cost := taskGiveCost(claim.config); cost != nil {

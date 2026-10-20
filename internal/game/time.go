@@ -11,7 +11,10 @@ import (
 // derives its weekly resets from it.
 const mondayReference = 1606114800
 
-const week = 7 * 24 * time.Hour
+const (
+	day  = 24 * time.Hour
+	week = 7 * day
+)
 
 // Exercise attempts refill from midnight, server time:
 // ExerciseCountRecoverUpCommand (controller/command/militaryexercise) expects

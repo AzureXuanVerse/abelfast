@@ -320,6 +320,10 @@ func (game *Game) Register() {
 	packets.Handle(game.handlePermanentStart)
 	packets.Handle(game.handlePermanentEnd)
 	packets.Handle(game.handleRerunActivate)
+	// returning player campaign
+	packets.Handle(game.handleRefluxData)
+	packets.Handle(game.handleRefluxSign)
+	packets.Handle(game.handleRefluxPtAward)
 	// challenge mode
 	packets.Handle(game.handleChallengeStart)
 	packets.Handle(game.handleChallengeInfo)
@@ -482,8 +486,10 @@ var loginBurst = []loginPush{
 	func(game *Game, l *login) (proto.Message, error) { return game.playerInfo(l.ctx, l.commander, l.ships) },
 	// PlayerProxy: no benefit buffs
 	empty[protobuf.SC_11015](),
-	// RefluxProxy: not a returning player
-	empty[protobuf.SC_11752](),
+	// RefluxProxy: the returning player campaign
+	func(game *Game, l *login) (proto.Message, error) {
+		return refluxInfo(l.ctx, l.queries, l.commander.ID, l.now)
+	},
 	// SystemTipProxy (island delegation tips): nothing to collect
 	empty[protobuf.SC_21536](),
 	func(game *Game, l *login) (proto.Message, error) {
@@ -629,6 +635,9 @@ func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.
 	}
 	ships, err := game.DB.ListShipsByCommander(ctx, commander.ID)
 	if err != nil {
+		return err
+	}
+	if err := game.startRefluxIfReturning(ctx, commander, len(ships), now); err != nil {
 		return err
 	}
 	l := &login{ctx: ctx, queries: game.DB.Queries, commander: commander, ships: ships, now: now}
