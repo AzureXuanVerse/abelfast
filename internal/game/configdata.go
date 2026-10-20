@@ -63,5 +63,6 @@ func loadGameData() error {
 		loadAppreciationData,
 		loadAttireData,
 		loadVoteData,
+		loadExchangeCodes,
 	)
 }
