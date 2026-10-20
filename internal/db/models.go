@@ -134,6 +134,14 @@ type ChapterState struct {
 	Ambushed    Cells
 }
 
+type CheaterMark struct {
+	ID          uint32
+	CommanderID uint32
+	AccountID   uint32
+	Reason      uint32
+	MarkedAt    int64
+}
+
 type Commander struct {
 	ID                  uint32
 	AccountID           uint32
@@ -757,6 +765,14 @@ type GuildUser struct {
 type GuildWaitTime struct {
 	CommanderID uint32
 	Until       uint32
+}
+
+type InnerAccount struct {
+	Username     string
+	PasswordHash []byte
+	MailBox      string
+	AccountID    uint32
+	RegisteredAt int64
 }
 
 type LimitChallenge struct {

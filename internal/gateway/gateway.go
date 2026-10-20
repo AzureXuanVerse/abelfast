@@ -92,6 +92,10 @@ func (gateway *Gateway) Register() {
 	packets.Handle(gateway.handleServerLogin)
 	packets.Handle(gateway.handleHeartbeat)
 	packets.Handle(gateway.handleCreatePlayer)
+	packets.Handle(gateway.handleRegister)
+	packets.Handle(gateway.handleAccountSearch)
+	packets.Handle(gateway.handleGatewaySwitch)
+	packets.Handle(gateway.handleCheaterMark)
 }
 
 func (gateway *Gateway) serverList() []*protobuf.SERVERINFO {
@@ -117,11 +121,22 @@ func (gateway *Gateway) handleServerState(client *connection.Client, req *protob
 }
 
 // handleLogin accepts any SDK login: arg2 is the SDK account uid, the account
-// id is derived from it so it stays the same across logins and restarts.
-//
-//belfast:static
+// id is derived from it so it stays the same across logins and restarts. An
+// inner login (login_type 2) must name an account registered with CS_10001.
 func (gateway *Gateway) handleLogin(client *connection.Client, req *protobuf.CS_10020) error {
 	account := accountID(req.GetArg2())
+	if req.GetLoginType() == innerLoginType {
+		var refused uint32
+		var err error
+		account, refused, err = gateway.innerAccount(req.GetArg1(), req.GetArg2())
+		if err != nil {
+			return err
+		}
+		if refused != 0 {
+			logger.LogEvent("Gateway", "Login", fmt.Sprintf("inner login %q refused (%d) from %s", req.GetArg1(), refused, client.IP), logger.LOG_LEVEL_WARN)
+			return client.Send(&protobuf.SC_10021{Result: proto.Uint32(refused)})
+		}
+	}
 	ticket := gateway.issueTicket(account)
 	notices, err := game.GatewayNotices(context.Background(), gateway.DB.Queries)
 	if err != nil {
