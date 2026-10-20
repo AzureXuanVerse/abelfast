@@ -118,3 +118,18 @@ func (game *Game) handleUpdateFleet(client *connection.Client, req *protobuf.CS_
 	}
 	return client.Send(&protobuf.SC_12103{Result: result(nil)})
 }
+
+// handleRenameFleet answers FleetRenameCommand (CS_12104,
+// controller/command/fleet/renamefleetcommand.lua, the formation screen's
+// fleet name): 2 to 24 characters, as the client checks before sending. On result 0 the client renames its fleet, anything else
+// shows ERROR_MESSAGE[result]. Built from the Lua alone.
+func (game *Game) handleRenameFleet(client *connection.Client, req *protobuf.CS_12104) error {
+	err := errRefused
+	if name := req.GetName(); req.GetId() != 0 && validLabel(name, minFleetNameLength, maxFleetNameLength) {
+		err = game.DB.RenameFleet(context.Background(), db.RenameFleetParams{CommanderID: client.CommanderID, FleetID: req.GetId(), Name: name})
+	}
+	if err != nil && !refused(err) {
+		return err
+	}
+	return client.Send(&protobuf.SC_12105{Result: result(err)})
+}

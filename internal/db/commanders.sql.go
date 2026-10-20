@@ -109,7 +109,7 @@ func (q *Queries) CountCommanders(ctx context.Context) (int64, error) {
 const createCommander = `-- name: CreateCommander :one
 INSERT INTO commanders (account_id, name, starter_ship, registered_at)
 VALUES (?, ?, ?, ?)
-RETURNING id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, oil_field_at, gold_field_at, oil_field_level, gold_field_level, class_field_level, class_proficiency, class_field_at, oil_field_upgrade_at, gold_field_upgrade_at, class_field_upgrade_at, last_online
+RETURNING id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, oil_field_at, gold_field_at, oil_field_level, gold_field_level, class_field_level, class_proficiency, class_field_at, oil_field_upgrade_at, gold_field_upgrade_at, class_field_upgrade_at, last_online, marry_ship
 `
 
 type CreateCommanderParams struct {
@@ -159,6 +159,7 @@ func (q *Queries) CreateCommander(ctx context.Context, arg CreateCommanderParams
 		&i.GoldFieldUpgradeAt,
 		&i.ClassFieldUpgradeAt,
 		&i.LastOnline,
+		&i.MarryShip,
 	)
 	return i, err
 }
@@ -173,7 +174,7 @@ func (q *Queries) DeleteSecretaries(ctx context.Context, commanderID uint32) err
 }
 
 const getCommander = `-- name: GetCommander :one
-SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, oil_field_at, gold_field_at, oil_field_level, gold_field_level, class_field_level, class_proficiency, class_field_at, oil_field_upgrade_at, gold_field_upgrade_at, class_field_upgrade_at, last_online FROM commanders WHERE id = ?
+SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, oil_field_at, gold_field_at, oil_field_level, gold_field_level, class_field_level, class_proficiency, class_field_at, oil_field_upgrade_at, gold_field_upgrade_at, class_field_upgrade_at, last_online, marry_ship FROM commanders WHERE id = ?
 `
 
 func (q *Queries) GetCommander(ctx context.Context, id uint32) (Commander, error) {
@@ -211,12 +212,13 @@ func (q *Queries) GetCommander(ctx context.Context, id uint32) (Commander, error
 		&i.GoldFieldUpgradeAt,
 		&i.ClassFieldUpgradeAt,
 		&i.LastOnline,
+		&i.MarryShip,
 	)
 	return i, err
 }
 
 const getCommanderByAccount = `-- name: GetCommanderByAccount :one
-SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, oil_field_at, gold_field_at, oil_field_level, gold_field_level, class_field_level, class_proficiency, class_field_at, oil_field_upgrade_at, gold_field_upgrade_at, class_field_upgrade_at, last_online FROM commanders WHERE account_id = ?
+SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, oil_field_at, gold_field_at, oil_field_level, gold_field_level, class_field_level, class_proficiency, class_field_at, oil_field_upgrade_at, gold_field_upgrade_at, class_field_upgrade_at, last_online, marry_ship FROM commanders WHERE account_id = ?
 `
 
 func (q *Queries) GetCommanderByAccount(ctx context.Context, accountID uint32) (Commander, error) {
@@ -254,6 +256,7 @@ func (q *Queries) GetCommanderByAccount(ctx context.Context, accountID uint32) (
 		&i.GoldFieldUpgradeAt,
 		&i.ClassFieldUpgradeAt,
 		&i.LastOnline,
+		&i.MarryShip,
 	)
 	return i, err
 }

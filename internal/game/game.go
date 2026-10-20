@@ -186,6 +186,10 @@ func (game *Game) Register() {
 	packets.Handle(game.handleShipEquip)
 	packets.Handle(game.handleRetireShips)
 	packets.Handle(game.handleLoveLetters)
+	packets.Handle(game.handlePropose)
+	packets.Handle(game.handleRenameShip)
+	packets.Handle(game.handleShipPreference)
+	packets.Handle(game.handleReqPlayerAssist)
 	packets.Handle(game.handleUpgradeStar)
 	packets.Handle(game.handleUpgradeMaxLevel)
 	packets.Handle(game.handleModShip)
@@ -215,6 +219,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleUrExchangeTracking)
 	// fleets, the campaign and battles
 	packets.Handle(game.handleUpdateFleet)
+	packets.Handle(game.handleRenameFleet)
 	packets.Handle(game.handleTracking13101)
 	packets.Handle(game.handleUpdateCustomFleet)
 	packets.Handle(game.handleChapterOp)

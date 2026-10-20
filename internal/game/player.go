@@ -171,5 +171,6 @@ func (game *Game) playerInfo(ctx context.Context, commander db.Commander, ships 
 		GuildWaitTime:   proto.Uint32(guildWait),
 		IconFrameList:   iconFrames,
 		ChatFrameList:   chatFrames,
+		MarryShip:       proto.Uint32(commander.MarryShip),
 	}, nil
 }

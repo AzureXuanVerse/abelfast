@@ -174,6 +174,7 @@ type Commander struct {
 	GoldFieldUpgradeAt  int64
 	ClassFieldUpgradeAt int64
 	LastOnline          int64
+	MarryShip           uint32
 }
 
 type CommanderActivity struct {
