@@ -11,6 +11,7 @@ func loadGameData() error {
 		gamedata.Load("equip_upgrade_data", &equipTransforms),
 		loadBuildExchange,
 		loadSkinData,
+		loadEquipSkinData,
 		loadChapterData,
 		loadChapterAutoData,
 		loadExperienceData,

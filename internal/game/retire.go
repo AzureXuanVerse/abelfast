@@ -8,13 +8,12 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
-	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
 // handleRetireShips retires ships (DestroyShipsCommand, CS_12004), from the
 // dock's retire mode. On result 0 the client removes each ship, puts its gear
-// back in the depot, adds ShipCalcHelper.CalcDestoryRes (the gold of the
+// back in the depot and its gear skins in their box, adds ShipCalcHelper.CalcDestoryRes (the gold of the
 // ships' types, their rarity's destory_item) and reads nothing else of the
 // reply; the server does the same. Any ship it can't retire refuses the whole
 // list, nothing changed.
@@ -80,10 +79,10 @@ func (tx *Tx) retireShips(ids []uint32) error {
 					return err
 				}
 			}
-			if equip.SkinID != 0 {
-				// the client puts it back in the gear skin box
-				logger.WithFields("Retire", logger.FieldValue("ship", id), logger.FieldValue("skin", equip.SkinID)).Warn("gear skin not stored")
-			}
+		}
+		// the client puts them back in the gear skin box
+		if err := tx.unequipSkins(equips); err != nil {
+			return err
 		}
 		// the archive keeps its best values (and so its tech points) after it
 		if _, err := raiseShipGroup(ctx, queries, ship); err != nil {

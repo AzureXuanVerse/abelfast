@@ -27,7 +27,7 @@ func runMail(args []string) {
 	title := flags.String("title", "", "mail title")
 	sender := flags.String("sender", "", "sender, empty for the client's default (Headquarters)")
 	body := flags.String("body", "", `mail text, "\n" for a new line`)
-	attach := flags.String("attach", "", "attachments, type:id:count[,type:id:count...] (DROP_TYPE_*: 1 resource, 2 item, 3 equipment, 4 ship, 5 furniture, 7 skin, 8 virtual item, 25 meowfficer)")
+	attach := flags.String("attach", "", "attachments, type:id:count[,type:id:count...] (DROP_TYPE_*: 1 resource, 2 item, 3 equipment, 4 ship, 5 furniture, 7 skin, 8 virtual item, 9 gear skin, 25 meowfficer)")
 	compensate := flags.Duration("compensate", 0, "send a compensation expiring after this long (e.g. 72h) instead of a mail; the client sees it from its next login")
 	flags.Parse(args)
 

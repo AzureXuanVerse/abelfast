@@ -31,9 +31,9 @@ const (
 // Permits by expiry, the META Showdown coordinates with their daily caps,
 // the rest as virtual item counters), META Sync Points (by group) and ship
 // skins (for good or for a time, as the client adds them: Drop's
-// DROP_TYPE_SKIN and DROP_TYPE_SKIN_TIMELIMIT cases, model/vo/drop.lua) and
-// meowfficers (grantMeowfficers, pushed in
-// SC_25039), recording the task progress they cause. Gear skins, frames...
+// DROP_TYPE_SKIN and DROP_TYPE_SKIN_TIMELIMIT cases, model/vo/drop.lua),
+// gear skins (the gear skin box) and meowfficers (grantMeowfficers, pushed
+// in SC_25039), recording the task progress they cause. Frames, emojis...
 // have no storage yet and are only logged.
 func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 	var cats []*protobuf.COMMANDERINFO
@@ -66,6 +66,10 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 			}
 		case kind == dropTypeSkin:
 			if err := tx.AddSkin(id); err != nil {
+				return err
+			}
+		case kind == dropTypeEquipSkin:
+			if err := tx.AddEquipSkin(id, count); err != nil {
 				return err
 			}
 		case kind == dropTypeSkinTimeLimit:

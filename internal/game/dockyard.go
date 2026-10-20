@@ -226,9 +226,9 @@ func upgradeMaterial(ship, material db.Ship) bool {
 		slices.Contains(testShips[material.TemplateID], ownableShips[ship.TemplateID].Rarity)
 }
 
-// consumeShips removes material ships, their gear back to the depot: what
-// the client does on result 0 of 12017 and 12027 (gear skins too, which
-// belfast doesn't keep apart).
+// consumeShips removes material ships, their gear back to the depot and
+// their gear skins to their box: what the client does on result 0 of 12017
+// and 12027.
 func (tx *Tx) consumeShips(ships []db.Ship) error {
 	for _, ship := range ships {
 		equips, err := tx.ListShipEquipments(tx.ctx, ship.ID)
@@ -241,6 +241,9 @@ func (tx *Tx) consumeShips(ships []db.Ship) error {
 					return err
 				}
 			}
+		}
+		if err := tx.unequipSkins(equips); err != nil {
+			return err
 		}
 		// the archives keep what it reached
 		if _, err := raiseShipGroup(tx.ctx, tx.Queries, ship); err != nil {

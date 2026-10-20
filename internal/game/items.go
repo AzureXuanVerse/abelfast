@@ -316,11 +316,11 @@ func readItemUses(items map[uint32]itemConfig, gear []packGear, gametip map[stri
 }
 
 // storableDrop is whether grantDrops keeps a reward of an item's contents:
-// resources, bag items, equipment, ships (any ownableShip), ship skins and
-// meowfficers.
+// resources, bag items, equipment, ships (any ownableShip), ship and gear
+// skins and meowfficers.
 // display_icon also lists placeholders for what the server draws (the
-// "Mystery" virtual items) and kinds belfast doesn't store (gear skins,
-// furniture, frames...).
+// "Mystery" virtual items) and kinds belfast doesn't store (furniture,
+// frames...).
 func storableDrop(kind, id uint32) bool {
 	switch kind {
 	case dropTypeResource:
@@ -339,6 +339,9 @@ func storableDrop(kind, id uint32) bool {
 		skin, ok := shipSkins[id]
 		_, base := ownableShip(skin.group*10 + 1)
 		return ok && skin.words && base
+	case dropTypeEquipSkin:
+		_, ok := equipSkins[id]
+		return ok
 	case dropTypeMeowfficer:
 		_, ok := meowfficerTemplates[id]
 		return ok

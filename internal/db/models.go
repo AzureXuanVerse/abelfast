@@ -241,6 +241,12 @@ type CommanderDorm struct {
 	NextTimestamp        int64
 }
 
+type CommanderEquipSkin struct {
+	CommanderID uint32
+	SkinID      uint32
+	Count       uint32
+}
+
 type CommanderEquipment struct {
 	CommanderID uint32
 	EquipID     uint32

@@ -184,6 +184,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleShipLock)
 	packets.Handle(game.handleSetShipSkin)
 	packets.Handle(game.handleShipEquip)
+	packets.Handle(game.handleShipEquipSkin)
 	packets.Handle(game.handleRetireShips)
 	packets.Handle(game.handleLoveLetters)
 	packets.Handle(game.handlePropose)
@@ -446,8 +447,10 @@ var loginBurst = []loginPush{
 	func(game *Game, l *login) (proto.Message, error) {
 		return equipmentDepot(l.ctx, l.queries, l.commander.ID)
 	},
-	// EquipmentProxy: no equipment skins
-	empty[protobuf.SC_14101](),
+	// EquipmentProxy: the gear skin box
+	func(game *Game, l *login) (proto.Message, error) {
+		return equipSkinBox(l.ctx, l.queries, l.commander.ID)
+	},
 	func(game *Game, l *login) (proto.Message, error) { return bag(l.ctx, l.queries, l.commander.ID) },
 	func(game *Game, l *login) (proto.Message, error) { return taskList(l.ctx, l.queries, l.commander.ID) },
 	func(game *Game, l *login) (proto.Message, error) {
