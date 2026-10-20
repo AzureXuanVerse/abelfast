@@ -168,7 +168,7 @@ func (q *Queries) DeleteFriendship(ctx context.Context, arg DeleteFriendshipPara
 }
 
 const getCommanderByName = `-- name: GetCommanderByName :one
-SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, oil_field_at, gold_field_at, oil_field_level, gold_field_level, class_field_level, class_proficiency, class_field_at, oil_field_upgrade_at, gold_field_upgrade_at, class_field_upgrade_at, last_online, marry_ship FROM commanders WHERE name = ? ORDER BY id LIMIT 1
+SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, oil_field_at, gold_field_at, oil_field_level, gold_field_level, class_field_level, class_proficiency, class_field_at, oil_field_upgrade_at, gold_field_upgrade_at, class_field_upgrade_at, last_online, marry_ship, child_display FROM commanders WHERE name = ? ORDER BY id LIMIT 1
 `
 
 func (q *Queries) GetCommanderByName(ctx context.Context, name string) (Commander, error) {
@@ -207,12 +207,13 @@ func (q *Queries) GetCommanderByName(ctx context.Context, name string) (Commande
 		&i.ClassFieldUpgradeAt,
 		&i.LastOnline,
 		&i.MarryShip,
+		&i.ChildDisplay,
 	)
 	return i, err
 }
 
 const listBlacklist = `-- name: ListBlacklist :many
-SELECT commanders.id, commanders.account_id, commanders.name, commanders.starter_ship, commanders.registered_at, commanders.guide_index, commanders.new_guide_index, commanders.level, commanders.exp, commanders.ship_bag_max, commanders.equip_bag_max, commanders.commander_bag_max, commanders.rank, commanders.chat_room_id, commanders.mail_storeroom_lv, commanders.manifesto, commanders.dorm_food, commanders.skill_class_num, commanders.quick_finish_day, commanders.quick_finishes, commanders.oil_field_at, commanders.gold_field_at, commanders.oil_field_level, commanders.gold_field_level, commanders.class_field_level, commanders.class_proficiency, commanders.class_field_at, commanders.oil_field_upgrade_at, commanders.gold_field_upgrade_at, commanders.class_field_upgrade_at, commanders.last_online, commanders.marry_ship FROM blacklist
+SELECT commanders.id, commanders.account_id, commanders.name, commanders.starter_ship, commanders.registered_at, commanders.guide_index, commanders.new_guide_index, commanders.level, commanders.exp, commanders.ship_bag_max, commanders.equip_bag_max, commanders.commander_bag_max, commanders.rank, commanders.chat_room_id, commanders.mail_storeroom_lv, commanders.manifesto, commanders.dorm_food, commanders.skill_class_num, commanders.quick_finish_day, commanders.quick_finishes, commanders.oil_field_at, commanders.gold_field_at, commanders.oil_field_level, commanders.gold_field_level, commanders.class_field_level, commanders.class_proficiency, commanders.class_field_at, commanders.oil_field_upgrade_at, commanders.gold_field_upgrade_at, commanders.class_field_upgrade_at, commanders.last_online, commanders.marry_ship, commanders.child_display FROM blacklist
 JOIN commanders ON commanders.id = blacklist.blocked_id
 WHERE blacklist.commander_id = ?
 ORDER BY blacklist.blocked_at, blacklist.blocked_id
@@ -264,6 +265,7 @@ func (q *Queries) ListBlacklist(ctx context.Context, commanderID uint32) ([]List
 			&i.Commander.ClassFieldUpgradeAt,
 			&i.Commander.LastOnline,
 			&i.Commander.MarryShip,
+			&i.Commander.ChildDisplay,
 		); err != nil {
 			return nil, err
 		}
@@ -279,7 +281,7 @@ func (q *Queries) ListBlacklist(ctx context.Context, commanderID uint32) ([]List
 }
 
 const listCommandersByID = `-- name: ListCommandersByID :many
-SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, oil_field_at, gold_field_at, oil_field_level, gold_field_level, class_field_level, class_proficiency, class_field_at, oil_field_upgrade_at, gold_field_upgrade_at, class_field_upgrade_at, last_online, marry_ship FROM commanders WHERE id IN (/*SLICE:ids*/?) ORDER BY id
+SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, oil_field_at, gold_field_at, oil_field_level, gold_field_level, class_field_level, class_proficiency, class_field_at, oil_field_upgrade_at, gold_field_upgrade_at, class_field_upgrade_at, last_online, marry_ship, child_display FROM commanders WHERE id IN (/*SLICE:ids*/?) ORDER BY id
 `
 
 func (q *Queries) ListCommandersByID(ctx context.Context, ids []uint32) ([]Commander, error) {
@@ -334,6 +336,7 @@ func (q *Queries) ListCommandersByID(ctx context.Context, ids []uint32) ([]Comma
 			&i.ClassFieldUpgradeAt,
 			&i.LastOnline,
 			&i.MarryShip,
+			&i.ChildDisplay,
 		); err != nil {
 			return nil, err
 		}
@@ -376,7 +379,7 @@ func (q *Queries) ListFriendIDs(ctx context.Context, commanderID uint32) ([]uint
 }
 
 const listFriendRequests = `-- name: ListFriendRequests :many
-SELECT commanders.id, commanders.account_id, commanders.name, commanders.starter_ship, commanders.registered_at, commanders.guide_index, commanders.new_guide_index, commanders.level, commanders.exp, commanders.ship_bag_max, commanders.equip_bag_max, commanders.commander_bag_max, commanders.rank, commanders.chat_room_id, commanders.mail_storeroom_lv, commanders.manifesto, commanders.dorm_food, commanders.skill_class_num, commanders.quick_finish_day, commanders.quick_finishes, commanders.oil_field_at, commanders.gold_field_at, commanders.oil_field_level, commanders.gold_field_level, commanders.class_field_level, commanders.class_proficiency, commanders.class_field_at, commanders.oil_field_upgrade_at, commanders.gold_field_upgrade_at, commanders.class_field_upgrade_at, commanders.last_online, commanders.marry_ship, friend_requests.content, friend_requests.sent_at FROM friend_requests
+SELECT commanders.id, commanders.account_id, commanders.name, commanders.starter_ship, commanders.registered_at, commanders.guide_index, commanders.new_guide_index, commanders.level, commanders.exp, commanders.ship_bag_max, commanders.equip_bag_max, commanders.commander_bag_max, commanders.rank, commanders.chat_room_id, commanders.mail_storeroom_lv, commanders.manifesto, commanders.dorm_food, commanders.skill_class_num, commanders.quick_finish_day, commanders.quick_finishes, commanders.oil_field_at, commanders.gold_field_at, commanders.oil_field_level, commanders.gold_field_level, commanders.class_field_level, commanders.class_proficiency, commanders.class_field_at, commanders.oil_field_upgrade_at, commanders.gold_field_upgrade_at, commanders.class_field_upgrade_at, commanders.last_online, commanders.marry_ship, commanders.child_display, friend_requests.content, friend_requests.sent_at FROM friend_requests
 JOIN commanders ON commanders.id = friend_requests.sender_id
 WHERE friend_requests.commander_id = ?
 ORDER BY friend_requests.sent_at, friend_requests.sender_id
@@ -430,6 +433,7 @@ func (q *Queries) ListFriendRequests(ctx context.Context, commanderID uint32) ([
 			&i.Commander.ClassFieldUpgradeAt,
 			&i.Commander.LastOnline,
 			&i.Commander.MarryShip,
+			&i.Commander.ChildDisplay,
 			&i.Content,
 			&i.SentAt,
 		); err != nil {
@@ -447,7 +451,7 @@ func (q *Queries) ListFriendRequests(ctx context.Context, commanderID uint32) ([
 }
 
 const listFriends = `-- name: ListFriends :many
-SELECT commanders.id, commanders.account_id, commanders.name, commanders.starter_ship, commanders.registered_at, commanders.guide_index, commanders.new_guide_index, commanders.level, commanders.exp, commanders.ship_bag_max, commanders.equip_bag_max, commanders.commander_bag_max, commanders.rank, commanders.chat_room_id, commanders.mail_storeroom_lv, commanders.manifesto, commanders.dorm_food, commanders.skill_class_num, commanders.quick_finish_day, commanders.quick_finishes, commanders.oil_field_at, commanders.gold_field_at, commanders.oil_field_level, commanders.gold_field_level, commanders.class_field_level, commanders.class_proficiency, commanders.class_field_at, commanders.oil_field_upgrade_at, commanders.gold_field_upgrade_at, commanders.class_field_upgrade_at, commanders.last_online, commanders.marry_ship FROM friends
+SELECT commanders.id, commanders.account_id, commanders.name, commanders.starter_ship, commanders.registered_at, commanders.guide_index, commanders.new_guide_index, commanders.level, commanders.exp, commanders.ship_bag_max, commanders.equip_bag_max, commanders.commander_bag_max, commanders.rank, commanders.chat_room_id, commanders.mail_storeroom_lv, commanders.manifesto, commanders.dorm_food, commanders.skill_class_num, commanders.quick_finish_day, commanders.quick_finishes, commanders.oil_field_at, commanders.gold_field_at, commanders.oil_field_level, commanders.gold_field_level, commanders.class_field_level, commanders.class_proficiency, commanders.class_field_at, commanders.oil_field_upgrade_at, commanders.gold_field_upgrade_at, commanders.class_field_upgrade_at, commanders.last_online, commanders.marry_ship, commanders.child_display FROM friends
 JOIN commanders ON commanders.id = friends.friend_id
 WHERE friends.commander_id = ?
 ORDER BY friends.since, friends.friend_id
@@ -499,6 +503,7 @@ func (q *Queries) ListFriends(ctx context.Context, commanderID uint32) ([]ListFr
 			&i.Commander.ClassFieldUpgradeAt,
 			&i.Commander.LastOnline,
 			&i.Commander.MarryShip,
+			&i.Commander.ChildDisplay,
 		); err != nil {
 			return nil, err
 		}
@@ -514,7 +519,7 @@ func (q *Queries) ListFriends(ctx context.Context, commanderID uint32) ([]ListFr
 }
 
 const listRecommendedCommanders = `-- name: ListRecommendedCommanders :many
-SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, oil_field_at, gold_field_at, oil_field_level, gold_field_level, class_field_level, class_proficiency, class_field_at, oil_field_upgrade_at, gold_field_upgrade_at, class_field_upgrade_at, last_online, marry_ship FROM commanders
+SELECT id, account_id, name, starter_ship, registered_at, guide_index, new_guide_index, level, exp, ship_bag_max, equip_bag_max, commander_bag_max, rank, chat_room_id, mail_storeroom_lv, manifesto, dorm_food, skill_class_num, quick_finish_day, quick_finishes, oil_field_at, gold_field_at, oil_field_level, gold_field_level, class_field_level, class_proficiency, class_field_at, oil_field_upgrade_at, gold_field_upgrade_at, class_field_upgrade_at, last_online, marry_ship, child_display FROM commanders
 WHERE id != ?1
 	AND id NOT IN (SELECT friend_id FROM friends WHERE commander_id = ?1)
 	AND id NOT IN (SELECT blocked_id FROM blacklist WHERE commander_id = ?1)
@@ -569,6 +574,7 @@ func (q *Queries) ListRecommendedCommanders(ctx context.Context, arg ListRecomme
 			&i.ClassFieldUpgradeAt,
 			&i.LastOnline,
 			&i.MarryShip,
+			&i.ChildDisplay,
 		); err != nil {
 			return nil, err
 		}

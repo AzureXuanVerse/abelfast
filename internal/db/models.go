@@ -195,6 +195,7 @@ type Commander struct {
 	ClassFieldUpgradeAt int64
 	LastOnline          int64
 	MarryShip           uint32
+	ChildDisplay        uint32
 }
 
 type CommanderActivity struct {
@@ -382,6 +383,11 @@ type CommanderDorm struct {
 	Name                 string
 	LoadTime             int64
 	NextTimestamp        int64
+}
+
+type CommanderEducate struct {
+	CommanderID uint32
+	State       string
 }
 
 type CommanderEquipSkin struct {

@@ -66,7 +66,7 @@ func (q *Queries) DeleteGuildRequest(ctx context.Context, arg DeleteGuildRequest
 }
 
 const getGuildCommander = `-- name: GetGuildCommander :one
-SELECT guild_members.commander_id, guild_members.guild_id, guild_members.duty, guild_members.liveness, guild_members.join_time, commanders.id, commanders.account_id, commanders.name, commanders.starter_ship, commanders.registered_at, commanders.guide_index, commanders.new_guide_index, commanders.level, commanders.exp, commanders.ship_bag_max, commanders.equip_bag_max, commanders.commander_bag_max, commanders.rank, commanders.chat_room_id, commanders.mail_storeroom_lv, commanders.manifesto, commanders.dorm_food, commanders.skill_class_num, commanders.quick_finish_day, commanders.quick_finishes, commanders.oil_field_at, commanders.gold_field_at, commanders.oil_field_level, commanders.gold_field_level, commanders.class_field_level, commanders.class_proficiency, commanders.class_field_at, commanders.oil_field_upgrade_at, commanders.gold_field_upgrade_at, commanders.class_field_upgrade_at, commanders.last_online, commanders.marry_ship FROM guild_members
+SELECT guild_members.commander_id, guild_members.guild_id, guild_members.duty, guild_members.liveness, guild_members.join_time, commanders.id, commanders.account_id, commanders.name, commanders.starter_ship, commanders.registered_at, commanders.guide_index, commanders.new_guide_index, commanders.level, commanders.exp, commanders.ship_bag_max, commanders.equip_bag_max, commanders.commander_bag_max, commanders.rank, commanders.chat_room_id, commanders.mail_storeroom_lv, commanders.manifesto, commanders.dorm_food, commanders.skill_class_num, commanders.quick_finish_day, commanders.quick_finishes, commanders.oil_field_at, commanders.gold_field_at, commanders.oil_field_level, commanders.gold_field_level, commanders.class_field_level, commanders.class_proficiency, commanders.class_field_at, commanders.oil_field_upgrade_at, commanders.gold_field_upgrade_at, commanders.class_field_upgrade_at, commanders.last_online, commanders.marry_ship, commanders.child_display FROM guild_members
 JOIN commanders ON commanders.id = guild_members.commander_id
 WHERE guild_members.guild_id = ? AND guild_members.duty = 1
 `
@@ -117,6 +117,7 @@ func (q *Queries) GetGuildCommander(ctx context.Context, guildID uint32) (GetGui
 		&i.Commander.ClassFieldUpgradeAt,
 		&i.Commander.LastOnline,
 		&i.Commander.MarryShip,
+		&i.Commander.ChildDisplay,
 	)
 	return i, err
 }
@@ -149,7 +150,7 @@ func (q *Queries) GuildRequestExists(ctx context.Context, arg GuildRequestExists
 }
 
 const listGuildRequests = `-- name: ListGuildRequests :many
-SELECT guild_requests.guild_id, guild_requests.commander_id, guild_requests.content, guild_requests.time, commanders.id, commanders.account_id, commanders.name, commanders.starter_ship, commanders.registered_at, commanders.guide_index, commanders.new_guide_index, commanders.level, commanders.exp, commanders.ship_bag_max, commanders.equip_bag_max, commanders.commander_bag_max, commanders.rank, commanders.chat_room_id, commanders.mail_storeroom_lv, commanders.manifesto, commanders.dorm_food, commanders.skill_class_num, commanders.quick_finish_day, commanders.quick_finishes, commanders.oil_field_at, commanders.gold_field_at, commanders.oil_field_level, commanders.gold_field_level, commanders.class_field_level, commanders.class_proficiency, commanders.class_field_at, commanders.oil_field_upgrade_at, commanders.gold_field_upgrade_at, commanders.class_field_upgrade_at, commanders.last_online, commanders.marry_ship FROM guild_requests
+SELECT guild_requests.guild_id, guild_requests.commander_id, guild_requests.content, guild_requests.time, commanders.id, commanders.account_id, commanders.name, commanders.starter_ship, commanders.registered_at, commanders.guide_index, commanders.new_guide_index, commanders.level, commanders.exp, commanders.ship_bag_max, commanders.equip_bag_max, commanders.commander_bag_max, commanders.rank, commanders.chat_room_id, commanders.mail_storeroom_lv, commanders.manifesto, commanders.dorm_food, commanders.skill_class_num, commanders.quick_finish_day, commanders.quick_finishes, commanders.oil_field_at, commanders.gold_field_at, commanders.oil_field_level, commanders.gold_field_level, commanders.class_field_level, commanders.class_proficiency, commanders.class_field_at, commanders.oil_field_upgrade_at, commanders.gold_field_upgrade_at, commanders.class_field_upgrade_at, commanders.last_online, commanders.marry_ship, commanders.child_display FROM guild_requests
 JOIN commanders ON commanders.id = guild_requests.commander_id
 WHERE guild_requests.guild_id = ?
 ORDER BY guild_requests.time, guild_requests.commander_id
@@ -206,6 +207,7 @@ func (q *Queries) ListGuildRequests(ctx context.Context, guildID uint32) ([]List
 			&i.Commander.ClassFieldUpgradeAt,
 			&i.Commander.LastOnline,
 			&i.Commander.MarryShip,
+			&i.Commander.ChildDisplay,
 		); err != nil {
 			return nil, err
 		}

@@ -198,5 +198,6 @@ func (game *Game) playerInfo(ctx context.Context, commander db.Commander, ships 
 		CartoonReadMark:    mangaRead,
 		CartoonCollectMark: mangaLiked,
 		AccPayLv:           proto.Uint32(payExp),
+		ChildDisplay:       proto.Uint32(commander.ChildDisplay),
 	}, nil
 }

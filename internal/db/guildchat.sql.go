@@ -40,7 +40,7 @@ func (q *Queries) AddGuildChat(ctx context.Context, arg AddGuildChatParams) (Gui
 }
 
 const listGuildChat = `-- name: ListGuildChat :many
-SELECT guild_chat.id, guild_chat.guild_id, guild_chat.commander_id, guild_chat.content, guild_chat.time, commanders.id, commanders.account_id, commanders.name, commanders.starter_ship, commanders.registered_at, commanders.guide_index, commanders.new_guide_index, commanders.level, commanders.exp, commanders.ship_bag_max, commanders.equip_bag_max, commanders.commander_bag_max, commanders.rank, commanders.chat_room_id, commanders.mail_storeroom_lv, commanders.manifesto, commanders.dorm_food, commanders.skill_class_num, commanders.quick_finish_day, commanders.quick_finishes, commanders.oil_field_at, commanders.gold_field_at, commanders.oil_field_level, commanders.gold_field_level, commanders.class_field_level, commanders.class_proficiency, commanders.class_field_at, commanders.oil_field_upgrade_at, commanders.gold_field_upgrade_at, commanders.class_field_upgrade_at, commanders.last_online, commanders.marry_ship FROM guild_chat
+SELECT guild_chat.id, guild_chat.guild_id, guild_chat.commander_id, guild_chat.content, guild_chat.time, commanders.id, commanders.account_id, commanders.name, commanders.starter_ship, commanders.registered_at, commanders.guide_index, commanders.new_guide_index, commanders.level, commanders.exp, commanders.ship_bag_max, commanders.equip_bag_max, commanders.commander_bag_max, commanders.rank, commanders.chat_room_id, commanders.mail_storeroom_lv, commanders.manifesto, commanders.dorm_food, commanders.skill_class_num, commanders.quick_finish_day, commanders.quick_finishes, commanders.oil_field_at, commanders.gold_field_at, commanders.oil_field_level, commanders.gold_field_level, commanders.class_field_level, commanders.class_proficiency, commanders.class_field_at, commanders.oil_field_upgrade_at, commanders.gold_field_upgrade_at, commanders.class_field_upgrade_at, commanders.last_online, commanders.marry_ship, commanders.child_display FROM guild_chat
 JOIN guild_members ON guild_members.commander_id = guild_chat.commander_id AND guild_members.guild_id = guild_chat.guild_id
 JOIN commanders ON commanders.id = guild_chat.commander_id
 WHERE guild_chat.guild_id = ?1
@@ -105,6 +105,7 @@ func (q *Queries) ListGuildChat(ctx context.Context, arg ListGuildChatParams) ([
 			&i.Commander.ClassFieldUpgradeAt,
 			&i.Commander.LastOnline,
 			&i.Commander.MarryShip,
+			&i.Commander.ChildDisplay,
 		); err != nil {
 			return nil, err
 		}
