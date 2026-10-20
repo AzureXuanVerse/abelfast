@@ -46,6 +46,7 @@ func loadGameData() error {
 		loadDailyLevels,
 		loadChallengeData,
 		loadDockyardData,
+		loadTransformData,
 		loadGuildData,
 		loadWorldData,
 		loadWorldOpData,

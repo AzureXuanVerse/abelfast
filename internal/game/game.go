@@ -193,6 +193,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleUpgradeStar)
 	packets.Handle(game.handleUpgradeMaxLevel)
 	packets.Handle(game.handleModShip)
+	packets.Handle(game.handleRemouldShip)
 	packets.Handle(game.handleCollectionAward)
 	packets.Handle(game.handleUpgradeShipEquipment)
 	packets.Handle(game.handleUpgradeEquipment)

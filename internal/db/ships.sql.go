@@ -262,7 +262,7 @@ func (q *Queries) ListShipEquipmentsByCommander(ctx context.Context, commanderID
 }
 
 const listShipGroups = `-- name: ListShipGroups :many
-SELECT commander_id, group_id, intimacy_max, lv_max, marry_flag, heart_flag, star FROM commander_ship_groups WHERE commander_id = ? ORDER BY rowid
+SELECT commander_id, group_id, intimacy_max, lv_max, marry_flag, heart_flag, star, trans FROM commander_ship_groups WHERE commander_id = ? ORDER BY rowid
 `
 
 func (q *Queries) ListShipGroups(ctx context.Context, commanderID uint32) ([]CommanderShipGroup, error) {
@@ -282,6 +282,7 @@ func (q *Queries) ListShipGroups(ctx context.Context, commanderID uint32) ([]Com
 			&i.MarryFlag,
 			&i.HeartFlag,
 			&i.Star,
+			&i.Trans,
 		); err != nil {
 			return nil, err
 		}

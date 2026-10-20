@@ -577,7 +577,11 @@ func groupEvasion(ctx context.Context, queries *db.Queries, commanderID uint32, 
 			avoidExtra = max(avoidExtra, equipEvasions[equip].avoidExtra)
 		}
 		if member.GetHpRant() > 0 {
-			sum += shipDodge(ship, slots, meowfficerDodge(cats, ship))
+			retrofits, err := queries.ListShipTransforms(ctx, ship.ID)
+			if err != nil {
+				return fleetEvasion{}, err
+			}
+			sum += shipDodge(ship, slots, retrofits, meowfficerDodge(cats, ship))
 		}
 	}
 	return fleetEvasion{dodgeSums: math.Pow(sum, 2.0/3), equipRateUp: avoidExtra / 10000}, nil

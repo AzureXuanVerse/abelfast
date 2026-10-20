@@ -240,7 +240,8 @@ func (tx *Tx) setShipSkin(shipID, skinID, shadow uint32, now time.Time) error {
 // the oath skin of an oathed ship or a skin the commander has. A shared one
 // must be a skin that can be shared, worn by an oathed ship for an oath skin
 // or at 100 affinity for the others (ShipSkin.CanUseShareSkinForShip).
-// Retrofit skins are refused: belfast keeps no retrofits.
+// The retrofit skin isn't owned: a remoulded ship of its group wears it
+// (Ship:getRemouldSkinId and isRemoulded).
 func (tx *Tx) canWear(ship db.Ship, skinID uint32, now time.Time) error {
 	skin, ok := shipSkins[skinID]
 	group := shipGroup(ship.TemplateID) // Ship.groupId, ShipSkin's ship_group
@@ -253,6 +254,15 @@ func (tx *Tx) canWear(ship db.Ship, skinID uint32, now time.Time) error {
 		return err
 	}
 	proposed := ship.Propose > 0
+	if skin.skinType == skinTypeRemake && !shared {
+		rows, err := tx.ListShipTransforms(tx.ctx, ship.ID)
+		if err != nil {
+			return err
+		}
+		if remoulded(group, transformLevels(rows)) {
+			return nil
+		}
+	}
 	if skin.skinType != skinTypeOld && !(skin.skinType == skinTypePropose && proposed) && !hasSkin(owned, skinID) {
 		return errRefused
 	}

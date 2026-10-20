@@ -381,6 +381,7 @@ type CommanderShipGroup struct {
 	MarryFlag   uint32
 	HeartFlag   uint32
 	Star        uint32
+	Trans       bool
 }
 
 type CommanderShopGroupPurchase struct {
@@ -971,6 +972,12 @@ type ShipStrength struct {
 	ShipID uint32
 	AttrID uint32
 	Exp    uint32
+}
+
+type ShipTransform struct {
+	ShipID      uint32
+	TransformID uint32
+	Level       uint32
 }
 
 type Spweapon struct {

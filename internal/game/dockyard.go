@@ -218,6 +218,14 @@ func (tx *Tx) materialShips(target uint32, ids []uint32) ([]db.Ship, error) {
 	return ships, nil
 }
 
+// upgradeMaterial is whether material can be fed to ship's limit break or
+// retrofit (BayProxy:getUpgradeShips): a ship of its group, or a Bulin
+// standing in for its rarity.
+func upgradeMaterial(ship, material db.Ship) bool {
+	return shipGroup(material.TemplateID) == shipGroup(ship.TemplateID) ||
+		slices.Contains(testShips[material.TemplateID], ownableShips[ship.TemplateID].Rarity)
+}
+
 // consumeShips removes material ships, their gear back to the depot: what
 // the client does on result 0 of 12017 and 12027 (gear skins too, which
 // belfast doesn't keep apart).
@@ -314,9 +322,8 @@ func (game *Game) handleUpgradeStar(client *connection.Client, req *protobuf.CS_
 		if err != nil {
 			return err
 		}
-		group, rarity := shipGroup(ship.TemplateID), ownableShips[ship.TemplateID].Rarity
 		for _, material := range materials {
-			if shipGroup(material.TemplateID) != group && !slices.Contains(testShips[material.TemplateID], rarity) {
+			if !upgradeMaterial(ship, material) {
 				return errRefused
 			}
 		}

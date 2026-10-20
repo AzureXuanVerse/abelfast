@@ -148,7 +148,8 @@ func fullShipInfo(ship db.Ship, equips []db.ShipEquipment, skills []db.ShipSkill
 }
 
 // shipList is SC_12001, BayProxy's ships: the SHIPINFO of each of ships
-// (the commander's, by id) with their slots, skills and augments.
+// (the commander's, by id) with their slots, skills, enhancements,
+// retrofits and augments.
 func shipList(ctx context.Context, queries *db.Queries, commanderID uint32, ships []db.Ship) (*protobuf.SC_12001, error) {
 	equips, err := queries.ListShipEquipmentsByCommander(ctx, commanderID)
 	if err != nil {
@@ -161,6 +162,14 @@ func shipList(ctx context.Context, queries *db.Queries, commanderID uint32, ship
 	strengths, err := queries.ListShipStrengthsByCommander(ctx, commanderID)
 	if err != nil {
 		return nil, err
+	}
+	transformRows, err := queries.ListShipTransformsByCommander(ctx, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	transformsByShip := map[uint32][]db.ShipTransform{}
+	for _, row := range transformRows {
+		transformsByShip[row.ShipID] = append(transformsByShip[row.ShipID], row)
 	}
 	strengthsByShip := map[uint32][]db.ShipStrength{}
 	for _, row := range strengths {
@@ -178,6 +187,7 @@ func shipList(ctx context.Context, queries *db.Queries, commanderID uint32, ship
 	for i, ship := range ships {
 		msg.Shiplist[i] = fullShipInfo(ship, equipsByShip[ship.ID], skillsByShip[ship.ID])
 		msg.Shiplist[i].StrengthList = strengthInfo(strengthsByShip[ship.ID])
+		msg.Shiplist[i].TransformList = transformInfo(transformsByShip[ship.ID])
 	}
 	if err := setShipSpWeapons(ctx, queries, commanderID, msg.Shiplist); err != nil {
 		return nil, err
@@ -287,21 +297,22 @@ func activeEquipments(slots []uint32) []uint32 {
 //     level, plus attrs_growth_extra above extra_attr_level_limit (the
 //     "lock" loop copies the same values, it changes nothing);
 //   - getShipProperties: evasion isn't enhanceable (ShipModAttr.ATTR_TO_INDEX),
-//     then intimacyAdditions; retrofits (transforms), blueprint and META
-//     ships aren't modeled and add nothing;
+//     then intimacyAdditions, then the dodge of its retrofits' effects
+//     (transforms); blueprint and META ships aren't modeled and add nothing;
 //   - getEquipmentProperties: the flat dodge of the active equipment and the
 //     best dodge property_rate (augments aren't modeled);
 //   - getProperties: floor(floor(base) * (1 + rate + the cats' rate)) +
 //     flat + the cats' flat (meowfficerDodge). The fleet tech nation bonus
 //     of max star ships and Operation Siren buffs aren't modeled and add
 //     nothing.
-func shipDodge(ship db.Ship, slots []uint32, cats attrBonus) float64 {
+func shipDodge(ship db.Ship, slots []uint32, retrofits []db.ShipTransform, cats attrBonus) float64 {
 	growth := shipDodges[ship.TemplateID]
 	dodge := growth.base + (float64(ship.Level)-1)*growth.growth/1000
 	if ship.Level > extraAttrLevelLimit {
 		dodge += float64(ship.Level-extraAttrLevelLimit) * growth.growthExtra / 1000
 	}
 	dodge *= 1 + float64(intimacyBonus(ship.Intimacy, ship.Propose != 0))/10000
+	dodge += transformBonus(retrofits, attributeDodge)
 	flat, rate := 0.0, 0.0
 	for _, equip := range activeEquipments(slots) {
 		evasion := equipEvasions[equip]
@@ -403,8 +414,9 @@ func (game *Game) handleLoveLetters(client *connection.Client, req *protobuf.CS_
 }
 
 // collectionState is SC_17001, CollectionProxy: the archives (one
-// SHIP_STATISTICS_INFO per ship group owned), the milestone rewards
-// claimed and the medals' progress. The login's syncTechPoints raised the
+// SHIP_STATISTICS_INFO per ship group owned, transform_list the groups
+// whose retrofit skin is unlocked), the milestone rewards claimed and the
+// medals' progress. The login's syncTechPoints raised the
 // entries from the ships owned first (raiseShipGroups).
 func collectionState(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobuf.SC_17001, error) {
 	groups, err := queries.ListShipGroups(ctx, commanderID)
@@ -445,6 +457,9 @@ func collectionState(ctx context.Context, queries *db.Queries, commanderID uint3
 	for _, group := range groups {
 		if !archiveGroups[group.GroupID] {
 			continue
+		}
+		if group.Trans {
+			msg.TransformList = append(msg.TransformList, group.GroupID)
 		}
 		// heart_count is the likes of every commander of the server
 		msg.ShipInfoList = append(msg.ShipInfoList, &protobuf.SHIP_STATISTICS_INFO{

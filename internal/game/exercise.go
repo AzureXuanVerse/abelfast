@@ -238,6 +238,10 @@ func (game *Game) targetInfo(ctx context.Context, queries *db.Queries, standings
 	if err != nil {
 		return nil, 0, false, err
 	}
+	retrofits, err := queries.ListShipTransformsByCommander(ctx, commanderID)
+	if err != nil {
+		return nil, 0, false, err
+	}
 	full := func(ship db.Ship) *protobuf.SHIPINFO {
 		var shipEquips []db.ShipEquipment
 		for _, equip := range equips {
@@ -253,6 +257,7 @@ func (game *Game) targetInfo(ctx context.Context, queries *db.Queries, standings
 		}
 		info := fullShipInfo(ship, shipEquips, shipSkills)
 		info.StrengthList = strengthInfo(slices.DeleteFunc(slices.Clone(strengths), func(row db.ShipStrength) bool { return row.ShipID != ship.ID }))
+		info.TransformList = transformInfo(slices.DeleteFunc(slices.Clone(retrofits), func(row db.ShipTransform) bool { return row.ShipID != ship.ID }))
 		return info
 	}
 	info := &protobuf.TARGETINFO{
