@@ -512,6 +512,16 @@ func (state *neState) res() *protobuf.TBRES {
 
 // fsm is the TBFSM of the game. NewEducateFSM reads cache[1] unconditionally.
 func (state *neState) fsm() *protobuf.TBFSM {
+	// NewEducateFSM:CheckStystem indexes the current system's state, which
+	// it only builds from its cache: never send a system without one
+	// (the choose step leads to the map, which is then asked for again)
+	switch {
+	case state.System == neSysMap && state.Site == nil,
+		state.System == neSysTalent && state.Talent == nil,
+		state.System == neSysTopic && state.Chat == nil,
+		state.System == neSysEnding && state.End == nil:
+		state.System = neSysChoose
+	}
 	cache := &protobuf.TBFSMCACHE{}
 	if state.PlanSet {
 		plan := &protobuf.TBFSMCACHEPLAN{CurIndex: proto.Uint32(state.PlanCur)}
