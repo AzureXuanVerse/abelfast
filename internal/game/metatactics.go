@@ -45,6 +45,9 @@ type metaSkillTask struct {
 	SkillUnlock [][]uint32 `json:"skill_unlock"`
 }
 
+// metaSkillTasksByLevel is ship_meta_skilltask by skill then level.
+var metaSkillTasksByLevel map[uint32]map[uint32]metaSkillTask
+
 var (
 	// metaTacticsSkills are the research skills of each META ship template
 	// (every ship_meta_breakout id), in buff_list_display order
@@ -55,13 +58,13 @@ var (
 )
 
 func loadMetaTacticsData() error {
-	var breakouts map[uint32]struct{}
 	var templates map[uint32]struct {
 		BuffListDisplay []uint32 `json:"buff_list_display"`
 	}
 	var tasks map[uint32]metaSkillTask
 	err := gamedata.LoadAll(
-		gamedata.Load("ship_meta_breakout", &breakouts),
+		gamedata.Load("ship_meta_breakout", &metaBreakouts),
+		gamedata.Load("ship_meta_repair", &metaRepairs),
 		gamedata.Load("ship_data_template", &templates),
 		gamedata.Load("ship_meta_skilltask", &tasks),
 	)
@@ -69,7 +72,12 @@ func loadMetaTacticsData() error {
 		return err
 	}
 	metaSkillUnlocks = map[uint32][][]uint32{}
+	metaSkillTasksByLevel = map[uint32]map[uint32]metaSkillTask{}
 	for _, task := range tasks {
+		if metaSkillTasksByLevel[task.SkillID] == nil {
+			metaSkillTasksByLevel[task.SkillID] = map[uint32]metaSkillTask{}
+		}
+		metaSkillTasksByLevel[task.SkillID][task.Level] = task
 		if _, ok := metaSkillUnlocks[task.SkillID]; !ok {
 			metaSkillUnlocks[task.SkillID] = nil
 		}
@@ -77,8 +85,8 @@ func loadMetaTacticsData() error {
 			metaSkillUnlocks[task.SkillID] = task.SkillUnlock
 		}
 	}
-	metaTacticsSkills = make(map[uint32][]uint32, len(breakouts))
-	for id := range breakouts {
+	metaTacticsSkills = make(map[uint32][]uint32, len(metaBreakouts))
+	for id := range metaBreakouts {
 		skills := []uint32{}
 		for _, skill := range templates[id].BuffListDisplay {
 			if _, ok := metaSkillUnlocks[skill]; ok {

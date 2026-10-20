@@ -21,11 +21,22 @@ const dropTypeMetaPt = 22
 const metaTypePt = 1
 
 // ship_strengthen_meta row: target is the Sync Point ladder (MetaPTData
-// targets), award_display the reward of each step ([type, id, count]).
+// targets), award_display the reward of each step ([type, id, count]),
+// repair_<attr> the ship_meta_repair rows of each Rigging Fortification
+// attribute in order (MetaCharacterAttr items).
 type metaShipConfig struct {
-	Type         uint32     `json:"type"`
-	Target       []uint32   `json:"target"`
-	AwardDisplay [][]uint32 `json:"award_display"`
+	Type          uint32     `json:"type"`
+	Target        []uint32   `json:"target"`
+	AwardDisplay  [][]uint32 `json:"award_display"`
+	RepairCannon  []uint32   `json:"repair_cannon"`
+	RepairTorpedo []uint32   `json:"repair_torpedo"`
+	RepairAir     []uint32   `json:"repair_air"`
+	RepairReload  []uint32   `json:"repair_reload"`
+}
+
+// repairs are the repair_<attr> lists of MetaCharacterConst.REPAIR_ATTRS.
+func (config metaShipConfig) repairs() [4][]uint32 {
+	return [4][]uint32{config.RepairCannon, config.RepairTorpedo, config.RepairAir, config.RepairReload}
 }
 
 var metaShips map[uint32]metaShipConfig

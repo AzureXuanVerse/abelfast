@@ -611,6 +611,7 @@ func loadShipData() error {
 	}
 	readItemUses(items, techPackGear(equips, equipStats), gametip)
 	readLessonBooks(items)
+	readMetaLessonBooks(items)
 	if err := readShipExpBooks(items); err != nil {
 		return err
 	}

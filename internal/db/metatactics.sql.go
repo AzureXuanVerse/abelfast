@@ -10,6 +10,76 @@ import (
 	"strings"
 )
 
+const addMetaRepair = `-- name: AddMetaRepair :exec
+INSERT INTO ship_meta_repairs (ship_id, repair_id) VALUES (?, ?) ON CONFLICT DO NOTHING
+`
+
+type AddMetaRepairParams struct {
+	ShipID   uint32
+	RepairID uint32
+}
+
+func (q *Queries) AddMetaRepair(ctx context.Context, arg AddMetaRepairParams) error {
+	_, err := q.db.ExecContext(ctx, addMetaRepair, arg.ShipID, arg.RepairID)
+	return err
+}
+
+const listMetaRepairs = `-- name: ListMetaRepairs :many
+SELECT repair_id FROM ship_meta_repairs WHERE ship_id = ? ORDER BY repair_id
+`
+
+func (q *Queries) ListMetaRepairs(ctx context.Context, shipID uint32) ([]uint32, error) {
+	rows, err := q.db.QueryContext(ctx, listMetaRepairs, shipID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uint32
+	for rows.Next() {
+		var repair_id uint32
+		if err := rows.Scan(&repair_id); err != nil {
+			return nil, err
+		}
+		items = append(items, repair_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMetaRepairsByCommander = `-- name: ListMetaRepairsByCommander :many
+SELECT r.ship_id, r.repair_id FROM ship_meta_repairs r
+JOIN ships s ON s.id = r.ship_id
+WHERE s.commander_id = ? ORDER BY r.ship_id, r.repair_id
+`
+
+func (q *Queries) ListMetaRepairsByCommander(ctx context.Context, commanderID uint32) ([]ShipMetaRepair, error) {
+	rows, err := q.db.QueryContext(ctx, listMetaRepairsByCommander, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ShipMetaRepair
+	for rows.Next() {
+		var i ShipMetaRepair
+		if err := rows.Scan(&i.ShipID, &i.RepairID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMetaTactics = `-- name: ListMetaTactics :many
 SELECT t.ship_id, t.skill_id, t.day, t.day_exp, t.double_exp, t.switches FROM ship_meta_tactics t
 JOIN ships s ON s.id = t.ship_id

@@ -1071,6 +1071,11 @@ type ShipEquipment struct {
 	SkinID  uint32
 }
 
+type ShipMetaRepair struct {
+	ShipID   uint32
+	RepairID uint32
+}
+
 type ShipMetaTactic struct {
 	ShipID    uint32
 	SkillID   uint32
