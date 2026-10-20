@@ -416,12 +416,6 @@ func (game *Game) handleShipEquip(client *connection.Client, req *protobuf.CS_12
 	return client.Send(&protobuf.SC_12007{Result: result(err)})
 }
 
-// handleLoveLetters answers GetAllLoveLetterLevelDataCommand (CS_12406):
-// love letters and their medals belong to married ships, none yet.
-func (game *Game) handleLoveLetters(client *connection.Client, req *protobuf.CS_12406) error {
-	return client.Send(&protobuf.SC_12407{})
-}
-
 // collectionState is SC_17001, CollectionProxy: the archives (one
 // SHIP_STATISTICS_INFO per ship group owned, transform_list the groups
 // whose retrofit skin is unlocked), the milestone rewards claimed and the

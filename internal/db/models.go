@@ -340,6 +340,31 @@ type CommanderJuusTopic struct {
 	ReadFlag    bool
 }
 
+type CommanderLoveLetter struct {
+	CommanderID uint32
+	LetterID    uint32
+}
+
+type CommanderLoveLetterGift struct {
+	CommanderID uint32
+	Pos         uint32
+	ItemID      uint32
+	GroupID     uint32
+	Year        uint32
+}
+
+type CommanderLoveLetterMedal struct {
+	CommanderID uint32
+	GroupID     uint32
+	Exp         uint32
+	Level       uint32
+}
+
+type CommanderLoveLetterReward struct {
+	CommanderID uint32
+	RewardID    uint32
+}
+
 type CommanderMedalShopPurchase struct {
 	CommanderID uint32
 	GoodsID     uint32

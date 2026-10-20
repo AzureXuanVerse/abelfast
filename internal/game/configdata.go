@@ -38,6 +38,7 @@ func loadGameData() error {
 		loadSkillClassData,
 		loadFleetTechData,
 		loadCryptolaliaData,
+		loadLoveLetterData,
 		loadMonthShops,
 		loadResourceFields,
 		loadMeowfficerData,
