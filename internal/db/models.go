@@ -225,6 +225,25 @@ type CommanderAppreciation struct {
 	ItemID      uint32
 }
 
+type CommanderAtelierItem struct {
+	CommanderID uint32
+	ItemID      uint32
+	Count       uint32
+}
+
+type CommanderAtelierRecipe struct {
+	CommanderID uint32
+	RecipeID    uint32
+	Used        uint32
+}
+
+type CommanderAtelierSlot struct {
+	CommanderID uint32
+	Pos         uint32
+	ItemID      uint32
+	ItemNum     uint32
+}
+
 type CommanderBlueprint struct {
 	CommanderID uint32
 	BlueprintID uint32

@@ -70,5 +70,6 @@ func loadGameData() error {
 		loadExchangeCodes,
 		loadGameRoomData,
 		loadMiniGameData,
+		loadAtelierData,
 	)
 }

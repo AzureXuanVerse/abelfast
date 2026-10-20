@@ -33,7 +33,8 @@ const (
 // skins (for good or for a time, as the client adds them: Drop's
 // DROP_TYPE_SKIN and DROP_TYPE_SKIN_TIMELIMIT cases, model/vo/drop.lua),
 // gear skins (the gear skin box) and meowfficers (grantMeowfficers, pushed
-// in SC_25039), recording the task progress they cause. Frames, emojis...
+// in SC_25039), Atelier materials, augment modules (pushed in SC_14200),
+// recording the task progress they cause. Frames, emojis...
 // have no storage yet and are only logged.
 func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 	var cats []*protobuf.COMMANDERINFO
@@ -112,6 +113,15 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 			}
 		case kind == dropTypeIconFrame || kind == dropTypeChatFrame || kind == dropTypeCover || kind == dropTypeCombatUI:
 			if err := tx.addAttireFrame(kind, id); err != nil {
+				return err
+			}
+		case kind == dropTypeRyza:
+			// the Atelier's materials
+			if err := tx.addAtelierItem(id, count); err != nil {
+				return err
+			}
+		case kind == dropTypeSpWeapon:
+			if err := tx.addSpWeapons(id, count); err != nil {
 				return err
 			}
 		case kind == dropTypeMeowfficer:
