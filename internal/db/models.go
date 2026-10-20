@@ -314,6 +314,22 @@ type CommanderCollectionAward struct {
 	AwardIndex  uint32
 }
 
+type CommanderColoringAward struct {
+	CommanderID uint32
+	ActivityID  uint32
+	GroupID     uint32
+	Drops       Drops
+}
+
+type CommanderColoringCell struct {
+	CommanderID uint32
+	ActivityID  uint32
+	GroupID     uint32
+	Row         uint32
+	Col         uint32
+	Color       uint32
+}
+
 type CommanderCommission struct {
 	CommanderID  uint32
 	CollectionID uint32

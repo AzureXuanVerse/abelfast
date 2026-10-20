@@ -252,3 +252,22 @@ func (q *Queries) SpendResource(ctx context.Context, arg SpendResourceParams) (i
 	}
 	return result.RowsAffected()
 }
+
+const spendVirtualItem = `-- name: SpendVirtualItem :execrows
+UPDATE commander_virtual_items SET amount = amount - ?1
+WHERE commander_id = ?2 AND item_id = ?3 AND amount >= ?1
+`
+
+type SpendVirtualItemParams struct {
+	Count       uint32
+	CommanderID uint32
+	ItemID      uint32
+}
+
+func (q *Queries) SpendVirtualItem(ctx context.Context, arg SpendVirtualItemParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, spendVirtualItem, arg.Count, arg.CommanderID, arg.ItemID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}

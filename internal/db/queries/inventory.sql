@@ -34,6 +34,10 @@ WHERE commander_id = sqlc.arg(commander_id) AND equip_id = sqlc.arg(equip_id) AN
 -- name: GetVirtualItem :one
 SELECT amount FROM commander_virtual_items WHERE commander_id = ? AND item_id = ?;
 
+-- name: SpendVirtualItem :execrows
+UPDATE commander_virtual_items SET amount = amount - sqlc.arg(count)
+WHERE commander_id = sqlc.arg(commander_id) AND item_id = sqlc.arg(item_id) AND amount >= sqlc.arg(count);
+
 -- name: AddVirtualItem :exec
 INSERT INTO commander_virtual_items (commander_id, item_id, amount) VALUES (?, ?, ?)
 ON CONFLICT (commander_id, item_id) DO UPDATE SET amount = amount + excluded.amount;

@@ -28,6 +28,9 @@ sql:
           - column: compensations.attachments
             go_type:
               type: Drops
+          - column: commander_coloring_awards.drops
+            go_type:
+              type: Drops
           - column: meowfficers.talents
             go_type:
               type: IDList

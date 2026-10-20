@@ -328,6 +328,11 @@ func (game *Game) Register() {
 	packets.Handle(game.handleActivityBossPage)
 	packets.Handle(game.handleCollabBossRushData)
 	packets.Handle(game.handleIslandNodes)
+	// coloring activity
+	packets.Handle(game.handleColoringFetch)
+	packets.Handle(game.handleColoringCell)
+	packets.Handle(game.handleColoringClear)
+	packets.Handle(game.handleColoringAchieve)
 	// challenge mode
 	packets.Handle(game.handleChallengeStart)
 	packets.Handle(game.handleChallengeInfo)
