@@ -351,6 +351,9 @@ func (game *Game) Register() {
 	packets.Handle(game.handleMusicPlayer)
 	packets.Handle(game.handleMiniGameHubs)
 	packets.Handle(game.handleGameRoomFirstCoin)
+	packets.Handle(game.handleGameRoomWeekCoin)
+	packets.Handle(game.handleGameRoomExchangeCoin)
+	packets.Handle(game.handleGameRoomSuccess)
 	packets.Handle(game.handleEmojiInfo)
 	packets.Handle(game.handleLimitChallenge)
 	packets.Handle(game.handleLimitChallengeAward)
@@ -379,6 +382,8 @@ func (game *Game) Register() {
 	packets.Handle(game.handleUnlockCryptolalia)
 	packets.Handle(game.handleShopStreet)
 	packets.Handle(game.handleMiniGameShop)
+	packets.Handle(game.handleMiniGameShopBuy)
+	packets.Handle(game.handleMiniGameShopFlush)
 	packets.Handle(game.handleSeasonInfo)
 	packets.Handle(game.handleReplaceRivals)
 	packets.Handle(game.handleArenaRank)
@@ -496,7 +501,7 @@ var loginBurst = []loginPush{
 		return navalAcademy(l.ctx, l.queries, l.commander, l.now)
 	},
 	func(game *Game, l *login) (proto.Message, error) {
-		return gameRoomInfo(l.ctx, l.queries, l.commander.ID)
+		return gameRoomInfo(l.ctx, l.queries, l.commander.ID, l.now)
 	},
 	// CommanderProxy: the meowfficers, cat boxes and saved pairs
 	func(game *Game, l *login) (proto.Message, error) {

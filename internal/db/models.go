@@ -340,8 +340,19 @@ type CommanderFurniture struct {
 }
 
 type CommanderGameRoom struct {
+	CommanderID    uint32
+	FirstEnter     uint32
+	WeeklyFreeWeek int64
+	PayWeek        int64
+	PayCoinCount   uint32
+	TicketMonth    int64
+	MonthlyTicket  uint32
+}
+
+type CommanderGameRoomScore struct {
 	CommanderID uint32
-	FirstEnter  uint32
+	RoomID      uint32
+	MaxScore    uint32
 }
 
 type CommanderGuildShop struct {
@@ -441,6 +452,13 @@ type CommanderMedalShopPurchase struct {
 	CommanderID uint32
 	GoodsID     uint32
 	FlashTime   int64
+	Count       uint32
+}
+
+type CommanderMiniGameShopPurchase struct {
+	CommanderID uint32
+	GoodsID     uint32
+	MonthStart  int64
 	Count       uint32
 }
 

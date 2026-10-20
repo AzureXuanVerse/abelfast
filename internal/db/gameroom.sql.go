@@ -9,6 +9,92 @@ import (
 	"context"
 )
 
+const addGameRoomMonthlyTickets = `-- name: AddGameRoomMonthlyTickets :exec
+INSERT INTO commander_game_room (commander_id, ticket_month, monthly_ticket) VALUES (?, ?, ?)
+ON CONFLICT (commander_id) DO UPDATE SET
+	monthly_ticket = CASE WHEN ticket_month = excluded.ticket_month THEN monthly_ticket + excluded.monthly_ticket ELSE excluded.monthly_ticket END,
+	ticket_month = excluded.ticket_month
+`
+
+type AddGameRoomMonthlyTicketsParams struct {
+	CommanderID   uint32
+	TicketMonth   int64
+	MonthlyTicket uint32
+}
+
+func (q *Queries) AddGameRoomMonthlyTickets(ctx context.Context, arg AddGameRoomMonthlyTicketsParams) error {
+	_, err := q.db.ExecContext(ctx, addGameRoomMonthlyTickets, arg.CommanderID, arg.TicketMonth, arg.MonthlyTicket)
+	return err
+}
+
+const addGameRoomPayCoins = `-- name: AddGameRoomPayCoins :exec
+INSERT INTO commander_game_room (commander_id, pay_week, pay_coin_count) VALUES (?, ?, ?)
+ON CONFLICT (commander_id) DO UPDATE SET
+	pay_coin_count = CASE WHEN pay_week = excluded.pay_week THEN pay_coin_count + excluded.pay_coin_count ELSE excluded.pay_coin_count END,
+	pay_week = excluded.pay_week
+`
+
+type AddGameRoomPayCoinsParams struct {
+	CommanderID  uint32
+	PayWeek      int64
+	PayCoinCount uint32
+}
+
+func (q *Queries) AddGameRoomPayCoins(ctx context.Context, arg AddGameRoomPayCoinsParams) error {
+	_, err := q.db.ExecContext(ctx, addGameRoomPayCoins, arg.CommanderID, arg.PayWeek, arg.PayCoinCount)
+	return err
+}
+
+const addMiniGameShopPurchase = `-- name: AddMiniGameShopPurchase :exec
+INSERT INTO commander_mini_game_shop_purchases (commander_id, goods_id, month_start, count) VALUES (?, ?, ?, ?)
+ON CONFLICT (commander_id, goods_id, month_start) DO UPDATE SET count = count + excluded.count
+`
+
+type AddMiniGameShopPurchaseParams struct {
+	CommanderID uint32
+	GoodsID     uint32
+	MonthStart  int64
+	Count       uint32
+}
+
+func (q *Queries) AddMiniGameShopPurchase(ctx context.Context, arg AddMiniGameShopPurchaseParams) error {
+	_, err := q.db.ExecContext(ctx, addMiniGameShopPurchase,
+		arg.CommanderID,
+		arg.GoodsID,
+		arg.MonthStart,
+		arg.Count,
+	)
+	return err
+}
+
+const getGameRoom = `-- name: GetGameRoom :one
+SELECT first_enter, weekly_free_week, pay_week, pay_coin_count, ticket_month, monthly_ticket
+FROM commander_game_room WHERE commander_id = ?
+`
+
+type GetGameRoomRow struct {
+	FirstEnter     uint32
+	WeeklyFreeWeek int64
+	PayWeek        int64
+	PayCoinCount   uint32
+	TicketMonth    int64
+	MonthlyTicket  uint32
+}
+
+func (q *Queries) GetGameRoom(ctx context.Context, commanderID uint32) (GetGameRoomRow, error) {
+	row := q.db.QueryRowContext(ctx, getGameRoom, commanderID)
+	var i GetGameRoomRow
+	err := row.Scan(
+		&i.FirstEnter,
+		&i.WeeklyFreeWeek,
+		&i.PayWeek,
+		&i.PayCoinCount,
+		&i.TicketMonth,
+		&i.MonthlyTicket,
+	)
+	return i, err
+}
+
 const getGameRoomFirstEnter = `-- name: GetGameRoomFirstEnter :one
 SELECT first_enter FROM commander_game_room WHERE commander_id = ?
 `
@@ -20,6 +106,73 @@ func (q *Queries) GetGameRoomFirstEnter(ctx context.Context, commanderID uint32)
 	return first_enter, err
 }
 
+const listGameRoomScores = `-- name: ListGameRoomScores :many
+SELECT room_id, max_score FROM commander_game_room_scores
+WHERE commander_id = ? ORDER BY room_id
+`
+
+type ListGameRoomScoresRow struct {
+	RoomID   uint32
+	MaxScore uint32
+}
+
+func (q *Queries) ListGameRoomScores(ctx context.Context, commanderID uint32) ([]ListGameRoomScoresRow, error) {
+	rows, err := q.db.QueryContext(ctx, listGameRoomScores, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListGameRoomScoresRow
+	for rows.Next() {
+		var i ListGameRoomScoresRow
+		if err := rows.Scan(&i.RoomID, &i.MaxScore); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMiniGameShopPurchases = `-- name: ListMiniGameShopPurchases :many
+SELECT goods_id, month_start, count FROM commander_mini_game_shop_purchases
+WHERE commander_id = ? ORDER BY goods_id, month_start
+`
+
+type ListMiniGameShopPurchasesRow struct {
+	GoodsID    uint32
+	MonthStart int64
+	Count      uint32
+}
+
+func (q *Queries) ListMiniGameShopPurchases(ctx context.Context, commanderID uint32) ([]ListMiniGameShopPurchasesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMiniGameShopPurchases, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMiniGameShopPurchasesRow
+	for rows.Next() {
+		var i ListMiniGameShopPurchasesRow
+		if err := rows.Scan(&i.GoodsID, &i.MonthStart, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setGameRoomFirstEnter = `-- name: SetGameRoomFirstEnter :execrows
 INSERT INTO commander_game_room (commander_id, first_enter) VALUES (?, 1)
 ON CONFLICT (commander_id) DO UPDATE SET first_enter = 1 WHERE first_enter = 0
@@ -27,6 +180,42 @@ ON CONFLICT (commander_id) DO UPDATE SET first_enter = 1 WHERE first_enter = 0
 
 func (q *Queries) SetGameRoomFirstEnter(ctx context.Context, commanderID uint32) (int64, error) {
 	result, err := q.db.ExecContext(ctx, setGameRoomFirstEnter, commanderID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const setGameRoomScore = `-- name: SetGameRoomScore :exec
+INSERT INTO commander_game_room_scores (commander_id, room_id, max_score) VALUES (?, ?, ?)
+ON CONFLICT (commander_id, room_id) DO UPDATE SET max_score = excluded.max_score
+WHERE max_score < excluded.max_score
+`
+
+type SetGameRoomScoreParams struct {
+	CommanderID uint32
+	RoomID      uint32
+	MaxScore    uint32
+}
+
+func (q *Queries) SetGameRoomScore(ctx context.Context, arg SetGameRoomScoreParams) error {
+	_, err := q.db.ExecContext(ctx, setGameRoomScore, arg.CommanderID, arg.RoomID, arg.MaxScore)
+	return err
+}
+
+const setGameRoomWeeklyFree = `-- name: SetGameRoomWeeklyFree :execrows
+INSERT INTO commander_game_room (commander_id, weekly_free_week) VALUES (?, ?)
+ON CONFLICT (commander_id) DO UPDATE SET weekly_free_week = excluded.weekly_free_week
+WHERE weekly_free_week < excluded.weekly_free_week
+`
+
+type SetGameRoomWeeklyFreeParams struct {
+	CommanderID    uint32
+	WeeklyFreeWeek int64
+}
+
+func (q *Queries) SetGameRoomWeeklyFree(ctx context.Context, arg SetGameRoomWeeklyFreeParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setGameRoomWeeklyFree, arg.CommanderID, arg.WeeklyFreeWeek)
 	if err != nil {
 		return 0, err
 	}

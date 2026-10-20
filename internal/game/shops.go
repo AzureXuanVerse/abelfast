@@ -162,15 +162,6 @@ func (game *Game) handleShopStreet(client *connection.Client, req *protobuf.CS_2
 	return client.Send(&protobuf.SC_22102{Street: street})
 }
 
-// handleMiniGameShop answers GetMiniGameShopCommand, the game room shop
-// (gameroom_shop_template): goods lists the purchases, none yet; it
-// refreshes with the month.
-func (game *Game) handleMiniGameShop(client *connection.Client, req *protobuf.CS_26150) error {
-	return client.Send(&protobuf.SC_26151{
-		NextFlashTime: proto.Uint32(uint32(nextMonth(time.Now()).Unix())),
-	})
-}
-
 // handleSkinPreviewUsage acknowledges the skin shop's live2d preview toggle
 // (RecordSkinAnimPreviwBtnUsageCommand,
 // controller/command/shop/recordskinanimpreviwbtnusagecommand.lua, CS_16203):
