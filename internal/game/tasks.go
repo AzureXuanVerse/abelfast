@@ -122,9 +122,14 @@ type TaskEvent struct {
 // research ships' claimed ones with their submit_time, which TaskProxy
 // keeps as finished (initTaskInfo's finishData): the Dev. Dock reads a
 // research's state from them (ShipBluePrint:getTaskStateById,
-// isFinishPrevTask).
+// isFinishPrevTask). So are the claimed tasks of a running mini-event's task
+// list (Activity:canPermanentFinish).
 func taskList(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobuf.SC_20001, error) {
 	tasks, err := queries.ListTasks(ctx, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	kept, err := permanentClaimedTasks(ctx, queries, commanderID)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +146,7 @@ func taskList(ctx context.Context, queries *db.Queries, commanderID uint32) (*pr
 		return nil, err
 	}
 	for _, task := range claimed {
-		if blueprintTask(task.TaskID) {
+		if blueprintTask(task.TaskID) || kept[task.TaskID] {
 			msg.Info = append(msg.Info, &protobuf.TASKINFO{
 				Id:         proto.Uint32(task.TaskID),
 				Progress:   proto.Uint32(task.Progress),

@@ -60,6 +60,8 @@ func loadGameData() error {
 		loadPhantomQuestData,
 		loadBlueprintData,
 		loadRemasterData,
+		loadPermanentData,
+		loadRerunData,
 		loadAppreciationData,
 		loadAttireData,
 		loadVoteData,

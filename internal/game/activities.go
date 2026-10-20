@@ -4,7 +4,9 @@ import (
 	"cmp"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"maps"
 	"slices"
 	"time"
 
@@ -58,10 +60,17 @@ func openActivity(id uint32, now time.Time) (activityConfig, bool) {
 // holds: Activity.lua reads every missing field as 0, so only the types that
 // start elsewhere set anything.
 func newActivityState(config activityConfig) db.CommanderActivity {
+	return newActivityStateAt(config, config.Time.Start)
+}
+
+// newActivityStateAt is newActivityState for an activity that starts at
+// startTime rather than at its activity_template time (a replayed
+// mini-event, a Capsule Rerun's activities).
+func newActivityStateAt(config activityConfig, startTime time.Time) db.CommanderActivity {
 	state := db.CommanderActivity{ActivityID: config.ID}
 	start := uint32(0)
-	if !config.Time.Start.IsZero() {
-		start = uint32(config.Time.Start.Unix())
+	if !startTime.IsZero() {
+		start = uint32(startTime.Unix())
 	}
 	switch config.Type {
 	case activityTypeTaskList:
@@ -102,7 +111,9 @@ func monthSignState(state db.CommanderActivity, now time.Time) db.CommanderActiv
 	return state
 }
 
-// activityList is SC_11200, ActivityProxy's activities.
+// activityList is SC_11200, ActivityProxy's activities: the ones running at
+// their activity_template time, then the ones the commander runs at their
+// own (commanderActivities).
 func (game *Game) activityList(ctx context.Context, commander db.Commander) (*protobuf.SC_11200, error) {
 	rows, err := game.DB.ListActivities(ctx, commander.ID)
 	if err != nil {
@@ -117,8 +128,22 @@ func (game *Game) activityList(ctx context.Context, commander db.Commander) (*pr
 		return nil, err
 	}
 	now := time.Now()
+	own, err := commanderActivities(ctx, game.DB.Queries, commander.ID, now)
+	if err != nil {
+		return nil, err
+	}
+	configs := openActivities(now)
+	listed := make(map[uint32]bool, len(configs))
+	for _, config := range configs {
+		listed[config.ID] = true
+	}
+	for _, id := range slices.Sorted(maps.Keys(own)) {
+		if config, ok := activityConfigs[id]; ok && !listed[id] {
+			configs = append(configs, config)
+		}
+	}
 	reply := &protobuf.SC_11200{}
-	for _, config := range openActivities(now) {
+	for _, config := range configs {
 		state, ok := stored[config.ID]
 		if !ok {
 			state = newActivityState(config)
@@ -127,6 +152,9 @@ func (game *Game) activityList(ctx context.Context, commander db.Commander) (*pr
 		if !config.Time.End.IsZero() {
 			stopTime = uint32(config.Time.End.Unix())
 		}
+		if stop, ok := own[config.ID]; ok && !listed[config.ID] {
+			stopTime = stop
+		}
 		switch config.Type {
 		case activityTypeMilitaryExercise:
 			start := periodStart(now, exerciseSeasonLength)
@@ -134,22 +162,44 @@ func (game *Game) activityList(ctx context.Context, commander db.Commander) (*pr
 		case activityTypeMonthSign:
 			state = monthSignState(state, now)
 		}
-		info := &protobuf.ACTIVITYINFO{
-			Id:        proto.Uint32(config.ID),
-			StopTime:  proto.Uint32(stopTime),
-			Data1:     proto.Uint32(state.Data1),
-			Data2:     proto.Uint32(state.Data2),
-			Data3:     proto.Uint32(state.Data3),
-			Data4:     proto.Uint32(state.Data4),
-			Data1List: state.Data1List,
-			GroupList: fleets[config.ID],
-		}
-		if config.Type == activityTypeIslandDrawAward {
-			info.Date1KeyValueList = []*protobuf.KEYVALUELIST_P11{{Key: proto.Uint32(1)}}
-		}
-		reply.ActivityList = append(reply.ActivityList, info)
+		reply.ActivityList = append(reply.ActivityList, activityInfo(config, state, stopTime, fleets[config.ID]))
 	}
 	return reply, nil
+}
+
+// activityInfo is an activity as ActivityProxy takes it (Activity.Create):
+// its stored state, when it ends (0 never) and its fleets.
+func activityInfo(config activityConfig, state db.CommanderActivity, stopTime uint32, fleets []*protobuf.GROUPINFO_P11) *protobuf.ACTIVITYINFO {
+	info := &protobuf.ACTIVITYINFO{
+		Id:        proto.Uint32(config.ID),
+		StopTime:  proto.Uint32(stopTime),
+		Data1:     proto.Uint32(state.Data1),
+		Data2:     proto.Uint32(state.Data2),
+		Data3:     proto.Uint32(state.Data3),
+		Data4:     proto.Uint32(state.Data4),
+		Data1List: state.Data1List,
+		GroupList: fleets,
+	}
+	if config.Type == activityTypeIslandDrawAward {
+		info.Date1KeyValueList = []*protobuf.KEYVALUELIST_P11{{Key: proto.Uint32(1)}}
+	}
+	return info
+}
+
+// commanderActivity is activity id's config, and whether it runs at now for
+// the commander: at its activity_template time or at the commander's own
+// (commanderActivities).
+func (game *Game) commanderActivity(ctx context.Context, commanderID, id uint32, now time.Time) (activityConfig, bool, error) {
+	if config, open := openActivity(id, now); open {
+		return config, true, nil
+	}
+	own, err := commanderActivities(ctx, game.DB.Queries, commanderID, now)
+	if err != nil {
+		return activityConfig{}, false, err
+	}
+	config, ok := activityConfigs[id]
+	_, running := own[id]
+	return config, ok && running, nil
 }
 
 // handleActivityOperation answers ActivityOperationCommand (CS_11202). The
@@ -166,12 +216,14 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 	ctx := context.Background()
 	now := time.Now()
 	reply := &protobuf.SC_11203{Result: result(nil)}
-	config, open := openActivity(req.GetActivityId(), now)
+	config, open, err := game.commanderActivity(ctx, client.CommanderID, req.GetActivityId(), now)
+	if err != nil {
+		return err
+	}
 	activityType := config.Type
 	if !open || req.GetCmd() != 1 {
 		activityType = 0
 	}
-	var err error
 	switch activityType {
 	case activityType7DaysLogin:
 		days := sevenDaySignConfigs[config.ConfigID].FrontDrops
@@ -214,7 +266,9 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 		})
 	case activityTypeTaskList:
 		// the tasks are pushed (SC_20003) before SC_11203
-		err = game.acceptTasksPush(ctx, client, activityTaskIDs(config, now)...)
+		err = game.tx(ctx, client, func(tx *Tx) error {
+			return tx.openTaskListDays(config, now)
+		})
 	default:
 		err = errRefused
 	}
@@ -225,4 +279,67 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 		return err
 	}
 	return client.Send(reply)
+}
+
+// taskListDays are a task list activity's config_data: the tasks of each
+// day, a day being one id or a list of them.
+func taskListDays(config activityConfig) [][]uint32 {
+	var raw []json.RawMessage
+	if json.Unmarshal(config.ConfigData, &raw) != nil {
+		return nil
+	}
+	days := make([][]uint32, len(raw))
+	for i, day := range raw {
+		days[i] = gamedata.IDs(day)
+	}
+	return days
+}
+
+// openTaskListDays answers a task list's CS_11202 cmd 1: a day's tasks are
+// handed out once that day is reached, counted in server days from the
+// activity's start (data1, the day it starts being day 1). data3 is the day
+// the page shows: ActivityOperationCommand sets it to the day of the first
+// task held and not claimed (getActivityTask), and the page reads it back
+// from SC_11200 at the next login (SkinTemplatePage.OnUpdateFlush).
+func (tx *Tx) openTaskListDays(config activityConfig, now time.Time) error {
+	state, err := activityState(tx.ctx, tx.Queries, tx.commanderID, config)
+	if err != nil {
+		return err
+	}
+	days := taskListDays(config)
+	open := len(days)
+	if state.Data1 != 0 {
+		start := startOfDay(time.Unix(int64(state.Data1), 0))
+		open = min(open, int(startOfDay(now).Sub(start).Hours()/24)+1)
+	}
+	if open < 1 {
+		return errRefused
+	}
+	var due []uint32
+	for _, day := range days[:open] {
+		due = append(due, day...)
+	}
+	added, err := acceptTasks(tx.ctx, tx.Queries, tx.commanderID, due, uint32(now.Unix()))
+	if err != nil {
+		return err
+	}
+	if added != nil {
+		tx.push(added)
+	}
+	for i, day := range days[:open] {
+		for _, id := range day {
+			task, err := tx.GetTask(tx.ctx, db.GetTaskParams{CommanderID: tx.commanderID, TaskID: id})
+			if errors.Is(err, sql.ErrNoRows) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			if task.SubmitTime == 0 {
+				state.Data3 = uint32(i + 1)
+				return tx.SaveActivity(tx.ctx, db.SaveActivityParams(state))
+			}
+		}
+	}
+	return nil
 }

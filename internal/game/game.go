@@ -316,6 +316,10 @@ func (game *Game) Register() {
 	packets.Handle(game.handleHandbookPtAward)
 	packets.Handle(game.handleActivityOperation)
 	packets.Handle(game.handleEditActivityFleet)
+	// mini-events, boss rush archives and Capsule Reruns
+	packets.Handle(game.handlePermanentStart)
+	packets.Handle(game.handlePermanentEnd)
+	packets.Handle(game.handleRerunActivate)
 	// challenge mode
 	packets.Handle(game.handleChallengeStart)
 	packets.Handle(game.handleChallengeInfo)
@@ -572,10 +576,14 @@ var loginBurst = []loginPush{
 		return game.friendList(l.ctx, l.queries, l.commander.ID)
 	},
 	func(game *Game, l *login) (proto.Message, error) { return game.activityList(l.ctx, l.commander) },
-	// ActivityPermanentProxy: no permanent (archived) event running
-	empty[protobuf.SC_11210](),
-	// ActivityRemasterProxy: no remaster ticket timer
-	empty[protobuf.SC_11213](),
+	// ActivityPermanentProxy: the mini-events finished and running
+	func(game *Game, l *login) (proto.Message, error) {
+		return permanentState(l.ctx, l.queries, l.commander.ID)
+	},
+	// ActivityRemasterProxy: the Capsule Reruns picked
+	func(game *Game, l *login) (proto.Message, error) {
+		return rerunState(l.ctx, l.queries, l.commander.ID)
+	},
 	// ServerNoticeProxy: the bulletin board
 	func(game *Game, l *login) (proto.Message, error) { return boardNotices(l.ctx, l.queries) },
 	// PlayerProxy: everything is loaded, starts the proxies
