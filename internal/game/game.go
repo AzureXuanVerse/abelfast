@@ -333,6 +333,12 @@ func (game *Game) Register() {
 	packets.Handle(game.handleColoringCell)
 	packets.Handle(game.handleColoringClear)
 	packets.Handle(game.handleColoringAchieve)
+	// new commander and Black Friday shops, stored activity data,
+	// anniversary summary
+	packets.Handle(game.handleGetNewServerShop)
+	packets.Handle(game.handleNewServerShopShopping)
+	packets.Handle(game.handleActivityStoreData)
+	packets.Handle(game.handleGetSummaryInfo)
 	// challenge mode
 	packets.Handle(game.handleChallengeStart)
 	packets.Handle(game.handleChallengeInfo)

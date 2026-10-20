@@ -47,9 +47,57 @@ func IDs(raw json.RawMessage) []uint32 {
 // ["timer", [[y,m,d],[h,m,s]], [[y,m,d],[h,m,s]]] in server time, the label
 // optional (shop_template.time is [start, end]; TimeMgr:inTime, mgr/timemgr.lua,
 // reads both). Anything else decodes as never open.
+//
+// The new commander activities write [["newuser", ...], ["timer", ...]]:
+// the timer goes in Start/End and the first part in NewUser. Such a window
+// is never Open by itself, it opens for each commander (NewUser.Span).
 type Window struct {
 	Always     bool
 	Start, End time.Time // zero without a timer
+	NewUser    *NewUser
+}
+
+// NewUser is a window's ["newuser", offset days, days, [[y,m,d],[h,m,s]]]
+// part (or ["newuser", [[y,m,d],[h,m,s]]]): the activity runs for each
+// commander registered since Since, Days days long. Activity:getStartTime
+// (model/vo/activity.lua) reads it back as ACTIVITYINFO.stop_time - Days.
+type NewUser struct {
+	Since        time.Time
+	Offset, Days int
+}
+
+// parseNewUser reads a ["newuser", offset, days, since] or
+// ["newuser", since] window part.
+func parseNewUser(raw json.RawMessage) (NewUser, bool) {
+	var parts []json.RawMessage
+	var label string
+	if json.Unmarshal(raw, &parts) != nil || len(parts) < 2 || json.Unmarshal(parts[0], &label) != nil || label != "newuser" {
+		return NewUser{}, false
+	}
+	var newUser NewUser
+	if len(parts) >= 4 && (json.Unmarshal(parts[1], &newUser.Offset) != nil || json.Unmarshal(parts[2], &newUser.Days) != nil) {
+		return NewUser{}, false
+	}
+	since, ok := clock(parts[len(parts)-1])
+	newUser.Since = since
+	return newUser, ok
+}
+
+// Span is when the activity runs for a commander registered at registered:
+// from the server day it registered (plus Offset days) for Days days, or
+// up to timerEnd when the window gives no length; ok is false for a
+// commander registered before Since.
+func (newUser NewUser) Span(registered, timerEnd time.Time) (start, end time.Time, ok bool) {
+	if registered.Before(newUser.Since) {
+		return time.Time{}, time.Time{}, false
+	}
+	local := registered.In(Zone)
+	start = time.Date(local.Year(), local.Month(), local.Day()+newUser.Offset, 0, 0, 0, 0, Zone)
+	end = timerEnd
+	if newUser.Days > 0 {
+		end = start.AddDate(0, 0, newUser.Days)
+	}
+	return start, end, true
 }
 
 // UnmarshalJSON implements json.Unmarshaler; it never fails, so a row is
@@ -64,6 +112,13 @@ func (window *Window) UnmarshalJSON(raw []byte) error {
 	var timer []json.RawMessage
 	if json.Unmarshal(raw, &timer) != nil {
 		return nil
+	}
+	if len(timer) == 2 {
+		if newUser, ok := parseNewUser(timer[0]); ok {
+			window.UnmarshalJSON(timer[1])
+			window.NewUser = &newUser
+			return nil
+		}
 	}
 	var label string
 	if len(timer) > 0 && json.Unmarshal(timer[0], &label) == nil {
@@ -91,6 +146,9 @@ func clock(raw json.RawMessage) (time.Time, bool) {
 
 // Open is whether the window contains now.
 func (window Window) Open(now time.Time) bool {
+	if window.NewUser != nil {
+		return false
+	}
 	if window.Always {
 		return true
 	}

@@ -89,9 +89,13 @@ func permanentType(id uint32) uint32 {
 // commanderActivities are the activities the commander runs at their own
 // time rather than at their activity_template one, with when each stops
 // (0 never): the running permanent activities, and the activities of the
-// commander's Capsule Rerun until they end.
+// commander's Capsule Rerun until they end, and the new commander
+// activities (newUserActivities).
 func commanderActivities(ctx context.Context, queries *db.Queries, commanderID uint32, now time.Time) (map[uint32]uint32, error) {
-	own := map[uint32]uint32{}
+	own, err := newUserActivities(ctx, queries, commanderID, now)
+	if err != nil {
+		return nil, err
+	}
 	permanent, err := queries.ListPermanentActivities(ctx, commanderID)
 	if err != nil {
 		return nil, err

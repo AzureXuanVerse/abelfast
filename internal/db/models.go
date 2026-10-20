@@ -205,6 +205,7 @@ type CommanderActivity struct {
 	Data3       uint32
 	Data4       uint32
 	Data1List   IDList
+	StrData1    string
 }
 
 type CommanderActivityKeyValue struct {
@@ -1227,6 +1228,20 @@ type MetaPtAward struct {
 	CommanderID uint32
 	GroupID     uint32
 	Target      uint32
+}
+
+type NewServerShopGood struct {
+	CommanderID uint32
+	ActivityID  uint32
+	GoodsID     uint32
+	Bought      uint32
+}
+
+type NewServerShopSubGood struct {
+	CommanderID uint32
+	ActivityID  uint32
+	GoodsID     uint32
+	ItemID      uint32
 }
 
 type Notice struct {

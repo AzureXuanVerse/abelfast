@@ -64,6 +64,7 @@ func loadGameData() error {
 		loadRerunData,
 		loadRefluxData,
 		loadColoringData,
+		loadNewServerShopData,
 		loadAppreciationData,
 		loadAttireData,
 		loadVoteData,

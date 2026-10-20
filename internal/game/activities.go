@@ -195,6 +195,9 @@ func activityInfo(config activityConfig, state db.CommanderActivity, stopTime ui
 		Data1List: state.Data1List,
 		GroupList: fleets,
 	}
+	if state.StrData1 != "" {
+		info.StrData1 = proto.String(state.StrData1)
+	}
 	if config.Type == activityTypeIslandDrawAward || config.Type == activityTypeVirtualBag {
 		info.Date1KeyValueList = []*protobuf.KEYVALUELIST_P11{{Key: proto.Uint32(1)}}
 	}

@@ -106,11 +106,17 @@ func guildFleetEfficiency(ships []db.GuildOperationShip) uint32 {
 	levels, power := 0.0, 0.0
 	for _, ship := range ships {
 		levels += float64(ship.Level)
-		attr := func(id uint32) float64 { return guildShipAttr(ship, id) }
-		// attribute_info_by_type: durability 1, cannon 2, torpedo 3,
-		// antiaircraft 4, air 5, reload 6, hit 8, dodge 9, speed 10,
-		// antisub 12
-		power += math.Floor(attr(1)/5 + attr(2) + attr(3) + attr(4) + attr(5) + attr(12) + attr(6) + attr(8)*2 + attr(9)*2 + attr(10))
+		power += shipCombatPower(ship)
 	}
 	return uint32(math.Floor((20 + math.Pow(levels, 0.7)) * (1 + power/(power+12500))))
+}
+
+// shipCombatPower is a ship's combat power (Ship:getShipCombatPower) from
+// its level's attributes, without gear.
+func shipCombatPower(ship db.GuildOperationShip) float64 {
+	attr := func(id uint32) float64 { return guildShipAttr(ship, id) }
+	// attribute_info_by_type: durability 1, cannon 2, torpedo 3,
+	// antiaircraft 4, air 5, reload 6, hit 8, dodge 9, speed 10,
+	// antisub 12
+	return math.Floor(attr(1)/5 + attr(2) + attr(3) + attr(4) + attr(5) + attr(12) + attr(6) + attr(8)*2 + attr(9)*2 + attr(10))
 }
