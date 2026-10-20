@@ -209,7 +209,8 @@ type islandTaskExtra struct {
 }
 
 // refreshIslandTasks draws new daily (each server day) and weekly (each
-// Monday) offers when due: the running and submitted ones of the period
+// Monday) offers when due, each until the period ends (PB_TASK_RANDOM
+// timestamp: the end time the client gives the task, IslandTaskAgency.AddTask): the running and submitted ones of the period
 // that ended are dropped. It tells what it removed. GUESS: no table says
 // how the offers are drawn; island_daily_task_num daily tasks and as many
 // weekly tasks as task_weekly lists, at random among those whose
@@ -219,9 +220,9 @@ func refreshIslandTasks(state *islandState, now time.Time) (removed, removedFini
 	if _, err := state.getExtra("tasks", &extra); err != nil {
 		return nil, nil, err
 	}
-	day, week := startOfDay(now).Unix(), periodStart(now, week).Unix()
+	day, thisWeek := startOfDay(now).Unix(), periodStart(now, week).Unix()
 	info := state.public().TaskInfo
-	refresh := func(kind, count uint32) {
+	refresh := func(kind, count uint32, until time.Time) {
 		drop := func(id uint32) bool { return islandTasks[id].Type == kind }
 		for _, task := range info.TaskList {
 			if drop(task.GetId()) {
@@ -245,18 +246,18 @@ func refreshIslandTasks(state *islandState, now time.Time) (removed, removedFini
 		slices.Sort(pool)
 		rand.Shuffle(len(pool), func(i, j int) { pool[i], pool[j] = pool[j], pool[i] })
 		for _, id := range pool[:min(int(count), len(pool))] {
-			info.TaskListRandom = append(info.TaskListRandom, &protobuf.PB_TASK_RANDOM{TaskId: proto.Uint32(id), Timestamp: proto.Uint32(uint32(now.Unix()))})
+			info.TaskListRandom = append(info.TaskListRandom, &protobuf.PB_TASK_RANDOM{TaskId: proto.Uint32(id), Timestamp: proto.Uint32(uint32(until.Unix()))})
 		}
 	}
 	changed := false
 	if extra.DailyRefresh != day {
-		refresh(islandTaskDaily, islandTaskRules.dailyCount)
+		refresh(islandTaskDaily, islandTaskRules.dailyCount, nextDay(now))
 		extra.DailyRefresh, changed = day, true
 	}
-	if extra.WeeklyRefresh != week {
-		refresh(islandTaskWeekly, islandTaskRules.weeklyCount)
+	if extra.WeeklyRefresh != thisWeek {
+		refresh(islandTaskWeekly, islandTaskRules.weeklyCount, time.Unix(thisWeek, 0).Add(week))
 		info.WeekDailyTaskNum = proto.Uint32(0)
-		extra.WeeklyRefresh, changed = week, true
+		extra.WeeklyRefresh, changed = thisWeek, true
 	}
 	if changed {
 		return removed, removedFinished, state.setExtra("tasks", extra)

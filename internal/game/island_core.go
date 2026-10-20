@@ -138,7 +138,8 @@ var (
 		// holds (no reward lists those abilities); belfast opens every one
 		// from the start: the buttons' abilities and the
 		// island_ability_template rows of IslandAblityAgency.TYPE_SYSTEM
-		// (but the event ones, effect 990000+), TYPE_PLACE and TYPE_MAP.
+		// (but the event ones, effect 990000+), TYPE_PLACE, TYPE_MAP and the
+		// daily plans' (type 30).
 		abilities []uint32
 	}
 	islandAbilities map[uint32]islandAbilityConfig
@@ -148,6 +149,8 @@ var (
 const (
 	islandAbilitySystem = 1
 	islandAbilityMap    = 11
+	// the daily plans (IslandGuideChecker.DAILY_TASK_ABILITY_ID's type)
+	islandAbilityDailyTasks = 30
 )
 
 // loadIslandLifeData reads the tables of every island subsystem.
@@ -218,7 +221,7 @@ func loadIslandCoreData() error {
 			if ability.Effect < 990000 && !slices.Contains(islandStart.abilities, id) {
 				islandStart.abilities = append(islandStart.abilities, id)
 			}
-		case islandAbilityPlace, islandAbilityMap:
+		case islandAbilityPlace, islandAbilityMap, islandAbilityDailyTasks:
 			if !slices.Contains(islandStart.abilities, id) {
 				islandStart.abilities = append(islandStart.abilities, id)
 			}
