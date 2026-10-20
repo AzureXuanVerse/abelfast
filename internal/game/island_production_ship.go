@@ -290,3 +290,17 @@ func cycleEnergy(ship *protobuf.PB_ISLAND_SHIP, formulaID, place uint32) uint32 
 	cut := float64(shipSkillEffect(ship, islandBuffShipProductCostCut, place)) * 0.01
 	return max(uint32(math.Floor(float64(productionFormulas[formulaID].StaminaCost)*(1-cut))), 1)
 }
+
+// workingShip is a character that can take a delegation: one of the
+// island's, or the Workerjuu (islandNpcShipID, IslandNpcShip: every island
+// has it without inviting it, always idle with full energy, on several
+// slots at once), made up anew each time (never stored, its
+// energy never runs out).
+func (state *islandState) workingShip(id uint32) *protobuf.PB_ISLAND_SHIP {
+	if id == islandNpcShipID {
+		ship := &protobuf.PB_ISLAND_SHIP{Id: proto.Uint32(id), Lv: proto.Uint32(1), BreakLv: proto.Uint32(1)}
+		ship.Power = proto.Uint32(shipMaxEnergy(ship))
+		return ship
+	}
+	return state.islandShip(id)
+}

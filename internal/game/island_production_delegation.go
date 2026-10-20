@@ -227,11 +227,11 @@ func (game *Game) handleIslandStartDelegation(client *connection.Client, req *pr
 		build := state.building(place)
 		slot := productionSlots[slotID]
 		formula, known := productionFormulas[formulaID]
-		ship := state.islandShip(req.GetShipId())
+		ship := state.workingShip(req.GetShipId())
 		if build == nil || slot.Place != place || appointArea(build, slotID) == nil || shipAppoint(build, slotID) != nil ||
 			appointAward(build, slotID) != nil || handBusy(build, slotID) || !known ||
 			!slices.Contains(productionSlotFormulas(slot), formulaID) || !state.formulaUnlocked(formulaID) ||
-			num == 0 || num > max(formula.ProductionLimit, 1) || ship == nil || shipBusy(ship, now) || state.shipWorking(ship.GetId()) {
+			num == 0 || num > max(formula.ProductionLimit, 1) || ship == nil || ship.GetId() != islandNpcShipID && (shipBusy(ship, now) || state.shipWorking(ship.GetId())) {
 			reply.Result = result(errRefused)
 			return nil
 		}
@@ -329,7 +329,7 @@ func (game *Game) handleIslandAddDelegation(client *connection.Client, req *prot
 		}
 		formulaID := appoint.GetFormulaId()
 		left := uint32(len(appoint.GetCostTimeList())) - cyclesDone(appoint, now)
-		ship := state.islandShip(appoint.GetShipId())
+		ship := state.workingShip(appoint.GetShipId())
 		if ship == nil || left == 0 || left+add > max(productionFormulas[formulaID].ProductionLimit, 1) {
 			reply.Result = result(errRefused)
 			return nil
@@ -395,7 +395,7 @@ func (game *Game) handleIslandFinishDelegation(client *connection.Client, req *p
 		total := uint32(len(appoint.GetCostTimeList()))
 		done := cyclesDone(appoint, now)
 		left := total - done
-		ship := state.islandShip(appoint.GetShipId())
+		ship := state.workingShip(appoint.GetShipId())
 		reply.Result = result(nil)
 		reply.ShipId = proto.Uint32(appoint.GetShipId())
 		reply.ReturnNum = proto.Uint32(left)

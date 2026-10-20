@@ -388,7 +388,7 @@ func (game *Game) handleIslandAutoCollect(client *connection.Client, req *protob
 		kind := req.GetType()
 		var ships []*protobuf.PB_ISLAND_SHIP
 		for i, id := range req.GetShipList() {
-			ship := state.islandShip(id)
+			ship := state.workingShip(id)
 			if ship == nil || shipBusy(ship, now) || slices.Contains(req.GetShipList()[:i], id) || i >= 3 {
 				reply.Result = result(errRefused)
 				return nil
