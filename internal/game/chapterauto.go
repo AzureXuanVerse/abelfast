@@ -412,6 +412,10 @@ func (tx *Tx) startChapterAuto(req *protobuf.CS_13012, now time.Time) ([]*protob
 	if err != nil {
 		return nil, err
 	}
+	// War Archives tickets for each permit sortie (remaster.go)
+	if err := tx.spendRemasterTickets(id, tickets); err != nil {
+		return nil, err
+	}
 	oil := config.OilLimit * tickets
 	fromStore := min(state.Oil, oil)
 	if err := tx.SpendResource(ResourceOil, oil-fromStore); err != nil {
@@ -505,6 +509,10 @@ func (tx *Tx) endChapterAuto(now time.Time) (*protobuf.SC_13015, error) {
 			refundSeconds += battle.Seconds
 			if ticket {
 				refundOil += config.OilLimit
+				// its War Archives tickets (remaster.go)
+				if err := tx.refundRemasterTickets(battle.ChapterID, 1); err != nil {
+					return nil, err
+				}
 				if battle.TicketExpireAt >= now.Unix() {
 					if refunds[battle.TicketExpireAt] == 0 {
 						refundOrder = append(refundOrder, battle.TicketExpireAt)
@@ -517,6 +525,10 @@ func (tx *Tx) endChapterAuto(now time.Time) (*protobuf.SC_13015, error) {
 		classExp += config.ClassExp
 		if !ticket {
 			continue
+		}
+		// a War Archives clear (remaster.go)
+		if err := tx.addRemasterPasses(battle.ChapterID, 1); err != nil {
+			return nil, err
 		}
 		template := chapterTemplates[battle.ChapterID]
 		if template == nil {

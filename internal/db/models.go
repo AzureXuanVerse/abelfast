@@ -936,6 +936,21 @@ type Notice struct {
 	NeedLevel  uint32
 }
 
+type RemasterAward struct {
+	CommanderID uint32
+	ActID       uint32
+	ChapterID   uint32
+	Pos         uint32
+	Count       uint32
+	Received    bool
+}
+
+type RemasterState struct {
+	CommanderID uint32
+	Tickets     uint32
+	ClaimedDay  int64
+}
+
 type Setting struct {
 	Key   string
 	Value []byte

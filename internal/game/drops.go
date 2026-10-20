@@ -87,6 +87,11 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 				return err
 			}
 			tx.event(TaskEvent{SubType: TaskSubCruisePt, Count: total + count})
+		case kind == dropTypeVItem && id == vitemRemasterTicket:
+			// the War Archives tickets, capped as the client caps them
+			if err := tx.addRemasterTickets(count); err != nil {
+				return err
+			}
 		case kind == dropTypeVItem && chapterTicketItems[id].kind != 0:
 			// Handover Permits, kept by expiry as the client adds them
 			if err := tx.addChapterTickets(id, count, time.Now()); err != nil {

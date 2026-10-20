@@ -234,6 +234,8 @@ func (game *Game) Register() {
 	packets.Handle(game.handleChapterOp)
 	packets.Handle(game.handleChapterBattleResult)
 	packets.Handle(game.handleRemasterInfo)
+	packets.Handle(game.handleRemasterTickets)
+	packets.Handle(game.handleRemasterAward)
 	packets.Handle(game.handleBeginStage)
 	packets.Handle(game.handleFinishStage)
 	packets.Handle(game.handleQuitBattle)

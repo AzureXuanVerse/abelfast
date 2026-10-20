@@ -237,7 +237,8 @@ func newChapter(template *chapterTemplate, teams []*protobuf.TEAM_INFO, now uint
 
 // handleTracking13101 starts a sortie (TrackingCommand, CS_13101): the
 // fleets from FLEET_INFO.main_team enter the chapter, chapter_template.oil is
-// spent (the client subtracts it too) and the map comes back in SC_13102.
+// spent (the client subtracts it too), as are remasterTicketCost War
+// Archives tickets for an archive stage, and the map comes back in SC_13102.
 // A SelectFleet chapter sends FleetProxy's fleets (Fleet:ChangeToElite, their
 // ids), a CustomFleet one its elite fleets (Chapter.PackEliteFleetInfo: id 0,
 // padded with empty teams), which are checked and saved like CS_13107's and
@@ -306,6 +307,10 @@ func (game *Game) handleTracking13101(client *connection.Client, req *protobuf.C
 		if err := tx.SpendResource(ResourceOil, template.oil); err != nil {
 			return err
 		}
+		// War Archives stages take tickets (remaster.go)
+		if err := tx.spendRemasterTickets(template.id, 1); err != nil {
+			return err
+		}
 		if elite != nil {
 			if err := saveEliteFleet(ctx, tx.Queries, client.CommanderID, elite); err != nil {
 				return err
@@ -371,7 +376,8 @@ func (game *Game) handleChapterOp(client *connection.Client, req *protobuf.CS_13
 
 // retreat ends the sortie (OpRetreat, group 0) or pulls one fleet out. Ending
 // a won chapter (ChapterLevelData:UpdateProgressOnRetreat) adds progress_boss
-// to its progress, counts a clear, and a pass when it was already cleared.
+// to its progress, counts a clear (also towards the War Archives awards,
+// addRemasterPasses), and a pass when it was already cleared.
 // A win the client ends on uninterrupted Auto-Repeat (act_arg_1 1) sets the
 // stage's Operational Handover record (recordChapterAuto), sent back as
 // auto_battle_time_update.
@@ -414,6 +420,10 @@ func (game *Game) retreat(ctx context.Context, client *connection.Client, sessio
 			progress.DefeatCount++
 			progress.TodayDefeatCount++
 			if err := queries.SaveChapterProgress(ctx, db.SaveChapterProgressParams(progress)); err != nil {
+				return err
+			}
+			// War Archives clear awards (remaster.go)
+			if err := tx.addRemasterPasses(session.template.id, 1); err != nil {
 				return err
 			}
 		}
@@ -784,12 +794,6 @@ func (session *chapterSession) spawnBoss() *protobuf.CHAPTERCELLINFO_P13 {
 	return free[0]
 }
 
-// handleRemasterInfo answers RemasterInfoRequestCommand (CS_13505): the
-// archive chapters' reward counters, none taken yet.
-func (game *Game) handleRemasterInfo(client *connection.Client, req *protobuf.CS_13505) error {
-	return client.Send(&protobuf.SC_13506{})
-}
-
 func chapterProgress(ctx context.Context, queries *db.Queries, commanderID, chapterID uint32) (db.ChapterProgress, error) {
 	progress, err := queries.GetChapterProgress(ctx, db.GetChapterProgressParams{CommanderID: commanderID, ChapterID: chapterID})
 	if errors.Is(err, sql.ErrNoRows) {
@@ -799,8 +803,9 @@ func chapterProgress(ctx context.Context, queries *db.Queries, commanderID, chap
 }
 
 // chapterList is SC_13001: the chapters played so far (Chapter.New reads
-// CHAPTERINFO) and the elite fleets by formation, no remaster tickets; the
-// login adds the Operational Handover (fillChapterAuto).
+// CHAPTERINFO), the elite fleets by formation and the War Archives tickets
+// (reactChapter, remaster.go); the login adds the Operational Handover
+// (fillChapterAuto).
 func chapterList(ctx context.Context, queries *db.Queries, commanderID uint32, ships []db.Ship) (*protobuf.SC_13001, error) {
 	rows, err := queries.ListChapterProgress(ctx, commanderID)
 	if err != nil {
@@ -810,8 +815,13 @@ func chapterList(ctx context.Context, queries *db.Queries, commanderID uint32, s
 	if err != nil {
 		return nil, err
 	}
+	// War Archives tickets (remaster.go)
+	react, err := reactChapter(ctx, queries, commanderID, time.Now())
+	if err != nil {
+		return nil, err
+	}
 	msg := &protobuf.SC_13001{
-		ReactChapter: &protobuf.REACTCHAPTER_INFO{},
+		ReactChapter: react,
 		FleetList:    fleets,
 	}
 	for _, row := range rows {
