@@ -290,7 +290,12 @@ func (game *Game) enterIsland(ctx context.Context, client *connection.Client, is
 // (islandVisitAllowed). The client then asks for the island's data
 // (CS_21200) and its first scene (CS_21213). belfast never queues anyone.
 func (game *Game) handleIslandEnter(client *connection.Client, req *protobuf.CS_21202) error {
-	reply, err := game.enterIsland(context.Background(), client, req.GetIslandId(), req.GetCode())
+	// an entry by id sends the code tostring(0) (EnterIslandCommand.Send)
+	code := req.GetCode()
+	if code == "0" {
+		code = ""
+	}
+	reply, err := game.enterIsland(context.Background(), client, req.GetIslandId(), code)
 	if err != nil {
 		return err
 	}
