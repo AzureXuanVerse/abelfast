@@ -735,6 +735,13 @@ type CommanderMusicPlayer struct {
 	MusicMode   uint32
 }
 
+type CommanderNewEducate struct {
+	CommanderID uint32
+	CharacterID uint32
+	State       string
+	Permanent   string
+}
+
 type CommanderPermanentActivity struct {
 	CommanderID uint32
 	ActivityID  uint32

@@ -28,6 +28,7 @@ func loadGameData() error {
 		loadItemData,
 		loadSpWeaponData,
 		loadEducateData,
+		loadNewEducateData,
 		loadApartmentData,
 		loadNewCommander,
 		loadStarterFurniture,
