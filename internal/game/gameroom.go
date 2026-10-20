@@ -224,8 +224,9 @@ func (game *Game) handleGameRoomFirstCoin(client *connection.Client, req *protob
 // free coins button, shown while SC_26120.weekly_free is 0: on result 0 the
 // client marks them taken and adds coins up to game_coin_max. It adds
 // game_coin_initial; the server gives game_coin_week (both 10). Once a
-// week, from Monday 00:00 server time (the wiki's Arcade page: "Every
-// week"; the weekday is a guess, the weekly reset of the other features).
+// week, from Monday 00:00 server time (wiki: Arcade, "Every week", the
+// rates resetting "every week with the server reset"; Missions, the weekly
+// reset is "Monday midnight (local server time)").
 // No official capture has it: the reply is built from the Lua alone.
 func (game *Game) handleGameRoomWeekCoin(client *connection.Client, req *protobuf.CS_26122) error {
 	thisWeek := periodStart(time.Now(), week).Unix()
