@@ -55,9 +55,11 @@ const apartmentEventMiniGameScore = 159
 var apartmentServerEvents = []uint32{apartmentEventFavorLevel, apartmentEventVisitDays, apartmentEventVisits, apartmentEventCollect, apartmentEventGift}
 
 // apartmentEventAbsolute is whether an event type's value is a level or a
-// score, kept at its highest, rather than a count added up. GUESS for the
-// minigame score: "Obtain 3 points in Anchorage's minigame" reads as a score
-// to reach, and the client only sends it with a new high score.
+// score, kept at its highest, rather than a count added up. The minigame
+// score is one: the client only sends it with a new high score, and the
+// wiki's "Private Quarters" page (Anchorage's Minigame: each side has 3 HP,
+// a win takes three) makes "Obtain 3 points in Anchorage's minigame" winning
+// one game, not points added up over several.
 func apartmentEventAbsolute(eventType uint32) bool {
 	return eventType == apartmentEventFavorLevel || eventType == apartmentEventMiniGameScore
 }

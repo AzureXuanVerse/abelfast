@@ -19,9 +19,13 @@ import (
 // client only shows the server-wide HP the server reports, in 1/10000 of the
 // boss's HP (bossHpMax).
 //
-// GUESS (no capture, nothing in the Lua or on the wiki says how the official
-// servers count it): a boss's HP is its extraenemy_template hp, and the
-// damage is the sum of what the commanders of this server stored for it:
+// The boss battle's gauge is per server and falls with the contribution
+// points all its commanders earn (the client's world_boss_help, and the
+// wiki's "The Big Shot's Proclamation": "Each server's progression will be
+// calculated separately"). GUESS (no capture, neither the Lua nor the wiki
+// gives the gauge's size or the collab's rule): a boss's HP is its
+// extraenemy_template hp, and the damage is the sum of what the commanders
+// of this server stored for it:
 //   - boss battle: the PT the commanders hold in the PT activity linked to it
 //     (activity_event_pt link_id, ActivityProxy:GetActBossLinkPTActID), one
 //     PT one HP. The PT are the contribution (damage_resource) its battles
