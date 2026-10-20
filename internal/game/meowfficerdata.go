@@ -112,8 +112,7 @@ var (
 	// instead award 2000 Coin"). drop_data_restore has rows for Drake, Kidd
 	// (2000 gold) and Bellamy (1000 gold), and task 20733 (Drake) says "If
 	// you already have Meowfficer Drake, you will instead receive Coins.";
-	// the specials without a row get what a row of their rarity gives (a
-	// guess).
+	// the specials without a row get the wiki's 2000 coins.
 	meowfficerDuplicates map[uint32]*protobuf.DROPINFO
 	// catteryPlayAwards are what playing with one housed cat gives, by
 	// commander_home teast_level[2] (a server-side drop id): server content,
@@ -199,28 +198,28 @@ func loadMeowfficerData() error {
 }
 
 // loadMeowfficerDuplicates fills meowfficerDuplicates from the cat rows of
-// drop_data_restore, the specials without one by rarity.
+// drop_data_restore, the specials without one getting
+// meowfficerDuplicateGold coins.
 func loadMeowfficerDuplicates(restores map[uint32]dropRestore) {
 	meowfficerDuplicates = map[uint32]*protobuf.DROPINFO{}
-	byRarity := map[uint32]*protobuf.DROPINFO{}
 	for _, row := range restores {
-		template, ok := meowfficerTemplates[row.TargetID]
-		if row.TargetType != dropTypeMeowfficer || !ok || row.ResourceNum == 0 {
+		if _, ok := meowfficerTemplates[row.TargetID]; row.TargetType != dropTypeMeowfficer || !ok || row.ResourceNum == 0 {
 			continue
 		}
-		restore := dropInfo(dropTypeResource, row.ResourceType, row.ResourceNum)
-		meowfficerDuplicates[row.TargetID] = restore
-		byRarity[template.Rarity] = restore
+		meowfficerDuplicates[row.TargetID] = dropInfo(dropTypeResource, row.ResourceType, row.ResourceNum)
 	}
 	for id, template := range meowfficerTemplates {
 		if _, ok := meowfficerDuplicates[id]; ok || template.AbilityRefreshType != meowfficerFixedTalents {
 			continue
 		}
-		if restore, ok := byRarity[template.Rarity]; ok {
-			meowfficerDuplicates[id] = restore
-		}
+		meowfficerDuplicates[id] = dropInfo(dropTypeResource, ResourceGold, meowfficerDuplicateGold)
 	}
 }
+
+// meowfficerDuplicateGold is what a second copy of a special cat gives
+// without a drop_data_restore row (wiki, Meowfficer: "Acquiring another
+// copy of a Special Meowfficer ... will instead award 2000 Coin").
+const meowfficerDuplicateGold = 2000
 
 // loadMeowfficerBoxRates reads the purchase rates out of
 // commander_build_rate_tip ("Rare: 60%; Elite: 35%; Super Rare: 5%."), the
