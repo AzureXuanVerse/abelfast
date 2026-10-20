@@ -5,12 +5,6 @@ import (
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
-// handleAuctionGameInit answers the auction minigame state the client asks
-// for right after loading (AuctionGameInitCommand): nothing played yet.
-func (game *Game) handleAuctionGameInit(client *connection.Client, req *protobuf.CS_23430) error {
-	return client.Send(&protobuf.SC_23431{})
-}
-
 // handleAppreciationVersion takes the gallery / music version the client
 // reports while building the player (Player.Ctor); it expects no reply.
 func (game *Game) handleAppreciationVersion(client *connection.Client, req *protobuf.CS_15300) error {

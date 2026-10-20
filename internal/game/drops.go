@@ -109,6 +109,11 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 			if err := tx.addCityRebuildPt(cityRebuild.ptItems[id], count); err != nil {
 				return err
 			}
+		case kind == dropTypeVItem && auction.coins[id]:
+			// Bid Coins (virtual_type 31), kept with the auction's state
+			if err := tx.addAuctionGold(count); err != nil {
+				return err
+			}
 		case kind == dropTypeMetaPt:
 			if err := tx.addMetaPt(id, count); err != nil {
 				return err

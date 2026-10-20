@@ -31,6 +31,9 @@ sql:
           - column: commander_coloring_awards.drops
             go_type:
               type: Drops
+          - column: commander_play_room_views.dress_list
+            go_type:
+              type: IDList
           - column: meowfficers.talents
             go_type:
               type: IDList
@@ -62,5 +65,8 @@ sql:
             go_type:
               type: IDList
           - column: commander_secondary_passwords.system_list
+            go_type:
+              type: IDList
+          - column: commander_auction.item_list
             go_type:
               type: IDList

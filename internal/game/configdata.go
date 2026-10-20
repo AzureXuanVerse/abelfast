@@ -77,5 +77,7 @@ func loadGameData() error {
 		loadFeastData,
 		loadActivityBossData,
 		loadIslandData,
+		loadAuctionData,
+		loadPlayRoomData,
 	)
 }

@@ -21,6 +21,10 @@ type Game struct {
 	online online // the commanders playing, see connect
 	// who entered their secondary password since logging in
 	secondaryUnlocks secondaryUnlocks
+	// the auction minigame's matchmaking and matches, see auction_match.go
+	auctions auctionHall
+	// the play room lobby and its games, see playroom.go
+	playRooms playRooms
 }
 
 // StartCommander creates what a new commander starts with (CS_10024), in
@@ -328,6 +332,25 @@ func (game *Game) Register() {
 	packets.Handle(game.handleActivityBossPage)
 	packets.Handle(game.handleCollabBossRushData)
 	packets.Handle(game.handleIslandNodes)
+	// the island's play rooms and the cheat bar
+	packets.Handle(game.handlePlayRoomList)
+	packets.Handle(game.handlePlayRoomInfo)
+	packets.Handle(game.handlePlayRoomCreate)
+	packets.Handle(game.handlePlayRoomJoin)
+	packets.Handle(game.handlePlayRoomSwitchViewer)
+	packets.Handle(game.handlePlayRoomExit)
+	packets.Handle(game.handlePlayRoomKick)
+	packets.Handle(game.handlePlayRoomReady)
+	packets.Handle(game.handlePlayRoomStart)
+	packets.Handle(game.handlePlayRoomMatchReady)
+	packets.Handle(game.handlePlayRoomInvite)
+	packets.Handle(game.handlePlayRoomChat)
+	packets.Handle(game.handlePlayRoomRank)
+	packets.Handle(game.handlePlayRoomLoad)
+	packets.Handle(game.handlePlayRoomView)
+	packets.Handle(game.handleCheatBarOperate)
+	packets.Handle(game.handleCheatBarReconnect)
+	packets.Handle(game.handleCheatBarCancelDelegate)
 	// coloring activity
 	packets.Handle(game.handleColoringFetch)
 	packets.Handle(game.handleColoringCell)
@@ -354,8 +377,20 @@ func (game *Game) Register() {
 	packets.Handle(game.handleJuusSkin)
 	packets.Handle(game.handleJuusCare)
 	packets.Handle(game.handleJuusTopic)
-	// minigames, shops, exercises, TB
+	// auction minigame (AuctionGameProxy, AuctionGameBaseProxy)
 	packets.Handle(game.handleAuctionGameInit)
+	packets.Handle(game.handleAuctionQuickMatch)
+	packets.Handle(game.handleAuctionMatchingReconnect)
+	packets.Handle(game.handleAuctionEventSelected)
+	packets.Handle(game.handleAuctionBid)
+	packets.Handle(game.handleAuctionForfeit)
+	packets.Handle(game.handleAuctionEmoji)
+	packets.Handle(game.handleAuctionSwitchEmoji)
+	packets.Handle(game.handleAuctionGamePreorderBox)
+	packets.Handle(game.handleAuctionGameOpenBox)
+	packets.Handle(game.handleAuctionGameShowMatchWarningTip)
+	packets.Handle(game.handleAuctionGameGetRelief)
+	// minigames, shops, exercises, TB
 	packets.Handle(game.handleAppreciationVersion)
 	packets.Handle(game.handleGalleryUnlock)
 	packets.Handle(game.handleMusicUnlock)

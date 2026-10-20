@@ -261,6 +261,31 @@ type CommanderAtelierSlot struct {
 	ItemNum     uint32
 }
 
+type CommanderAuction struct {
+	CommanderID   uint32
+	ActivityID    uint32
+	Gold          uint32
+	GameNum       uint32
+	BuyNum        uint32
+	MaxProfit     uint32
+	AccProfit     int64
+	AccBuyPrice   uint32
+	AccItemPrice  uint32
+	MaxLotValue   uint32
+	ItemList      IDList
+	PreBuyState   uint32
+	PreTimestamp  int64
+	PreBox        string
+	PreLine       uint32
+	MatchTime     int64
+	IsForbidden   uint32
+	BackForbidden uint32
+	InactiveNum   uint32
+	InactiveState uint32
+	GetReliefNum  uint32
+	ResetDay      int64
+}
+
 type CommanderBlueprint struct {
 	CommanderID uint32
 	BlueprintID uint32
@@ -629,6 +654,23 @@ type CommanderPermanentActivity struct {
 	ActivityID  uint32
 	Running     bool
 	Finished    bool
+}
+
+type CommanderPlayRoomScore struct {
+	CommanderID uint32
+	GameType    uint32
+	Season      uint32
+	Score       uint32
+	MaxScore    uint32
+}
+
+type CommanderPlayRoomView struct {
+	CommanderID uint32
+	GameType    uint32
+	ShipID      uint32
+	SkinID      uint32
+	Color       uint32
+	DressList   IDList
 }
 
 type CommanderRandomFlagship struct {
