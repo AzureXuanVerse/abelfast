@@ -140,6 +140,13 @@ type ChapterState struct {
 	Ambushed    Cells
 }
 
+type ChargeExp struct {
+	CommanderID uint32
+	Exp         uint32
+	Taps        uint32
+	TappedAt    int64
+}
+
 type CheaterMark struct {
 	ID          uint32
 	CommanderID uint32
@@ -651,6 +658,12 @@ type EquipCodeReport struct {
 	ReportedAt  int64
 }
 
+type ExchangeCodeRedemption struct {
+	CommanderID uint32
+	Code        string
+	RedeemedAt  int64
+}
+
 type Fleet struct {
 	CommanderID uint32
 	FleetID     uint32
@@ -1160,6 +1173,12 @@ type Spweapon struct {
 	AttrTemp1   uint32
 	AttrTemp2   uint32
 	Pt          uint32
+}
+
+type SurveysDone struct {
+	CommanderID uint32
+	SurveyID    uint32
+	DoneAt      int64
 }
 
 type TechnologyCatchup struct {
