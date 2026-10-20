@@ -137,8 +137,11 @@ var (
 
 // loadIslandLifeData reads the tables of every island subsystem.
 func loadIslandLifeData() error {
+	// island_set first: the subsystems read it while loading
+	if err := loadIslandCoreData(); err != nil {
+		return err
+	}
 	return gamedata.LoadAll(
-		loadIslandCoreData,
 		loadIslandInventoryData,
 		loadIslandTaskData,
 		loadIslandOrderData,
@@ -263,6 +266,9 @@ func readIsland(ctx context.Context, queries *db.Queries, commanderID uint32) (*
 		if islandPlaces[id].UnlockType == 0 && !slices.ContainsFunc(public.BuildList, func(build *protobuf.PB_ISLAND_BUILD) bool { return build.GetId() == id }) {
 			public.BuildList = append(public.BuildList, islandNewBuilding(id))
 		}
+	}
+	for _, build := range state.public().BuildList {
+		repairIslandBuilding(build)
 	}
 	if len(row.Position) > 0 {
 		state.position = &protobuf.PB_PLAYER_POS_RECORD{}
