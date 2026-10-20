@@ -241,6 +241,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleQuitBattle)
 	packets.Handle(game.handleDailyQuickBattle)
 	packets.Handle(game.handleStartChapterAuto)
+	packets.Handle(game.handleStartWorldChapterAuto)
 	packets.Handle(game.handleEndChapterAuto)
 	packets.Handle(game.handleAddChapterAutoTime)
 	packets.Handle(game.handleStartCommission)

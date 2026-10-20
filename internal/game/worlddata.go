@@ -84,6 +84,8 @@ type worldColormask struct {
 	PortMapIcon uint32 `json:"port_map_icon"` // its port (world_port_data), 0 for none
 	World       uint32 `json:"world"`         // the atlas (WorldConst.DefaultAtlas 1)
 	Regions     uint32 `json:"regions"`
+	// MapTransfer are the entrances it links to (WorldEntrance.transportDic)
+	MapTransfer []uint32 `json:"map_transfer"`
 	// CompleteChapter is the base map's secured version (the "Safe Zone"
 	// map World:ReplacementMapType shows once the base map is secured)
 	CompleteChapter []uint32 `json:"complete_chapter"`

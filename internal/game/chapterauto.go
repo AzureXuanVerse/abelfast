@@ -25,8 +25,8 @@ import (
 // gives a stage clear's rewards as well. Nothing was captured: everything
 // here is built from the Lua and the tables, the rewards of a permit sortie
 // on belfast's own drops (scenarioDrops). Operation Siren's handover
-// (CS_13018, ChapterAutoProxy.TYPE.WORLD) isn't served: belfast has no
-// Operation Siren.
+// (CS_13018, ChapterAutoProxy.TYPE.WORLD) shares the sortie list and the
+// claim: worldauto.go.
 
 // ChapterAutoProxy.TYPE
 const chapterAutoCampaign = 1
@@ -98,6 +98,7 @@ func loadChapterAutoData() error {
 		gamedata.Load("chapter_auto_statistics", &chapterAutoConfigs),
 		gamedata.Load("item_virtual_data_statistics", &vitems),
 		gamedata.Load("item_data_statistics", &items),
+		loadWorldAutoData,
 		func() (err error) {
 			gameset, err = gamedata.Gameset()
 			return err
@@ -385,8 +386,10 @@ func (tx *Tx) startChapterAuto(req *protobuf.CS_13012, now time.Time) ([]*protob
 	if req.GetType() != chapterAutoCampaign || !ok || chapterTemplates[id] == nil || num == 0 || tickets > num {
 		return nil, errRefused
 	}
-	running, err := chapterAutoRunning(tx.ctx, tx.Queries, tx.commanderID)
-	if err != nil || running {
+	// any handover, an Operation Siren one too (LevelInfoView only offers
+	// the button without one, GetCommissionDoingType)
+	running, err := tx.ListChapterAutoBattles(tx.ctx, tx.commanderID)
+	if err != nil || len(running) > 0 {
 		return nil, cmp.Or(err, errRefused)
 	}
 	progress, err := chapterProgress(tx.ctx, tx.Queries, tx.commanderID, id)
@@ -466,6 +469,7 @@ func (tx *Tx) startChapterAuto(req *protobuf.CS_13012, now time.Time) ([]*protob
 //     and those permits' oil, stored for the next handover (oil).
 //
 // A permit sortie counts as the battles it stands for for the missions.
+// An Operation Siren handover is claimed by endWorldChapterAuto.
 // Non-zero shows chapter_auto_end_fail.
 func (game *Game) handleEndChapterAuto(client *connection.Client, req *protobuf.CS_13014) error {
 	ctx := context.Background()
@@ -492,6 +496,9 @@ func (tx *Tx) endChapterAuto(now time.Time) (*protobuf.SC_13015, error) {
 	}
 	if len(battles) == 0 {
 		return nil, errRefused
+	}
+	if battles[0].Type == chapterAutoWorld {
+		return tx.endWorldChapterAuto(battles, now)
 	}
 	state, err := chapterAutoState(tx.ctx, tx.Queries, tx.commanderID, now)
 	if err != nil {
