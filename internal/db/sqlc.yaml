@@ -16,6 +16,9 @@ sql:
           - column: commander_activities.data1_list
             go_type:
               type: IDList
+          - column: commander_minigame_data.datas
+            go_type:
+              type: IDList
           - column: chapter_states.ambushed
             go_type:
               type: Cells

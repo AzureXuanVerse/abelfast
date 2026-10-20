@@ -462,6 +462,39 @@ type CommanderMiniGameShopPurchase struct {
 	Count       uint32
 }
 
+type CommanderMinigameDatum struct {
+	CommanderID uint32
+	GameID      uint32
+	Datas       IDList
+	Count       uint32
+	CountDay    int64
+	Gold        uint32
+}
+
+type CommanderMinigameHub struct {
+	CommanderID uint32
+	HubID       uint32
+	UsedCnt     uint32
+	Ultimate    uint32
+	OpenedAt    int64
+}
+
+type CommanderMinigameScore struct {
+	CommanderID uint32
+	GameID      uint32
+	Score       uint32
+	Extra       uint32
+}
+
+type CommanderMinigameValue struct {
+	CommanderID uint32
+	GameID      uint32
+	ListKey     uint32
+	Key         uint32
+	Value       uint32
+	Value2      uint32
+}
+
 type CommanderMonthShopPurchase struct {
 	CommanderID uint32
 	GoodsID     uint32

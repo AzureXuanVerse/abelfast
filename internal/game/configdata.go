@@ -69,5 +69,6 @@ func loadGameData() error {
 		gamedata.Load("survey_data_template", &surveys),
 		loadExchangeCodes,
 		loadGameRoomData,
+		loadMiniGameData,
 	)
 }

@@ -350,6 +350,8 @@ func (game *Game) Register() {
 	packets.Handle(game.handleMangaLike)
 	packets.Handle(game.handleMusicPlayer)
 	packets.Handle(game.handleMiniGameHubs)
+	packets.Handle(game.handleMiniGameOperation)
+	packets.Handle(game.handleMiniGameFriendRank)
 	packets.Handle(game.handleGameRoomFirstCoin)
 	packets.Handle(game.handleGameRoomWeekCoin)
 	packets.Handle(game.handleGameRoomExchangeCoin)

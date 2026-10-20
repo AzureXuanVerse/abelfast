@@ -17,11 +17,6 @@ func (game *Game) handleAppreciationVersion(client *connection.Client, req *prot
 	return nil
 }
 
-// handleMiniGameHubs answers MiniGameRequestCommand: no minigame played.
-func (game *Game) handleMiniGameHubs(client *connection.Client, req *protobuf.CS_26101) error {
-	return client.Send(&protobuf.SC_26102{})
-}
-
 // handleEmojiInfo answers EmojiInfoRequestCommand: no extra emojis unlocked.
 func (game *Game) handleEmojiInfo(client *connection.Client, req *protobuf.CS_11601) error {
 	return client.Send(&protobuf.SC_11602{})
