@@ -380,6 +380,14 @@ type CommanderItem struct {
 	Count       uint32
 }
 
+type CommanderJuusGroup struct {
+	CommanderID uint32
+	GroupID     uint32
+	SkinID      uint32
+	Favorite    uint32
+	CurTopic    uint32
+}
+
 type CommanderJuusPost struct {
 	CommanderID    uint32
 	PostID         uint32
@@ -449,10 +457,36 @@ type CommanderMusicPlayer struct {
 	MusicMode   uint32
 }
 
+type CommanderPermanentActivity struct {
+	CommanderID uint32
+	ActivityID  uint32
+	Running     bool
+	Finished    bool
+}
+
 type CommanderRandomFlagship struct {
 	CommanderID uint32
 	Mode        uint32
 	Enabled     bool
+}
+
+type CommanderReflux struct {
+	CommanderID     uint32
+	ReturnLv        uint32
+	ReturnTime      int64
+	ShipNumber      uint32
+	LastOfflineTime int64
+	Pt              uint32
+	SignCnt         uint32
+	SignLastTime    int64
+	PtStage         uint32
+}
+
+type CommanderRemaster struct {
+	CommanderID uint32
+	RemasterID  uint32
+	TimerID     uint32
+	ActivatedAt int64
 }
 
 type CommanderRequisition struct {

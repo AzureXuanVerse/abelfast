@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"time"
 
@@ -108,6 +109,7 @@ func loadJuusData() error {
 		gamedata.Load("activity_ins_chat_group", &juusTopicConfigs),
 		gamedata.Load("activity_ins_chat_language", &words),
 		gamedata.Load("activity_ins_redpackage", &packets),
+		gamedata.Load("activity_ins_ship_group_template", &juusChatConfigs),
 		loadJuusPosts,
 		loadJuusOptionReplies,
 	)
@@ -265,12 +267,21 @@ func (game *Game) handleJuusComment(client *connection.Client, req *protobuf.CS_
 }
 
 // juusGroups is SC_11711, the Juus chats (InstagramChatProxy): the unlocked
-// topics grouped by character, each with the commander's answers. The
-// current topic is the latest one unlocked. CS_11710 replies with it.
+// topics grouped by character, each with the commander's answers, and the
+// chat's settings: background skin, care, and the topic shown (the latest
+// one unlocked until the commander picks one). CS_11710 replies with it.
 func (game *Game) juusGroups(ctx context.Context, commanderID uint32) (*protobuf.SC_11711, error) {
 	topics, err := game.DB.ListJuusTopics(ctx, commanderID)
 	if err != nil {
 		return nil, err
+	}
+	rows, err := game.DB.ListJuusGroups(ctx, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	settings := make(map[uint32]db.CommanderJuusGroup, len(rows))
+	for _, row := range rows {
+		settings[row.GroupID] = row
 	}
 	replies, err := game.DB.ListJuusReplies(ctx, commanderID)
 	if err != nil {
@@ -298,7 +309,144 @@ func (game *Game) juusGroups(ctx context.Context, commanderID uint32) (*protobuf
 		chat := &protobuf.JUUS_CHAT_GROUP{Id: proto.Uint32(topic.TopicID), OpTime: proto.Uint32(topic.OpTime), ReadFlag: proto.Uint32(readFlag), ReplyList: answers[topic.TopicID]}
 		group.ChatGroupList = append(group.ChatGroupList, chat)
 	}
+	for _, group := range msg.Groups {
+		setting := settings[group.GetId()]
+		group.SkinId, group.Favorite = proto.Uint32(setting.SkinID), proto.Uint32(setting.Favorite)
+		if setting.CurTopic == 0 {
+			continue
+		}
+		for _, chat := range group.ChatGroupList {
+			if chat.GetId() == setting.CurTopic {
+				group.CurChatGroup = proto.Uint32(setting.CurTopic)
+			}
+		}
+	}
 	return msg, nil
+}
+
+// activity_ins_ship_group_template row: a chat's character, type 1 a ship
+// (its id is the ship group), 2 a group chat
+type juusChatConfig struct {
+	Type uint32 `json:"type"`
+}
+
+const juusChatShip = 1
+
+var juusChatConfigs map[uint32]juusChatConfig
+
+// juusChatGroup tells whether the commander has a chat with group: one of
+// its topics unlocked.
+func (game *Game) juusChatGroup(ctx context.Context, commanderID, group uint32) (bool, error) {
+	topics, err := game.DB.ListJuusTopics(ctx, commanderID)
+	if err != nil {
+		return false, err
+	}
+	for _, topic := range topics {
+		if juusTopicConfigs[topic.TopicID].ShipGroup == group {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// juusSkinAllowed is whether a ship's chat can take skinID as background,
+// the skins InstagramChat:GetSkins offers unlocked: the ship's own or one
+// its group shares (ship_data_group share_group_id), owned, or its default
+// skin once the ship is in the archives, its oath skin once oathed, its
+// retrofit skin once retrofitted (the lockFrame of the background picker,
+// juuschat_background_tip2).
+func (game *Game) juusSkinAllowed(ctx context.Context, commanderID, group, skinID uint32) (bool, error) {
+	skin, ok := shipSkins[skinID]
+	if !ok || (skin.group != group && !slices.Contains(shareGroups[group], skin.group)) {
+		return false, nil
+	}
+	owned, err := ownedSkins(ctx, game.DB.Queries, commanderID, time.Now())
+	if err != nil {
+		return false, err
+	}
+	if hasSkin(owned, skinID) {
+		return true, nil
+	}
+	groups, err := game.DB.ListShipGroups(ctx, commanderID)
+	if err != nil {
+		return false, err
+	}
+	for _, row := range groups {
+		if row.GroupID != skin.group {
+			continue
+		}
+		switch skin.skinType {
+		case skinTypeDefault:
+			return true, nil
+		case skinTypePropose:
+			return row.MarryFlag > 0, nil
+		case skinTypeRemake:
+			return row.Trans, nil
+		}
+	}
+	return false, nil
+}
+
+// handleJuusSkin sets a ship chat's background skin (InstagramChatCommand
+// SET_SKIN, CS_11714); 0 goes back to the ship's painting.
+func (game *Game) handleJuusSkin(client *connection.Client, req *protobuf.CS_11714) error {
+	ctx := context.Background()
+	group, skinID := req.GetGroupId(), req.GetSkinId()
+	ok, err := game.juusChatGroup(ctx, client.CommanderID, group)
+	if err == nil && ok {
+		ok = juusChatConfigs[group].Type == juusChatShip
+	}
+	if err == nil && ok && skinID != 0 {
+		ok, err = game.juusSkinAllowed(ctx, client.CommanderID, group, skinID)
+	}
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return client.Send(&protobuf.SC_11715{Result: result(errRefused)})
+	}
+	if err := game.DB.SetJuusGroupSkin(ctx, db.SetJuusGroupSkinParams{CommanderID: client.CommanderID, GroupID: group, SkinID: skinID}); err != nil {
+		return err
+	}
+	return client.Send(&protobuf.SC_11715{Result: result(nil)})
+}
+
+// handleJuusCare sets a chat's care flag (InstagramChatCommand SET_CARE,
+// CS_11716): 1 cared for, 0 not, as the care button toggles it.
+func (game *Game) handleJuusCare(client *connection.Client, req *protobuf.CS_11716) error {
+	ctx := context.Background()
+	ok, err := game.juusChatGroup(ctx, client.CommanderID, req.GetGroupId())
+	if err != nil {
+		return err
+	}
+	if !ok || req.GetValue() > 1 {
+		return client.Send(&protobuf.SC_11717{Result: result(errRefused)})
+	}
+	if err := game.DB.SetJuusGroupFavorite(ctx, db.SetJuusGroupFavoriteParams{CommanderID: client.CommanderID, GroupID: req.GetGroupId(), Favorite: req.GetValue()}); err != nil {
+		return err
+	}
+	return client.Send(&protobuf.SC_11717{Result: result(nil)})
+}
+
+// handleJuusTopic sets the topic a chat shows (InstagramChatCommand
+// SET_TOPIC, CS_11718): one of its topics the commander unlocked (the topic
+// picker only lists the active ones).
+func (game *Game) handleJuusTopic(client *connection.Client, req *protobuf.CS_11718) error {
+	ctx := context.Background()
+	id := req.GetChatGroupId()
+	topics, err := game.DB.ListJuusTopics(ctx, client.CommanderID)
+	if err != nil {
+		return err
+	}
+	config, ok := juusTopicConfigs[id]
+	unlocked := slices.ContainsFunc(topics, func(topic db.ListJuusTopicsRow) bool { return topic.TopicID == id })
+	if !ok || !unlocked {
+		return client.Send(&protobuf.SC_11719{Result: result(errRefused)})
+	}
+	if err := game.DB.SetJuusGroupTopic(ctx, db.SetJuusGroupTopicParams{CommanderID: client.CommanderID, GroupID: config.ShipGroup, CurTopic: id}); err != nil {
+		return err
+	}
+	return client.Send(&protobuf.SC_11719{Result: result(nil)})
 }
 
 // handleJuusGroups answers InstagramChatCommand with the commander's Juus

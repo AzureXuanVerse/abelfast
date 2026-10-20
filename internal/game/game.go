@@ -328,6 +328,9 @@ func (game *Game) Register() {
 	packets.Handle(game.handleJuusChatReply)
 	packets.Handle(game.handleJuusTopicsRead)
 	packets.Handle(game.handleJuusActivateTopics)
+	packets.Handle(game.handleJuusSkin)
+	packets.Handle(game.handleJuusCare)
+	packets.Handle(game.handleJuusTopic)
 	// minigames, shops, exercises, TB
 	packets.Handle(game.handleAuctionGameInit)
 	packets.Handle(game.handleAppreciationVersion)

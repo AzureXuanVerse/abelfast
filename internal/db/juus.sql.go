@@ -137,6 +137,39 @@ func (q *Queries) LikeJuusPost(ctx context.Context, arg LikeJuusPostParams) (Com
 	return i, err
 }
 
+const listJuusGroups = `-- name: ListJuusGroups :many
+SELECT commander_id, group_id, skin_id, favorite, cur_topic FROM commander_juus_groups WHERE commander_id = ?
+`
+
+func (q *Queries) ListJuusGroups(ctx context.Context, commanderID uint32) ([]CommanderJuusGroup, error) {
+	rows, err := q.db.QueryContext(ctx, listJuusGroups, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CommanderJuusGroup
+	for rows.Next() {
+		var i CommanderJuusGroup
+		if err := rows.Scan(
+			&i.CommanderID,
+			&i.GroupID,
+			&i.SkinID,
+			&i.Favorite,
+			&i.CurTopic,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listJuusPosts = `-- name: ListJuusPosts :many
 SELECT commander_id, post_id, is_good, is_read, comment_discuss, comment_index, comment_time FROM commander_juus_posts WHERE commander_id = ? ORDER BY post_id
 `
@@ -283,6 +316,54 @@ type ReadJuusTopicParams struct {
 
 func (q *Queries) ReadJuusTopic(ctx context.Context, arg ReadJuusTopicParams) error {
 	_, err := q.db.ExecContext(ctx, readJuusTopic, arg.CommanderID, arg.TopicID)
+	return err
+}
+
+const setJuusGroupFavorite = `-- name: SetJuusGroupFavorite :exec
+INSERT INTO commander_juus_groups (commander_id, group_id, favorite) VALUES (?, ?, ?)
+ON CONFLICT (commander_id, group_id) DO UPDATE SET favorite = excluded.favorite
+`
+
+type SetJuusGroupFavoriteParams struct {
+	CommanderID uint32
+	GroupID     uint32
+	Favorite    uint32
+}
+
+func (q *Queries) SetJuusGroupFavorite(ctx context.Context, arg SetJuusGroupFavoriteParams) error {
+	_, err := q.db.ExecContext(ctx, setJuusGroupFavorite, arg.CommanderID, arg.GroupID, arg.Favorite)
+	return err
+}
+
+const setJuusGroupSkin = `-- name: SetJuusGroupSkin :exec
+INSERT INTO commander_juus_groups (commander_id, group_id, skin_id) VALUES (?, ?, ?)
+ON CONFLICT (commander_id, group_id) DO UPDATE SET skin_id = excluded.skin_id
+`
+
+type SetJuusGroupSkinParams struct {
+	CommanderID uint32
+	GroupID     uint32
+	SkinID      uint32
+}
+
+func (q *Queries) SetJuusGroupSkin(ctx context.Context, arg SetJuusGroupSkinParams) error {
+	_, err := q.db.ExecContext(ctx, setJuusGroupSkin, arg.CommanderID, arg.GroupID, arg.SkinID)
+	return err
+}
+
+const setJuusGroupTopic = `-- name: SetJuusGroupTopic :exec
+INSERT INTO commander_juus_groups (commander_id, group_id, cur_topic) VALUES (?, ?, ?)
+ON CONFLICT (commander_id, group_id) DO UPDATE SET cur_topic = excluded.cur_topic
+`
+
+type SetJuusGroupTopicParams struct {
+	CommanderID uint32
+	GroupID     uint32
+	CurTopic    uint32
+}
+
+func (q *Queries) SetJuusGroupTopic(ctx context.Context, arg SetJuusGroupTopicParams) error {
+	_, err := q.db.ExecContext(ctx, setJuusGroupTopic, arg.CommanderID, arg.GroupID, arg.CurTopic)
 	return err
 }
 

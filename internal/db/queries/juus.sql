@@ -41,3 +41,18 @@ ON CONFLICT (commander_id, topic_id, chat_id) DO UPDATE SET value = excluded.val
 
 -- name: ListJuusReplies :many
 SELECT topic_id, chat_id, value FROM commander_juus_replies WHERE commander_id = ? ORDER BY rowid;
+
+-- name: ListJuusGroups :many
+SELECT * FROM commander_juus_groups WHERE commander_id = ?;
+
+-- name: SetJuusGroupSkin :exec
+INSERT INTO commander_juus_groups (commander_id, group_id, skin_id) VALUES (?, ?, ?)
+ON CONFLICT (commander_id, group_id) DO UPDATE SET skin_id = excluded.skin_id;
+
+-- name: SetJuusGroupFavorite :exec
+INSERT INTO commander_juus_groups (commander_id, group_id, favorite) VALUES (?, ?, ?)
+ON CONFLICT (commander_id, group_id) DO UPDATE SET favorite = excluded.favorite;
+
+-- name: SetJuusGroupTopic :exec
+INSERT INTO commander_juus_groups (commander_id, group_id, cur_topic) VALUES (?, ?, ?)
+ON CONFLICT (commander_id, group_id) DO UPDATE SET cur_topic = excluded.cur_topic;
