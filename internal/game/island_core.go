@@ -139,7 +139,11 @@ var (
 		// from the start: the buttons' abilities and the
 		// island_ability_template rows of IslandAblityAgency.TYPE_SYSTEM
 		// (but the event ones, effect 990000+), TYPE_PLACE, TYPE_MAP and the
-		// daily plans' (type 30).
+		// daily plans' (type 30). The wiki (Island Planner) only says the
+		// Windswept Plains are the starting area, Morningdew Farm and
+		// Get-Together Island unlock early, the Commercial Area and
+		// Prosperous Plantation later, and the Island Life plans "often
+		// unlock key functions"; it doesn't say which unlocks what.
 		abilities []uint32
 	}
 	islandAbilities map[uint32]islandAbilityConfig

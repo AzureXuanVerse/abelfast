@@ -581,6 +581,8 @@ func (game *Game) handleIslandSeasonPtAward(client *connection.Client, req *prot
 // counters) and the island starts the current one with no points. GUESS:
 // the ranking among players (rank awards, IslandSeasonReview PT_RANK) is
 // the official server's; belfast ranks nobody and gives no rank award.
+// The wiki has no ranking rule (Recent News/2025, Season I reset: only that
+// special reset gave everyone the highest-tier development ranking reward).
 func (game *Game) handleIslandSeasonReset(client *connection.Client, req *protobuf.CS_21024) error {
 	reply := &protobuf.SC_21025{}
 	err := game.tx(context.Background(), client, func(tx *Tx) error {
