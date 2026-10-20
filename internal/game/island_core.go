@@ -229,11 +229,13 @@ func newIsland(commanderID uint32, now uint32) *islandState {
 			island.PublicData.BuildList = append(island.PublicData.BuildList, islandNewBuilding(id))
 		}
 	}
-	return &islandState{
+	state := &islandState{
 		commanderID: commanderID,
 		island:      protocol.FillRequired(island),
 		extra:       map[string]json.RawMessage{},
 	}
+	islandFishingDefaults(state)
+	return state
 }
 
 // readIsland loads a commander's island; nil when it has none yet.
@@ -253,6 +255,7 @@ func readIsland(ctx context.Context, queries *db.Queries, commanderID uint32) (*
 		state.island.PrivateData = &protobuf.PB_ISLAND_PRIVATE{}
 	}
 	protocol.FillRequired(state.island)
+	islandFishingDefaults(state)
 	// the sites there from the start, also on an island made before one was
 	for _, id := range slices.Sorted(maps.Keys(islandPlaces)) {
 		public := state.public()

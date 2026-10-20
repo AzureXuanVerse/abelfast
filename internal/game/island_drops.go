@@ -143,22 +143,21 @@ func (tx *Tx) addIslandDrops(drops []*protobuf.DROPINFO) error {
 		id, count := drop.GetId(), drop.GetNumber()
 		switch drop.GetType() {
 		case dropTypeIslandItem:
-			state.addIslandItem(id, count)
 			obtained[id] += count
+			// told to the client as overflow when it doesn't fit
+			// (islandItemOverflows): the reply shares the drop
+			if state.islandItemOverflows(id, count) {
+				drop.Type = proto.Uint32(dropTypeIslandOverflow)
+				state.addIslandOverflow(id, count)
+			} else {
+				state.addIslandItem(id, count)
+			}
 		case dropTypeIslandOverflow:
-			found := false
-			for _, item := range private.ItemListCache {
-				if item.GetId() == id {
-					item.Num = proto.Uint32(item.GetNum() + count)
-					found = true
-				}
-			}
-			if !found {
-				private.ItemListCache = append(private.ItemListCache, &protobuf.PB_ISLAND_ITEM{Id: proto.Uint32(id), Num: proto.Uint32(count)})
-			}
+			state.addIslandOverflow(id, count)
 		case dropTypeIslandAbility:
 			if !slices.Contains(public.AbilityList, id) {
 				public.AbilityList = append(public.AbilityList, id)
+				islandFishingAbility(state, id)
 				if err := tx.islandAbilityGained(state, id); err != nil {
 					return err
 				}
