@@ -4,6 +4,13 @@
 
 package db
 
+type ActivityBossMark struct {
+	ActivityID uint32
+	BossID     uint32
+	Mark       uint32
+	ReachedAt  int64
+}
+
 type ActivityFleetMeowfficer struct {
 	CommanderID  uint32
 	ActivityID   uint32
@@ -460,6 +467,15 @@ type CommanderHandbookPage struct {
 	CommanderID uint32
 	PageID      uint32
 	Award       uint32
+}
+
+type CommanderIslandNode struct {
+	CommanderID uint32
+	ActivityID  uint32
+	NodeID      uint32
+	EventID     uint32
+	IsNew       bool
+	RefreshedAt int64
 }
 
 type CommanderItem struct {

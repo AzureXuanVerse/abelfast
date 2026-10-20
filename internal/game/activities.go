@@ -198,6 +198,11 @@ func activityInfo(config activityConfig, state db.CommanderActivity, stopTime ui
 	if config.Type == activityTypeIslandDrawAward || config.Type == activityTypeVirtualBag {
 		info.Date1KeyValueList = []*protobuf.KEYVALUELIST_P11{{Key: proto.Uint32(1)}}
 	}
+	if config.Type == activityTypeBossBattleMark2 {
+		// ActivityProxy:InitActivityBossData indexes lists 1 and 2 (the
+		// stages' expedition drops taken, and their counters) unchecked
+		info.Date1KeyValueList = []*protobuf.KEYVALUELIST_P11{{Key: proto.Uint32(1)}, {Key: proto.Uint32(2)}}
+	}
 	return info
 }
 

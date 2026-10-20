@@ -44,9 +44,11 @@ type permanentActivityConfig struct {
 }
 
 // activity_event_pt row: target are the PT a PT activity's rewards need
-// (ActivityPtData.targets)
+// (ActivityPtData.targets), link_id the boss activity it belongs to
+// (GetActBossLinkPTActID)
 type eventPtConfig struct {
 	Target []uint32 `json:"target"`
+	LinkID uint32   `json:"link_id"`
 }
 
 var (

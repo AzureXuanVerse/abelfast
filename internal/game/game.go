@@ -324,6 +324,10 @@ func (game *Game) Register() {
 	packets.Handle(game.handleRefluxData)
 	packets.Handle(game.handleRefluxSign)
 	packets.Handle(game.handleRefluxPtAward)
+	// server-wide activity bosses, the anniversary island
+	packets.Handle(game.handleActivityBossPage)
+	packets.Handle(game.handleCollabBossRushData)
+	packets.Handle(game.handleIslandNodes)
 	// challenge mode
 	packets.Handle(game.handleChallengeStart)
 	packets.Handle(game.handleChallengeInfo)
