@@ -117,7 +117,7 @@ func (tx *Tx) retireShips(ids []uint32) error {
 
 // busyShips are the commander's ships ShipStatus.canDestroyShip turns down
 // for a state belfast keeps: in a fleet (inFleet, inPvP...), in the active
-// chapter (inChapter) or a secretary (inAdmiral).
+// chapter (inChapter), a secretary (inAdmiral) or on a commission (inEvent).
 func busyShips(ctx context.Context, queries *db.Queries, commanderID uint32) (map[uint32]bool, error) {
 	busy := map[uint32]bool{}
 	fleets, err := queries.ListFleetShips(ctx, commanderID)
@@ -133,6 +133,13 @@ func busyShips(ctx context.Context, queries *db.Queries, commanderID uint32) (ma
 	}
 	for _, secretary := range secretaries {
 		busy[secretary.ShipID] = true
+	}
+	commissions, err := queries.ListCommissionShips(ctx, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	for _, ship := range commissions {
+		busy[ship.ShipID] = true
 	}
 	chapter, err := loadChapter(ctx, queries, commanderID)
 	if err != nil || chapter == nil {

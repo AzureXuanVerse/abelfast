@@ -241,6 +241,10 @@ func (game *Game) Register() {
 	packets.Handle(game.handleStartChapterAuto)
 	packets.Handle(game.handleEndChapterAuto)
 	packets.Handle(game.handleAddChapterAutoTime)
+	packets.Handle(game.handleStartCommission)
+	packets.Handle(game.handleFinishCommission)
+	packets.Handle(game.handleGiveUpCommission)
+	packets.Handle(game.handleFlushCommissions)
 	// tasks and activities
 	packets.Handle(game.handleSubmitTask)
 	packets.Handle(game.handleSubmitTasks)

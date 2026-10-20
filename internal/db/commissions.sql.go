@@ -23,6 +23,119 @@ func (q *Queries) AddCommission(ctx context.Context, arg AddCommissionParams) er
 	return err
 }
 
+const addCommissionShip = `-- name: AddCommissionShip :exec
+INSERT INTO commander_commission_ships (commander_id, collection_id, pos, ship_id) VALUES (?, ?, ?, ?)
+`
+
+type AddCommissionShipParams struct {
+	CommanderID  uint32
+	CollectionID uint32
+	Pos          uint32
+	ShipID       uint32
+}
+
+func (q *Queries) AddCommissionShip(ctx context.Context, arg AddCommissionShipParams) error {
+	_, err := q.db.ExecContext(ctx, addCommissionShip,
+		arg.CommanderID,
+		arg.CollectionID,
+		arg.Pos,
+		arg.ShipID,
+	)
+	return err
+}
+
+const deleteCommission = `-- name: DeleteCommission :exec
+DELETE FROM commander_commissions WHERE commander_id = ? AND collection_id = ?
+`
+
+type DeleteCommissionParams struct {
+	CommanderID  uint32
+	CollectionID uint32
+}
+
+func (q *Queries) DeleteCommission(ctx context.Context, arg DeleteCommissionParams) error {
+	_, err := q.db.ExecContext(ctx, deleteCommission, arg.CommanderID, arg.CollectionID)
+	return err
+}
+
+const deleteCommissionShips = `-- name: DeleteCommissionShips :exec
+DELETE FROM commander_commission_ships WHERE commander_id = ? AND collection_id = ?
+`
+
+type DeleteCommissionShipsParams struct {
+	CommanderID  uint32
+	CollectionID uint32
+}
+
+func (q *Queries) DeleteCommissionShips(ctx context.Context, arg DeleteCommissionShipsParams) error {
+	_, err := q.db.ExecContext(ctx, deleteCommissionShips, arg.CommanderID, arg.CollectionID)
+	return err
+}
+
+const getCommission = `-- name: GetCommission :one
+SELECT commander_id, collection_id, finish_time, over_time FROM commander_commissions WHERE commander_id = ? AND collection_id = ?
+`
+
+type GetCommissionParams struct {
+	CommanderID  uint32
+	CollectionID uint32
+}
+
+func (q *Queries) GetCommission(ctx context.Context, arg GetCommissionParams) (CommanderCommission, error) {
+	row := q.db.QueryRowContext(ctx, getCommission, arg.CommanderID, arg.CollectionID)
+	var i CommanderCommission
+	err := row.Scan(
+		&i.CommanderID,
+		&i.CollectionID,
+		&i.FinishTime,
+		&i.OverTime,
+	)
+	return i, err
+}
+
+const getCommissionRefresh = `-- name: GetCommissionRefresh :one
+SELECT refreshed_at FROM commander_commission_refresh WHERE commander_id = ?
+`
+
+func (q *Queries) GetCommissionRefresh(ctx context.Context, commanderID uint32) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getCommissionRefresh, commanderID)
+	var refreshed_at int64
+	err := row.Scan(&refreshed_at)
+	return refreshed_at, err
+}
+
+const listCommissionShips = `-- name: ListCommissionShips :many
+SELECT collection_id, ship_id FROM commander_commission_ships WHERE commander_id = ? ORDER BY collection_id, pos
+`
+
+type ListCommissionShipsRow struct {
+	CollectionID uint32
+	ShipID       uint32
+}
+
+func (q *Queries) ListCommissionShips(ctx context.Context, commanderID uint32) ([]ListCommissionShipsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCommissionShips, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCommissionShipsRow
+	for rows.Next() {
+		var i ListCommissionShipsRow
+		if err := rows.Scan(&i.CollectionID, &i.ShipID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCommissions = `-- name: ListCommissions :many
 SELECT commander_id, collection_id, finish_time, over_time FROM commander_commissions WHERE commander_id = ? ORDER BY rowid
 `
@@ -53,4 +166,64 @@ func (q *Queries) ListCommissions(ctx context.Context, commanderID uint32) ([]Co
 		return nil, err
 	}
 	return items, nil
+}
+
+const offerCommission = `-- name: OfferCommission :exec
+INSERT INTO commander_commissions (commander_id, collection_id, finish_time, over_time) VALUES (?, ?, 0, ?) ON CONFLICT DO NOTHING
+`
+
+type OfferCommissionParams struct {
+	CommanderID  uint32
+	CollectionID uint32
+	OverTime     uint32
+}
+
+func (q *Queries) OfferCommission(ctx context.Context, arg OfferCommissionParams) error {
+	_, err := q.db.ExecContext(ctx, offerCommission, arg.CommanderID, arg.CollectionID, arg.OverTime)
+	return err
+}
+
+const setCommissionFinishTime = `-- name: SetCommissionFinishTime :exec
+UPDATE commander_commissions SET finish_time = ? WHERE commander_id = ? AND collection_id = ?
+`
+
+type SetCommissionFinishTimeParams struct {
+	FinishTime   uint32
+	CommanderID  uint32
+	CollectionID uint32
+}
+
+func (q *Queries) SetCommissionFinishTime(ctx context.Context, arg SetCommissionFinishTimeParams) error {
+	_, err := q.db.ExecContext(ctx, setCommissionFinishTime, arg.FinishTime, arg.CommanderID, arg.CollectionID)
+	return err
+}
+
+const setCommissionOverTime = `-- name: SetCommissionOverTime :exec
+UPDATE commander_commissions SET over_time = ? WHERE commander_id = ? AND collection_id = ?
+`
+
+type SetCommissionOverTimeParams struct {
+	OverTime     uint32
+	CommanderID  uint32
+	CollectionID uint32
+}
+
+func (q *Queries) SetCommissionOverTime(ctx context.Context, arg SetCommissionOverTimeParams) error {
+	_, err := q.db.ExecContext(ctx, setCommissionOverTime, arg.OverTime, arg.CommanderID, arg.CollectionID)
+	return err
+}
+
+const setCommissionRefresh = `-- name: SetCommissionRefresh :exec
+INSERT INTO commander_commission_refresh (commander_id, refreshed_at) VALUES (?, ?)
+ON CONFLICT (commander_id) DO UPDATE SET refreshed_at = excluded.refreshed_at
+`
+
+type SetCommissionRefreshParams struct {
+	CommanderID uint32
+	RefreshedAt int64
+}
+
+func (q *Queries) SetCommissionRefresh(ctx context.Context, arg SetCommissionRefreshParams) error {
+	_, err := q.db.ExecContext(ctx, setCommissionRefresh, arg.CommanderID, arg.RefreshedAt)
+	return err
 }

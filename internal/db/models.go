@@ -213,6 +213,18 @@ type CommanderCommission struct {
 	OverTime     uint32
 }
 
+type CommanderCommissionRefresh struct {
+	CommanderID uint32
+	RefreshedAt int64
+}
+
+type CommanderCommissionShip struct {
+	CommanderID  uint32
+	CollectionID uint32
+	Pos          uint32
+	ShipID       uint32
+}
+
 type CommanderCommonFlag struct {
 	CommanderID uint32
 	FlagID      uint32

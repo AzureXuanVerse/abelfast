@@ -2,7 +2,9 @@ package game
 
 import (
 	"context"
+	"encoding/json"
 	"math/rand/v2"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -16,6 +18,24 @@ type commissionConfig struct {
 	Type uint32 `json:"type"`
 	Lv   uint32 `json:"lv"`   // commander level it is offered from
 	Time uint32 `json:"time"` // how long it stays offered, 0 for no limit
+
+	CollectTime uint32   `json:"collect_time"` // seconds it runs
+	Oil         uint32   `json:"oil"`          // oil it costs to start
+	Exp         uint32   `json:"exp"`          // exp each ship gets
+	ShipNum     uint32   `json:"ship_num"`     // ships it takes at least
+	ShipLv      uint32   `json:"ship_lv"`      // level one of them must reach
+	ShipType    []uint32 `json:"ship_type"`    // the ship types it takes
+	// what the panel shows it gives: [{type, id, nums}], nums a count, a
+	// range ("100~170") or a minimum ("3000+")
+	DropDisplay []commissionDisplay `json:"drop_display"`
+	// {type, id, nums: "Chance to receive"}, or [] when it has none
+	SpecialDrop json.RawMessage `json:"special_drop"`
+}
+
+type commissionDisplay struct {
+	Type uint32 `json:"type"`
+	ID   uint32 `json:"id"`
+	Nums string `json:"nums"`
 }
 
 // collection_template types that aren't drawn
@@ -31,7 +51,26 @@ const (
 var commissionConfigs map[uint32]commissionConfig
 
 func loadCommissionData() error {
-	return gamedata.Load("collection_template", &commissionConfigs)()
+	var resources map[uint32]commissionResourceConfig
+	var gameset map[string]uint32
+	err := gamedata.LoadAll(
+		gamedata.Load("collection_template", &commissionConfigs),
+		gamedata.Load("player_resource", &resources),
+		func() (err error) {
+			gameset, err = gamedata.Gameset()
+			return err
+		},
+	)
+	if err != nil {
+		return err
+	}
+	for _, key := range []string{"night_collection_begin", "night_collection_end"} {
+		if _, ok := gameset[key]; !ok {
+			return gamedata.Missing("gameset", "%s", key)
+		}
+	}
+	nightCommissionBegin, nightCommissionEnd = gameset["night_collection_begin"], gameset["night_collection_end"]
+	return readCommissionAwards(resources)
 }
 
 // grantCommissionsStarter offers a new commander new_commander.json's count
@@ -55,20 +94,16 @@ func grantCommissionsStarter(ctx context.Context, queries *db.Queries, commander
 	return nil
 }
 
-// commissionList is SC_13002, EventProxy's commissions; max_team, how many
-// can run at once, is user_level max_collection at the commander's level.
+// commissionList is SC_13002, EventProxy's commissions (refreshed first,
+// refreshCommissions); max_team, how many can run at once, is user_level
+// max_collection at the commander's level.
 func commissionList(ctx context.Context, queries *db.Queries, commanderID, level uint32) (*protobuf.SC_13002, error) {
-	rows, err := queries.ListCommissions(ctx, commanderID)
+	if _, err := refreshCommissions(ctx, queries, commanderID, level, time.Now()); err != nil {
+		return nil, err
+	}
+	list, err := commissionInfos(ctx, queries, commanderID)
 	if err != nil {
 		return nil, err
 	}
-	msg := &protobuf.SC_13002{MaxTeam: proto.Uint32(commanderLevels[level].MaxCollection)}
-	for _, row := range rows {
-		msg.CollectionList = append(msg.CollectionList, &protobuf.COLLECTIONINFO{
-			Id:         proto.Uint32(row.CollectionID),
-			FinishTime: proto.Uint32(row.FinishTime),
-			OverTime:   proto.Uint32(row.OverTime),
-		})
-	}
-	return msg, nil
+	return &protobuf.SC_13002{MaxTeam: proto.Uint32(commanderLevels[level].MaxCollection), CollectionList: list}, nil
 }
