@@ -23,6 +23,20 @@ func (q *Queries) AddCommission(ctx context.Context, arg AddCommissionParams) er
 	return err
 }
 
+const addCommissionDailyDrawn = `-- name: AddCommissionDailyDrawn :exec
+UPDATE commander_commission_refresh SET daily_drawn = daily_drawn + ? WHERE commander_id = ?
+`
+
+type AddCommissionDailyDrawnParams struct {
+	DailyDrawn  uint32
+	CommanderID uint32
+}
+
+func (q *Queries) AddCommissionDailyDrawn(ctx context.Context, arg AddCommissionDailyDrawnParams) error {
+	_, err := q.db.ExecContext(ctx, addCommissionDailyDrawn, arg.DailyDrawn, arg.CommanderID)
+	return err
+}
+
 const addCommissionShip = `-- name: AddCommissionShip :exec
 INSERT INTO commander_commission_ships (commander_id, collection_id, pos, ship_id) VALUES (?, ?, ?, ?)
 `
@@ -91,6 +105,17 @@ func (q *Queries) GetCommission(ctx context.Context, arg GetCommissionParams) (C
 		&i.OverTime,
 	)
 	return i, err
+}
+
+const getCommissionDailyDrawn = `-- name: GetCommissionDailyDrawn :one
+SELECT daily_drawn FROM commander_commission_refresh WHERE commander_id = ?
+`
+
+func (q *Queries) GetCommissionDailyDrawn(ctx context.Context, commanderID uint32) (uint32, error) {
+	row := q.db.QueryRowContext(ctx, getCommissionDailyDrawn, commanderID)
+	var daily_drawn uint32
+	err := row.Scan(&daily_drawn)
+	return daily_drawn, err
 }
 
 const getCommissionRefresh = `-- name: GetCommissionRefresh :one
@@ -214,16 +239,17 @@ func (q *Queries) SetCommissionOverTime(ctx context.Context, arg SetCommissionOv
 }
 
 const setCommissionRefresh = `-- name: SetCommissionRefresh :exec
-INSERT INTO commander_commission_refresh (commander_id, refreshed_at) VALUES (?, ?)
-ON CONFLICT (commander_id) DO UPDATE SET refreshed_at = excluded.refreshed_at
+INSERT INTO commander_commission_refresh (commander_id, refreshed_at, daily_drawn) VALUES (?, ?, ?)
+ON CONFLICT (commander_id) DO UPDATE SET refreshed_at = excluded.refreshed_at, daily_drawn = excluded.daily_drawn
 `
 
 type SetCommissionRefreshParams struct {
 	CommanderID uint32
 	RefreshedAt int64
+	DailyDrawn  uint32
 }
 
 func (q *Queries) SetCommissionRefresh(ctx context.Context, arg SetCommissionRefreshParams) error {
-	_, err := q.db.ExecContext(ctx, setCommissionRefresh, arg.CommanderID, arg.RefreshedAt)
+	_, err := q.db.ExecContext(ctx, setCommissionRefresh, arg.CommanderID, arg.RefreshedAt, arg.DailyDrawn)
 	return err
 }

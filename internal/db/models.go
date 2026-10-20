@@ -453,6 +453,7 @@ type CommanderCommission struct {
 type CommanderCommissionRefresh struct {
 	CommanderID uint32
 	RefreshedAt int64
+	DailyDrawn  uint32
 }
 
 type CommanderCommissionShip struct {

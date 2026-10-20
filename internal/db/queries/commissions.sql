@@ -32,5 +32,11 @@ DELETE FROM commander_commission_ships WHERE commander_id = ? AND collection_id 
 SELECT refreshed_at FROM commander_commission_refresh WHERE commander_id = ?;
 
 -- name: SetCommissionRefresh :exec
-INSERT INTO commander_commission_refresh (commander_id, refreshed_at) VALUES (?, ?)
-ON CONFLICT (commander_id) DO UPDATE SET refreshed_at = excluded.refreshed_at;
+INSERT INTO commander_commission_refresh (commander_id, refreshed_at, daily_drawn) VALUES (?, ?, ?)
+ON CONFLICT (commander_id) DO UPDATE SET refreshed_at = excluded.refreshed_at, daily_drawn = excluded.daily_drawn;
+
+-- name: GetCommissionDailyDrawn :one
+SELECT daily_drawn FROM commander_commission_refresh WHERE commander_id = ?;
+
+-- name: AddCommissionDailyDrawn :exec
+UPDATE commander_commission_refresh SET daily_drawn = daily_drawn + ? WHERE commander_id = ?;

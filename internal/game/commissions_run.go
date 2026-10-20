@@ -24,15 +24,35 @@ import (
 // ("Complete 1 commissions.").
 const TaskSubCommission = 80
 
-// commissionTypeDaily is the collection_template type of the "Daily Resource
-// Extraction" commissions, drawn anew every server day.
-const commissionTypeDaily = 4
+// collection_template types of the daily commissions (the wiki's
+// Commissions page, "Daily Commissions"): the "Daily Resource Extraction"
+// ones (type 4, and from level 50 the "Awakening Tactical Research" ones of
+// type 6, listed with them) and the extra ones (type 1) drawn once a day's
+// first commissionDailyPerDay were.
+const (
+	commissionTypeExtra     = 1
+	commissionTypeDaily     = 4
+	commissionTypeAwakening = 6
+)
+
+// commissionDailyTypes are the daily-slot commissions: drawn each server day
+// and on completing one, rolled over into the next day's morning.
+var commissionDailyTypes = []uint32{commissionTypeExtra, commissionTypeDaily, commissionTypeAwakening}
 
 const (
 	// commissionDailyCount is how many daily commissions a day brings: the
 	// capture's login on the next day offered 4 new ones (30102, 30106,
 	// 30109, 30110, type 4).
 	commissionDailyCount = 4
+	// commissionDailyPerDay is how many of a day's daily-slot commissions are
+	// Daily Resource Extraction ones, the extra ones (type 1) coming after
+	// (the wiki's Commissions page: "The first 10 daily commissions
+	// generated in a day will be of this type").
+	commissionDailyPerDay = 10
+	// commissionNightCount is how many night commissions the night window
+	// brings (the wiki's Commissions page: "four of these commissions will
+	// automatically appear in the Urgent tab").
+	commissionNightCount = 4
 	// commissionDailyGrace is how long into the new day the previous day's
 	// daily commissions stay offered: the capture gave them an over_time of
 	// the day's 12:00, server time.
@@ -43,7 +63,8 @@ const (
 	// commissionGreatSuccessPercent is the chance a commission ends in a
 	// great success (SC_13006.is_cri, the "perfect" grade of
 	// ShipExpLayer), which also gives its special_drop. The rate is
-	// server-side and nothing captured shows it: this is a guess.
+	// server-side, nothing captured shows it and the wiki's Commissions
+	// page doesn't say: this is a GUESS.
 	commissionGreatSuccessPercent = 10
 	// itemShipExpDisplay is the "Ship EXP" placeholder of drop_display
 	// (item_virtual_data_statistics 59000): SC_13006.exp, not a drop.
@@ -188,16 +209,17 @@ func nightCommissionUntil(now time.Time) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// drawCommissions offers up to n commissions of a type open at level, not
-// already offered (nor except), with over_time over (0 for no limit).
-func drawCommissions(ctx context.Context, queries *db.Queries, commanderID, level, kind uint32, n int, over, except uint32) ([]*protobuf.COLLECTIONINFO, error) {
+// drawCommissions offers up to n commissions of the types kinds open at
+// level, not already offered (nor except), with over_time over (0 for no
+// limit).
+func drawCommissions(ctx context.Context, queries *db.Queries, commanderID, level uint32, kinds []uint32, n int, over, except uint32) ([]*protobuf.COLLECTIONINFO, error) {
 	rows, err := queries.ListCommissions(ctx, commanderID)
 	if err != nil {
 		return nil, err
 	}
 	var candidates []uint32
 	for id, config := range commissionConfigs {
-		if config.Type == kind && config.Lv <= level && id != except && !slices.ContainsFunc(rows, func(row db.CommanderCommission) bool { return row.CollectionID == id }) {
+		if slices.Contains(kinds, config.Type) && config.Lv <= level && id != except && !slices.ContainsFunc(rows, func(row db.CommanderCommission) bool { return row.CollectionID == id }) {
 			candidates = append(candidates, id)
 		}
 	}
@@ -212,6 +234,35 @@ func drawCommissions(ctx context.Context, queries *db.Queries, commanderID, leve
 	return offered, nil
 }
 
+// drawDailyCommissions offers n daily-slot commissions (not except): Daily
+// Resource Extraction ones while fewer than commissionDailyPerDay were drawn
+// this server day, extra ones after (the wiki's Commissions page).
+func drawDailyCommissions(ctx context.Context, queries *db.Queries, commanderID, level uint32, n int, except uint32) ([]*protobuf.COLLECTIONINFO, error) {
+	drawn, err := queries.GetCommissionDailyDrawn(ctx, commanderID)
+	if errors.Is(err, sql.ErrNoRows) {
+		drawn = commissionDailyPerDay
+	} else if err != nil {
+		return nil, err
+	}
+	var offered []*protobuf.COLLECTIONINFO
+	for range n {
+		kinds := []uint32{commissionTypeExtra}
+		if drawn < commissionDailyPerDay {
+			kinds = []uint32{commissionTypeDaily, commissionTypeAwakening}
+		}
+		one, err := drawCommissions(ctx, queries, commanderID, level, kinds, 1, 0, except)
+		if err != nil {
+			return nil, err
+		}
+		offered = append(offered, one...)
+		drawn++
+	}
+	if err := queries.AddCommissionDailyDrawn(ctx, db.AddCommissionDailyDrawnParams{DailyDrawn: uint32(n), CommanderID: commanderID}); err != nil {
+		return nil, err
+	}
+	return offered, nil
+}
+
 // refreshCommissions brings the commissions on offer up to now and returns
 // those it offered or changed:
 //   - the ones never started whose over_time passed are dropped (the client
@@ -221,11 +272,10 @@ func drawCommissions(ctx context.Context, queries *db.Queries, commanderID, leve
 //     drawn, the previous day's that weren't started kept until
 //     commissionDailyGrace into the day, as captured. A commander's first
 //     refresh only records the day: the starter commissions are its draw;
-//   - during the night window a night commission (type 5) is offered until
-//     the window ends whenever none is offered or running. On the urgency
-//     tab the client flushes again for as long as checkNightEvent finds
-//     none, so one is always there at night (how many a night brings
-//     officially is unknown).
+//   - during the night window commissionNightCount night commissions
+//     (type 5) are offered until the window ends whenever none is offered
+//     or running (the client flushes when its urgency tab finds none,
+//     checkNightEvent).
 func refreshCommissions(ctx context.Context, queries *db.Queries, commanderID, level uint32, now time.Time) ([]*protobuf.COLLECTIONINFO, error) {
 	unix := uint32(now.Unix())
 	rows, err := queries.ListCommissions(ctx, commanderID)
@@ -255,7 +305,7 @@ func refreshCommissions(ctx context.Context, queries *db.Queries, commanderID, l
 	case refreshed < day.Unix():
 		grace := day.Add(commissionDailyGrace)
 		for _, row := range rows {
-			if commissionConfigs[row.CollectionID].Type != commissionTypeDaily || row.FinishTime != 0 || row.OverTime != 0 {
+			if !slices.Contains(commissionDailyTypes, commissionConfigs[row.CollectionID].Type) || row.FinishTime != 0 || row.OverTime != 0 {
 				continue
 			}
 			if !now.Before(grace) {
@@ -270,17 +320,17 @@ func refreshCommissions(ctx context.Context, queries *db.Queries, commanderID, l
 			}
 			changed = append(changed, commissionInfo(row, nil))
 		}
-		offered, err := drawCommissions(ctx, queries, commanderID, level, commissionTypeDaily, commissionDailyCount, 0, 0)
+		if err := queries.SetCommissionRefresh(ctx, db.SetCommissionRefreshParams{CommanderID: commanderID, RefreshedAt: now.Unix()}); err != nil {
+			return nil, err
+		}
+		offered, err := drawDailyCommissions(ctx, queries, commanderID, level, commissionDailyCount, 0)
 		if err != nil {
 			return nil, err
 		}
 		changed = append(changed, offered...)
-		if err := queries.SetCommissionRefresh(ctx, db.SetCommissionRefreshParams{CommanderID: commanderID, RefreshedAt: now.Unix()}); err != nil {
-			return nil, err
-		}
 	}
 	if until, ok := nightCommissionUntil(now); ok && !night {
-		offered, err := drawCommissions(ctx, queries, commanderID, level, commissionTypeNight, 1, uint32(until.Unix()), 0)
+		offered, err := drawCommissions(ctx, queries, commanderID, level, []uint32{commissionTypeNight}, commissionNightCount, uint32(until.Unix()), 0)
 		if err != nil {
 			return nil, err
 		}
@@ -384,9 +434,12 @@ func (game *Game) handleStartCommission(client *connection.Client, req *protobuf
 // it with Ship:addExp, without accumulating: trainShip), drop_list its
 // rewards (commissionAwards: its drop_display, the special_drop too when
 // is_cri, a great success), new_collection what the client adds once it
-// drops the commission. A finished commission that isn't a daily, night,
-// urgent or activity one is replaced by another of its type (the
-// replacement is a guess: no capture shows a finish). The rest comes from
+// drops the commission. A finished daily-slot one is replaced by the day's
+// next daily one (drawDailyCommissions: "A new Commission is generated when
+// a Daily is completed"), a major one (type 3) by another ("Exactly one of
+// these commissions is available (or in progress) at any given time, with a
+// new one generated on completion"), both from the wiki's Commissions page;
+// night, urgent and activity ones aren't replaced. The rest comes from
 // the client's own flushes (CS_13009: a new day, or no night commission
 // left at night). It counts for TaskSubCommission;
 // the client counts collect_attack_count itself. No official capture has
@@ -446,13 +499,15 @@ func (game *Game) handleFinishCommission(client *connection.Client, req *protobu
 			return err
 		}
 		var offered []*protobuf.COLLECTIONINFO
-		switch config.Type {
-		case commissionTypeActivity, commissionTypeDaily, commissionTypeNight:
+		switch {
+		case config.Type == commissionTypeActivity, config.Type == commissionTypeNight, config.Time != 0:
+		case slices.Contains(commissionDailyTypes, config.Type):
+			if offered, err = drawDailyCommissions(tx.ctx, tx.Queries, tx.commanderID, commander.Level, 1, req.GetId()); err != nil {
+				return err
+			}
 		default:
-			if config.Time == 0 {
-				if offered, err = drawCommissions(tx.ctx, tx.Queries, tx.commanderID, commander.Level, config.Type, 1, 0, req.GetId()); err != nil {
-					return err
-				}
+			if offered, err = drawCommissions(tx.ctx, tx.Queries, tx.commanderID, commander.Level, []uint32{config.Type}, 1, 0, req.GetId()); err != nil {
+				return err
 			}
 		}
 		isCri := uint32(0)
