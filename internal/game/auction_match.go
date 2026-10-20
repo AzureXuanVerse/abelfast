@@ -433,8 +433,10 @@ func (match *auctionMatch) checkLoaded(out *auctionOutbox) {
 
 // startRound starts the next round's event phase (SC_23401).
 //
-// GUESS: the public event is any group 2 auction_event, the personal ones
-// three distinct group 1 events, drawn uniformly.
+// One group (public) event and three individual events per auction (wiki,
+// Recent News, Top Bidder, 16 July 2026). GUESS: the public event is any
+// group 2 auction_event, the personal ones three distinct group 1 events,
+// drawn uniformly (the wiki doesn't say how they are picked).
 func (match *auctionMatch) startRound(out *auctionOutbox) {
 	match.round++
 	match.phase = auctionEvents

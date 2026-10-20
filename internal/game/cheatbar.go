@@ -27,7 +27,9 @@ import (
 // player's cards (type 2): a card that is neither the real card nor a joker
 // makes the putter the liar. The liar, or the challenger when there was no
 // lie, spins the penalty roulette (type 3): bar_punishment_limit chambers,
-// one of them (drawn at random for the game) eliminates. A new round
+// one of them (drawn at random for the game) eliminates, so each spin
+// survived makes the next likelier to eliminate (wiki, Recent News,
+// Tactical Simulation, 9 April 2026). A new round
 // follows each spin; the last one standing wins. Every operation goes to
 // the table as SC_23105.
 //
