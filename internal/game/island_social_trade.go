@@ -35,6 +35,14 @@ const (
 	islandItemPearl = 9900
 )
 
+// The pearl trade's unlock (handleIslandTrade).
+const (
+	islandTradeUnlockLevel = 22
+	islandTradeUnlockTask  = 20017001
+	// IslandTaskConditionType.FINISH_TASK
+	islandConditionFinishTask = 2
+)
+
 const (
 	islandTradeDayStart = 3 * time.Hour
 	// the price trend shows the 6 days before today (CollectDate)
@@ -116,8 +124,13 @@ func islandTradeLatest(treasure *protobuf.PB_ISLAND_TREASURE) *protobuf.PB_TRE_H
 // handleIslandTrade answers IslandTradeCommand (CS_21240): buy (type 1) or
 // sell (type 2) num pearls at the price of the island the commander is on.
 // The client takes the funds (num times the purchase price) or the pearls
-// itself; the reply drops the pearls or the funds. GUESS: trading needs the
-// commander's island at treasure_unlock (20), as the market opens there.
+// itself; the reply drops the pearls or the funds. Trading needs the
+// commander's island at Development Lv. 22 and the "Research Into the Pearl
+// Trade" task done (wiki "Recent News", Season II notes; the client's
+// island_trade_activity_unlock tip says 22 too, island_set treasure_unlock's
+// 20 is not what players are told). That task is a chain of three
+// (island_task 20017001-20017003); the first one, after which Peary trades,
+// opens it.
 func (game *Game) handleIslandTrade(client *connection.Client, req *protobuf.CS_21240) error {
 	reply := &protobuf.SC_21241{}
 	islandID, num := req.GetIslandId(), req.GetNum()
@@ -135,7 +148,7 @@ func (game *Game) handleIslandTrade(client *connection.Client, req *protobuf.CS_
 		if err != nil {
 			return err
 		}
-		if market == nil || own.public().GetLevel() < islandSocialConfig.tradeUnlockLvl {
+		if market == nil || own.public().GetLevel() < islandTradeUnlockLevel || !islandConditionMet(own, []uint32{islandConditionFinishTask, islandTradeUnlockTask}) {
 			reply.Result = result(errRefused)
 			return nil
 		}

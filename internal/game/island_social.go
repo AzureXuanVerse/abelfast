@@ -152,23 +152,22 @@ func (tx *Tx) saveIsland(state *islandState) error {
 
 // islandSocialConfig is what the social side reads from the tables.
 var islandSocialConfig struct {
-	whiteListMax   uint32
-	giftCount      uint32 // supplies dropped by a sign-in (daily_gift_drop_num)
-	giftFetchMax   uint32 // supplies taken on other islands a day (daily_gift_get_max)
-	giftItem       uint32 // GUESS: the island item a supply holds (daily_gift)
-	agoraCost      [][3]uint32
-	themeMax       uint32
-	labelIDs       map[uint32]islandCardLabelConfig
-	photos         map[uint32]islandCardDiyConfig
-	defaultPhoto   uint32
-	cardAchvMax    uint32
-	achievements   map[uint32]islandAchievementCardConfig
-	abilities      map[uint32]islandAbilitySocialConfig
-	tradeBuy       uint32    // purchase price, % of the selling price
-	tradeLimit     [2]uint32 // pearls bought a week, sold to another island a day
-	tradeInitial   [2]uint32 // a day's selling price range
-	tradePriceCap  [2]uint32
-	tradeUnlockLvl uint32
+	whiteListMax  uint32
+	giftCount     uint32 // supplies dropped by a sign-in (daily_gift_drop_num)
+	giftFetchMax  uint32 // supplies taken on other islands a day (daily_gift_get_max)
+	giftItem      uint32 // GUESS: the island item a supply holds (daily_gift)
+	agoraCost     [][3]uint32
+	themeMax      uint32
+	labelIDs      map[uint32]islandCardLabelConfig
+	photos        map[uint32]islandCardDiyConfig
+	defaultPhoto  uint32
+	cardAchvMax   uint32
+	achievements  map[uint32]islandAchievementCardConfig
+	abilities     map[uint32]islandAbilitySocialConfig
+	tradeBuy      uint32    // purchase price, % of the selling price
+	tradeLimit    [2]uint32 // pearls bought a week, sold to another island a day
+	tradeInitial  [2]uint32 // a day's selling price range
+	tradePriceCap [2]uint32
 }
 
 type islandCardLabelConfig struct {
@@ -214,7 +213,6 @@ func loadIslandSocialData() error {
 	config.defaultPhoto = islandSetInt("island_card_photo_default")
 	config.cardAchvMax = islandSetInt("island_card_achievement_limit")
 	config.tradeBuy = islandSetInt("treasure_price_buy")
-	config.tradeUnlockLvl = islandSetInt("treasure_unlock")
 	// [[level, [type, id, count], capacity], ...]: the cost of each plaza
 	// upgrade from level (IslandAgoraAgency.consumeList)
 	var expansion [][]json.RawMessage
