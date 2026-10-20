@@ -314,7 +314,7 @@ func (game *Game) handleUpgradeStar(client *connection.Client, req *protobuf.CS_
 			return err
 		}
 		breakout, ok := breakouts[ship.TemplateID]
-		next, known := ownableShips[breakout.BreakoutID]
+		_, known := ownableShips[breakout.BreakoutID]
 		if !ok || breakout.BreakoutID == 0 || !known || specialShip(ship.TemplateID) || ship.Level < breakout.Level {
 			return errRefused
 		}
@@ -344,26 +344,39 @@ func (game *Game) handleUpgradeStar(client *connection.Client, req *protobuf.CS_
 		if err := tx.consumeShips(materials); err != nil {
 			return err
 		}
-		for _, skill := range next.Skills {
-			if err := tx.AddShipSkill(tx.ctx, db.AddShipSkillParams{ShipID: ship.ID, SkillID: skill, Level: 1}); err != nil {
-				return err
-			}
-		}
-		for _, skill := range ownableShips[ship.TemplateID].Skills {
-			if !slices.Contains(next.Skills, skill) {
-				if err := tx.DeleteShipSkill(tx.ctx, db.DeleteShipSkillParams{ShipID: ship.ID, SkillID: skill}); err != nil {
-					return err
-				}
-			}
-		}
-		ship.TemplateID = breakout.BreakoutID
-		ship.MaxLevel = max(min(shipConfigMaxLevel, next.MaxLevel), ship.MaxLevel)
-		return tx.saveShipGrowth(ship)
+		return tx.limitBreak(ship, breakout.BreakoutID)
 	})
 	if err != nil && !refused(err) {
 		return err
 	}
 	return client.Send(&protobuf.SC_12028{Result: result(err)})
+}
+
+// limitBreak moves ship to its limit broken template next, as the client
+// does on a limit break (UpgradeStarCommand, and ModBluePrintCommand's
+// upgradeStar for research ships): the skills of next's buff_list it lacks
+// at level 1, the skills only the old template had dropped, its max level
+// raised to next's (Ship:updateMaxLevel).
+func (tx *Tx) limitBreak(ship db.Ship, next uint32) error {
+	template, ok := ownableShips[next]
+	if !ok {
+		return errRefused
+	}
+	for _, skill := range template.Skills {
+		if err := tx.AddShipSkill(tx.ctx, db.AddShipSkillParams{ShipID: ship.ID, SkillID: skill, Level: 1}); err != nil {
+			return err
+		}
+	}
+	for _, skill := range ownableShips[ship.TemplateID].Skills {
+		if !slices.Contains(template.Skills, skill) {
+			if err := tx.DeleteShipSkill(tx.ctx, db.DeleteShipSkillParams{ShipID: ship.ID, SkillID: skill}); err != nil {
+				return err
+			}
+		}
+	}
+	ship.TemplateID = next
+	ship.MaxLevel = max(min(shipConfigMaxLevel, template.MaxLevel), ship.MaxLevel)
+	return tx.saveShipGrowth(ship)
 }
 
 // nextMaxLevel is Ship:getNextMaxLevel: the first ship_level level_limit

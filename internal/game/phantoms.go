@@ -88,10 +88,10 @@ func (game *Game) handleGetPhantomQuestProgress(client *connection.Client, req *
 // wearing its default skin (BayProxy.updateShipSkin); SHIPINFO
 // skin_shadow_list sends it back. It is refused unless the ship is the
 // commander's research ship at technology_shadow_unlock_lv, the shadow isn't
-// unlocked yet and the quest's target is reached. belfast keeps no research
-// progress nor victory counts: the type 2 and 3 quests can't be verified and
-// are refused. No official capture has it: the reply is built from the Lua
-// alone.
+// unlocked yet and the quest's target is reached (type 2: the development
+// level, fate phases included, of the ship's strength_list). belfast keeps
+// no victory counts: the type 3 quest can't be verified and is refused. No
+// official capture has it: the reply is built from the Lua alone.
 func (game *Game) handleFinishPhantomQuest(client *connection.Client, req *protobuf.CS_12210) error {
 	ctx := context.Background()
 	err := game.tx(ctx, client, func(tx *Tx) error {
@@ -111,6 +111,18 @@ func (game *Game) handleFinishPhantomQuest(client *connection.Client, req *proto
 		switch quest.Type {
 		case phantomQuestShipLevel:
 			if ship.Level < quest.TargetNum {
+				return errRefused
+			}
+		case phantomQuestBlueprintLevel:
+			config, ok := blueprintConfigs[shipGroup(ship.TemplateID)]
+			if !ok {
+				return errRefused
+			}
+			progress, err := shipBlueprintProgress(ctx, tx.Queries, config, ship.ID)
+			if err != nil {
+				return err
+			}
+			if progress.stored() < quest.TargetNum {
 				return errRefused
 			}
 		case phantomQuestOath:

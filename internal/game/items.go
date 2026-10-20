@@ -35,6 +35,7 @@ const (
 	usageShipGift       = "usage_favorability"
 	usageGuildDonate    = "usage_guild_donate"
 	usageGuildOperation = "usage_guild_operation"
+	usageBlueprint      = "usage_blueprint"
 )
 
 // itemUseConfig is what item_data_statistics says about using an item.
@@ -73,6 +74,9 @@ type itemUse struct {
 	affection uint32
 	// the skin items' usage_arg (skinitems.go)
 	skin skinUse
+	// usage_blueprint: the development exp one research ship blueprint
+	// gives (ShipBluePrint:getItemExp, usage_arg[1])
+	blueprintExp uint32
 }
 
 var itemUses map[uint32]itemUse
@@ -308,6 +312,10 @@ func readItemUses(items map[uint32]itemConfig, gear []packGear, gametip map[stri
 			}
 		case usageShipGift:
 			use.affection = readShipGift(row.UsageArg)
+		case usageBlueprint:
+			if exp := gamedata.IDs(row.UsageArg); len(exp) > 0 {
+				use.blueprintExp = exp[0]
+			}
 		case usageRandomSkin, usageSkinSelect, usageSkinDiscount, usageSkinExp:
 			use.skin = readSkinUse(row, icons, items)
 		}

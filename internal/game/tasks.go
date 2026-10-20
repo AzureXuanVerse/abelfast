@@ -117,7 +117,11 @@ type TaskEvent struct {
 	Count   uint32 // amount to add, or the new value for absolute sub types
 }
 
-// taskList is SC_20001, TaskProxy's tasks.
+// taskList is SC_20001, TaskProxy's tasks: the running ones, then the
+// research ships' claimed ones with their submit_time, which TaskProxy
+// keeps as finished (initTaskInfo's finishData): the Dev. Dock reads a
+// research's state from them (ShipBluePrint:getTaskStateById,
+// isFinishPrevTask).
 func taskList(ctx context.Context, queries *db.Queries, commanderID uint32) (*protobuf.SC_20001, error) {
 	tasks, err := queries.ListTasks(ctx, commanderID)
 	if err != nil {
@@ -129,6 +133,20 @@ func taskList(ctx context.Context, queries *db.Queries, commanderID uint32) (*pr
 			Id:         proto.Uint32(task.TaskID),
 			Progress:   proto.Uint32(task.Progress),
 			AcceptTime: proto.Uint32(task.AcceptTime),
+		}
+	}
+	claimed, err := queries.ListSubmittedTasks(ctx, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	for _, task := range claimed {
+		if blueprintTask(task.TaskID) {
+			msg.Info = append(msg.Info, &protobuf.TASKINFO{
+				Id:         proto.Uint32(task.TaskID),
+				Progress:   proto.Uint32(task.Progress),
+				AcceptTime: proto.Uint32(task.AcceptTime),
+				SubmitTime: proto.Uint32(task.SubmitTime),
+			})
 		}
 	}
 	return msg, nil
@@ -504,6 +522,14 @@ func (game *Game) applyTaskEvents(ctx context.Context, queries *db.Queries, comm
 		if len(unlocked) > 0 {
 			pushes = append(pushes, &protobuf.SC_20103{Id: unlocked})
 		}
+		// the research ships' opening tasks of the level
+		opened, err := acceptTasks(ctx, queries, commanderID, blueprintOpenTasksAt(level), uint32(time.Now().Unix()))
+		if err != nil {
+			return nil, err
+		}
+		if opened != nil {
+			pushes = append(pushes, opened)
+		}
 	}
 
 	// the same for the open activities' tasks
@@ -669,10 +695,10 @@ func (game *Game) handleSubmitTask(client *connection.Client, req *protobuf.CS_2
 		return client.Send(&protobuf.SC_20006{Result: result(errRefused)})
 	}
 	awards, err := game.claimTasks(ctx, client, []taskClaimed{claim}, nil)
-	if err != nil {
+	if err != nil && !refused(err) {
 		return err
 	}
-	return client.Send(&protobuf.SC_20006{Result: result(nil), AwardList: awards})
+	return client.Send(&protobuf.SC_20006{Result: result(err), AwardList: awards})
 }
 
 // handleSubmitTasks claims several finished tasks at once
@@ -694,7 +720,10 @@ func (game *Game) handleSubmitTasks(client *connection.Client, req *protobuf.CS_
 		}
 	}
 	awards, err := game.claimTasks(ctx, client, claims, nil)
-	if err != nil {
+	if refused(err) {
+		// a "Gather" task the commander can't pay: nothing claimed
+		return client.Send(&protobuf.SC_20012{})
+	} else if err != nil {
 		return err
 	}
 	reply.AwardList = awards
@@ -718,7 +747,9 @@ func (game *Game) taskClaim(ctx context.Context, commanderID, id uint32) (taskCl
 	if err != nil {
 		return taskClaimed{}, false, err
 	}
-	ok = ok && task.SubmitTime == 0 && task.Progress >= config.TargetNum
+	// a "Gather" task's progress is what the commander owns, paid on claim
+	reached := task.Progress >= config.TargetNum || taskGiveCost(config) != nil
+	ok = ok && task.SubmitTime == 0 && reached
 	return taskClaimed{task: task, config: config, drops: config.awards}, ok, nil
 }
 
@@ -742,6 +773,11 @@ func (game *Game) claimTasks(ctx context.Context, client *connection.Client, cla
 		for _, claim := range claims {
 			if _, err := tx.SubmitTask(ctx, db.SubmitTaskParams{SubmitTime: now, CommanderID: client.CommanderID, TaskID: claim.task.TaskID}); err != nil {
 				return err
+			}
+			if cost := taskGiveCost(claim.config); cost != nil {
+				if err := tx.payDrops([][]uint32{cost}); err != nil {
+					return err
+				}
 			}
 			drops := configDrops(claim.drops)
 			guildDrops, notices, err := game.guildTaskClaimed(tx, claim.task.TaskID, claim.config)

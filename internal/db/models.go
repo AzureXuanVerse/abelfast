@@ -207,6 +207,22 @@ type CommanderAppreciation struct {
 	ItemID      uint32
 }
 
+type CommanderBlueprint struct {
+	CommanderID uint32
+	BlueprintID uint32
+	ShipID      uint32
+	StartTime   int64
+	Duration    int64
+}
+
+type CommanderBlueprintState struct {
+	CommanderID uint32
+	ColdTime    int64
+	PursueDay   int64
+	Pursued     uint32
+	PursuedUr   uint32
+}
+
 type CommanderBuildState struct {
 	CommanderID   uint32
 	ExchangeCount uint32

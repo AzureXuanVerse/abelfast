@@ -29,8 +29,8 @@ var generalBlueprints = sync.OnceValues(func() ([]uint32, error) {
 // the client removes that entry's items and adds its drop_list
 // (PlayerConst.addTranDrop). Each entry is its own transaction, so one
 // turned down leaves the others. The view caps the count at what the ship's
-// research still needs (getUseageMaxItem); belfast keeps no research
-// progress, so that cap is the client's alone. No official capture has it:
+// research still needs (getUseageMaxItem); that cap is the client's
+// alone. No official capture has it:
 // the reply is built from the Lua alone.
 func (game *Game) handleQuickExchangeBlueprint(client *connection.Client, req *protobuf.CS_15012) error {
 	ctx := context.Background()

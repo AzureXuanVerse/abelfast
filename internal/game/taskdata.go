@@ -21,6 +21,8 @@ type taskConfig struct {
 	AwardChoice  json.RawMessage `json:"award_choice"`
 	NextTask     json.RawMessage `json:"next_task"`
 	AutoCommit   uint32          `json:"auto_commit"`
+	// tasks to claim before it can be accepted (TaskProxy:isFinishPrevTasks)
+	OpenNeed json.RawMessage `json:"open_need"`
 	// cruise mission vouchers (QUICK_TASK_PASS_TICKET_ID) finishing the
 	// task at once costs, 0 when it can't be (QuickTaskCommand)
 	QuickFinish uint32 `json:"quick_finish"`

@@ -877,14 +877,20 @@ func (game *Game) handleGuildRank(client *connection.Client, req *protobuf.CS_62
 
 // handleTriggerTask answers TriggerTaskCommand (CS_20007) for the guild
 // mission's personal task (GuildOfficeMediator.ON_ACCEPT_TASK): it is given
-// again once claimed, the week's mission counting each completion. Other
-// tasks the client triggers (technology, blueprints...) are refused for now.
-// The client adds the task at progress 0 itself.
+// again once claimed, the week's mission counting each completion; and for a
+// research ship's task (triggerBlueprintTask). Other tasks the client
+// triggers are refused for now. The client adds the task at progress 0
+// itself.
 func (game *Game) handleTriggerTask(client *connection.Client, req *protobuf.CS_20007) error {
 	ctx := context.Background()
 	now := serverNow()
 	reply := &protobuf.SC_20008{}
 	err := game.tx(ctx, client, func(tx *Tx) error {
+		if _, ok := blueprintOfTask[req.GetId()]; ok {
+			var err error
+			reply.Task, err = tx.triggerBlueprintTask(req.GetId(), now)
+			return err
+		}
 		member, ok, err := guildMembership(ctx, tx.Queries, client.CommanderID)
 		if err != nil {
 			return err

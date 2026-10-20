@@ -248,6 +248,14 @@ func (game *Game) Register() {
 	packets.Handle(game.handleQuickExchangeBlueprint)
 	packets.Handle(game.handleGetPhantomQuestProgress)
 	packets.Handle(game.handleFinishPhantomQuest)
+	// research ships (Dev. Dock)
+	packets.Handle(game.handleStartBlueprint)
+	packets.Handle(game.handleFinishBlueprint)
+	packets.Handle(game.handleModBlueprint)
+	packets.Handle(game.handleStopBlueprint)
+	packets.Handle(game.handleBlueprintSpeedup)
+	packets.Handle(game.handlePursueBlueprint)
+	packets.Handle(game.handleItemUnlockBlueprint)
 	packets.Handle(game.handleUseShipExpBooks)
 	packets.Handle(game.handleExchangeRing)
 	packets.Handle(game.handleComposeItem)
@@ -475,8 +483,10 @@ var loginBurst = []loginPush{
 	},
 	// TechnologyProxy: the research projects, queue and catch-up
 	func(game *Game, l *login) (proto.Message, error) { return game.researchLoginPush(l) },
-	// TechnologyProxy blueprints (PR ships): none
-	empty[protobuf.SC_63100](),
+	// TechnologyProxy: the research ships (PR / DR)
+	func(game *Game, l *login) (proto.Message, error) {
+		return blueprintList(l.ctx, l.queries, l.commander.ID, l.now)
+	},
 	// TechnologyNationProxy: Fleet Technology
 	func(game *Game, l *login) (proto.Message, error) {
 		return fleetTechState(l.ctx, l.queries, l.commander.ID)
@@ -566,6 +576,11 @@ func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.
 	}
 	now := time.Now()
 	if err := expireSkins(ctx, game.DB, commander.ID, now); err != nil {
+		return err
+	}
+	// the research ships' opening tasks first: syncTechPoints brings them
+	// to the commander's points
+	if err := game.syncBlueprintTasks(ctx, commander.ID, commander.Level); err != nil {
 		return err
 	}
 	if err := game.syncTechPoints(ctx, commander.ID); err != nil {

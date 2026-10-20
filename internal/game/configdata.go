@@ -58,6 +58,7 @@ func loadGameData() error {
 		loadWorldTaskData,
 		loadWorldSirenData,
 		loadPhantomQuestData,
+		loadBlueprintData,
 		loadRemasterData,
 		loadAppreciationData,
 		loadVoteData,
