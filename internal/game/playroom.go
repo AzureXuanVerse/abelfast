@@ -799,6 +799,7 @@ func (game *Game) leavePlayRoom(box *playOutbox, id uint32, now time.Time) uint3
 		game.breakTable(box, room, map[uint32]bool{id: true}, id)
 	case playLoading:
 		delete(pr.of, id)
+		pr.handOver(box, room, id)
 		room.loads[id] = 100
 		game.quitRanked(box, room, id, now)
 		if !game.anyonePlaying(room) {
@@ -808,6 +809,7 @@ func (game *Game) leavePlayRoom(box *playOutbox, id uint32, now time.Time) uint3
 		}
 	case playPlaying:
 		delete(pr.of, id)
+		pr.handOver(box, room, id)
 		if room.game != nil {
 			if seat := room.game.seatOf(id); seat != nil && !seat.out {
 				room.game.delegate(box, id)
@@ -822,6 +824,25 @@ func (game *Game) leavePlayRoom(box *playOutbox, id uint32, now time.Time) uint3
 		}
 	}
 	return pr.cooldown(id, now)
+}
+
+// handOver keys a game's room under another commander still in it when its
+// host id leaves for good: the room id is the host's (PlayRoomTools
+// GetHostID), and the host may open a room of its own, which would take
+// the key and leave the game unticked.
+func (pr *playRooms) handOver(box *playOutbox, room *playRoom, id uint32) {
+	if room.id != id || pr.rooms[room.id] != room {
+		return
+	}
+	for _, other := range room.humans() {
+		if other != id && pr.of[other] == room {
+			delete(pr.rooms, room.id)
+			room.id = other
+			pr.rooms[other] = room
+			room.tellRoom(box, id)
+			return
+		}
+	}
 }
 
 // quitRanked charges a commander leaving a ranked game: the last rank's
