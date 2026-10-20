@@ -452,8 +452,8 @@ func researchUnits(config researchConfig, kind, id uint32) uint32 {
 // drop_client, each random placeholder drawn (resolveContent) per unit,
 // the "Coins" placeholder as coins (guessed 100 per hour of the project)
 // and the "Random Gear Design T2" one among the Elite designs, plus
-// Specialized Cores (wiki: by the hours the project takes; guessed one per
-// hour).
+// Specialized Cores, one per 30 minutes of the project (wiki, Core Shop:
+// Specialized Core Collection Plan, "Research Academy: Per 30 mins 1").
 func researchDrops(config researchConfig) []*protobuf.DROPINFO {
 	var drops []*protobuf.DROPINFO
 	for _, entry := range config.DropClient {
@@ -479,7 +479,7 @@ func researchDrops(config researchConfig) []*protobuf.DROPINFO {
 			}
 		}
 	}
-	return mergeDrop(drops, dropTypeVItem, vitemSpecializedCore, max(1, config.Time/3600))
+	return mergeDrop(drops, dropTypeVItem, vitemSpecializedCore, max(1, config.Time/1800))
 }
 
 // researchCatchupDrop is the catch-up blueprints a claimed project adds
