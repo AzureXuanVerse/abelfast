@@ -92,6 +92,17 @@ func (q *Queries) CountShipGroups(ctx context.Context, commanderID uint32) (int6
 	return count, err
 }
 
+const countShipsByCommander = `-- name: CountShipsByCommander :one
+SELECT COUNT(*) FROM ships WHERE commander_id = ?
+`
+
+func (q *Queries) CountShipsByCommander(ctx context.Context, commanderID uint32) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countShipsByCommander, commanderID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createShip = `-- name: CreateShip :one
 INSERT INTO ships (commander_id, template_id, level, exp, energy, intimacy, max_level, is_locked, created_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)

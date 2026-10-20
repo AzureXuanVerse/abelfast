@@ -61,6 +61,7 @@ func loadGameData() error {
 		loadBlueprintData,
 		loadRemasterData,
 		loadAppreciationData,
+		loadAttireData,
 		loadVoteData,
 	)
 }

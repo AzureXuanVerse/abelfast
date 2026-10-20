@@ -600,3 +600,15 @@ func setShipTrophies(ctx context.Context, queries *db.Queries, commanderID uint3
 	}
 	return nil
 }
+
+// handleShipCount answers GetShipCntCommand (MainCheckShipNumSequence, on
+// entering the main scene): how many ships the server keeps, as in
+// SC_11003.ship_count. More than the dock the client loaded makes it show
+// dockyard_data_loss_detected and log out.
+func (game *Game) handleShipCount(client *connection.Client, req *protobuf.CS_11800) error {
+	count, err := game.DB.CountShipsByCommander(context.Background(), client.CommanderID)
+	if err != nil {
+		return err
+	}
+	return client.Send(&protobuf.SC_11801{ShipCount: proto.Uint32(uint32(count))})
+}

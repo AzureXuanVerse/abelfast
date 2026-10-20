@@ -110,7 +110,7 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 			if err := tx.AddVirtualItem(id, count); err != nil {
 				return err
 			}
-		case kind == dropTypeIconFrame || kind == dropTypeChatFrame:
+		case kind == dropTypeIconFrame || kind == dropTypeChatFrame || kind == dropTypeCover || kind == dropTypeCombatUI:
 			if err := tx.addAttireFrame(kind, id); err != nil {
 				return err
 			}

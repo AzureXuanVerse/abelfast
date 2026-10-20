@@ -51,19 +51,28 @@ var (
 // skin its skin, marry_flag its oath time (PlayerAttire.proposeTime).
 // transform_flag stays 0, retrofits aren't kept. Without a secretary, or
 // when it can't be read, the starter ship (a new account's capture).
+// icon_frame and chat_frame are the frames applied (CS_11005), read by
+// PlayerAttire into the portrait's and the chat bubbles' frames.
 func (game *Game) displayInfo(commander db.Commander) *protobuf.DISPLAYINFO {
-	flagship, err := game.DB.GetFlagshipDisplay(context.Background(), commander.ID)
+	ctx := context.Background()
+	display := &protobuf.DISPLAYINFO{Icon: proto.Uint32(commander.StarterShip)}
+	if look, err := appearance(ctx, game.DB.Queries, commander.ID); err != nil {
+		logger.WithFields("Friend", logger.FieldValue("commander", commander.ID)).Warn("appearance unreadable: " + err.Error())
+	} else {
+		display.IconFrame = proto.Uint32(look.IconFrame)
+		display.ChatFrame = proto.Uint32(look.ChatFrame)
+	}
+	flagship, err := game.DB.GetFlagshipDisplay(ctx, commander.ID)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			logger.WithFields("Friend", logger.FieldValue("commander", commander.ID)).Warn("flagship unreadable: " + err.Error())
 		}
-		return &protobuf.DISPLAYINFO{Icon: proto.Uint32(commander.StarterShip)}
+		return display
 	}
-	return &protobuf.DISPLAYINFO{
-		Icon:      proto.Uint32(flagship.TemplateID),
-		Skin:      proto.Uint32(flagship.SkinID),
-		MarryFlag: proto.Uint32(flagship.Propose),
-	}
+	display.Icon = proto.Uint32(flagship.TemplateID)
+	display.Skin = proto.Uint32(flagship.SkinID)
+	display.MarryFlag = proto.Uint32(flagship.Propose)
+	return display
 }
 
 // playerInfoP50 is a commander as a world chat sender, a friend request or

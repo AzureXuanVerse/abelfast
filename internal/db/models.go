@@ -201,6 +201,17 @@ type CommanderActivityTask struct {
 	Finished    bool
 }
 
+type CommanderAppearance struct {
+	CommanderID    uint32
+	IconFrame      uint32
+	ChatFrame      uint32
+	BattleUi       uint32
+	Cover          uint32
+	LoadingPicOpen bool
+	GalleryPics    IDList
+	MangaPics      IDList
+}
+
 type CommanderAppreciation struct {
 	CommanderID uint32
 	Kind        uint32
@@ -447,6 +458,15 @@ type CommanderResource struct {
 	CommanderID uint32
 	ResourceID  uint32
 	Amount      uint32
+}
+
+type CommanderSecondaryPassword struct {
+	CommanderID  uint32
+	PasswordHash string
+	Notice       string
+	SystemList   IDList
+	FailCount    uint32
+	FailCd       int64
 }
 
 type CommanderSecretary struct {

@@ -49,3 +49,12 @@ sql:
           - column: guild_capital_logs.event_target
             go_type:
               type: IDList
+          - column: commander_appearance.gallery_pics
+            go_type:
+              type: IDList
+          - column: commander_appearance.manga_pics
+            go_type:
+              type: IDList
+          - column: commander_secondary_passwords.system_list
+            go_type:
+              type: IDList

@@ -72,3 +72,6 @@ ON CONFLICT (commander_id, trophy_id) DO UPDATE SET progress = excluded.progress
 
 -- name: SetShipSkin :exec
 UPDATE ships SET skin_id = ? WHERE id = ? AND commander_id = ?;
+
+-- name: CountShipsByCommander :one
+SELECT COUNT(*) FROM ships WHERE commander_id = ?;

@@ -13,17 +13,6 @@ import (
 // maxChatRoom is the highest world chat room ChangeChatRoomCommand allows.
 const maxChatRoom = 99
 
-// handleSecondaryPassword answers FetchSecondaryPasswordCommand, which keeps
-// a loading overlay up until it gets a reply: no secondary password set, no
-// failed attempts.
-func (game *Game) handleSecondaryPassword(client *connection.Client, req *protobuf.CS_11603) error {
-	return client.Send(&protobuf.SC_11604{
-		FailCount: proto.Uint32(0),
-		FailCd:    proto.Uint32(0),
-		Notice:    proto.String(""),
-	})
-}
-
 // handleChangeChatRoom answers ChangeChatRoomCommand, moving the commander
 // to another world chat room (1 to 99); it comes back in
 // SC_11003.chat_room_id. Room 0 asks the server to pick one: ConnectionMgr

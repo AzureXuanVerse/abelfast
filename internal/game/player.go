@@ -134,7 +134,11 @@ func (game *Game) playerInfo(ctx context.Context, commander db.Commander, ships 
 	if err != nil {
 		return nil, err
 	}
-	iconFrames, chatFrames, err := attireFrames(ctx, game.DB.Queries, commander.ID)
+	owned, err := attireFrames(ctx, game.DB.Queries, commander.ID)
+	if err != nil {
+		return nil, err
+	}
+	look, err := appearance(ctx, game.DB.Queries, commander.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +172,12 @@ func (game *Game) playerInfo(ctx context.Context, commander db.Commander, ships 
 		CommanderBagMax:    proto.Uint32(commander.CommanderBagMax),
 		Display:            game.displayInfo(commander),
 		MailStoreroomLv:    proto.Uint32(commander.MailStoreroomLv),
-		BattleUi:           proto.Uint32(0), // item_data_battleui "Standard"
+		BattleUiList:       owned.combatUIs,
+		BattleUi:           proto.Uint32(look.BattleUi), // CS_11005 type 4
+		Cover:              &protobuf.LIVINGAREA_COVER{Id: proto.Uint32(look.Cover), Covers: owned.covers},
+		LoadingPicOpenFlag: proto.Uint32(boolFlag(look.LoadingPicOpen)),
+		LoadingPicIdList_1: look.GalleryPics,
+		LoadingPicIdList_2: look.MangaPics,
 		NewGuideIndex:      proto.Uint32(commander.NewGuideIndex),
 		StoryList:          stories,
 		FlagList:           flags,
@@ -177,8 +186,8 @@ func (game *Game) playerInfo(ctx context.Context, commander db.Commander, ships 
 		CdList:             cds,
 		Soundstory:         cryptolalia,
 		GuildWaitTime:      proto.Uint32(guildWait),
-		IconFrameList:      iconFrames,
-		ChatFrameList:      chatFrames,
+		IconFrameList:      owned.icons,
+		ChatFrameList:      owned.chats,
 		MarryShip:          proto.Uint32(commander.MarryShip),
 		MedalId:            medals,
 		Appreciation:       appreciation,

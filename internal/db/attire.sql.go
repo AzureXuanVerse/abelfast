@@ -24,6 +24,23 @@ func (q *Queries) AddAttireFrame(ctx context.Context, arg AddAttireFrameParams) 
 	return err
 }
 
+const hasAttireFrame = `-- name: HasAttireFrame :one
+SELECT EXISTS (SELECT 1 FROM attire_frames WHERE commander_id = ? AND drop_type = ? AND frame_id = ?)
+`
+
+type HasAttireFrameParams struct {
+	CommanderID uint32
+	DropType    uint32
+	FrameID     uint32
+}
+
+func (q *Queries) HasAttireFrame(ctx context.Context, arg HasAttireFrameParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, hasAttireFrame, arg.CommanderID, arg.DropType, arg.FrameID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const listAttireFrames = `-- name: ListAttireFrames :many
 SELECT commander_id, drop_type, frame_id FROM attire_frames WHERE commander_id = ? ORDER BY drop_type, frame_id
 `

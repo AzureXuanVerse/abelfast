@@ -19,6 +19,8 @@ type Game struct {
 	DB *db.Store
 
 	online online // the commanders playing, see connect
+	// who entered their secondary password since logging in
+	secondaryUnlocks secondaryUnlocks
 }
 
 // StartCommander creates what a new commander starts with (CS_10024), in
@@ -89,6 +91,16 @@ func (game *Game) Register() {
 	packets.Handle(game.handleHarvestResource)
 	packets.Handle(game.handleHarvestClassResource)
 	packets.Handle(game.handleSecondaryPassword)
+	packets.Handle(game.handleSetSecondaryPassword)
+	packets.Handle(game.handleSecondaryPasswordSettings)
+	packets.Handle(game.handleConfirmSecondaryPassword)
+	packets.Handle(game.handleAttireApply)
+	packets.Handle(game.handleCancelCommonFlag)
+	packets.Handle(game.handleChangeCover)
+	packets.Handle(game.handleStoryList)
+	packets.Handle(game.handleLoadingPics)
+	packets.Handle(game.handleShipCount)
+	packets.Handle(game.handleGMCommand)
 	packets.Handle(game.handleChangeChatRoom)
 	packets.Handle(game.handleClientReport)
 	// Operation Siren: state, activation, maps, stamina
@@ -575,6 +587,11 @@ func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.
 		return err
 	}
 	now := time.Now()
+	if req.GetTimestamp() == 0 {
+		// a login, not a reconnect (timestamp 1): the secondary password
+		// is asked again
+		game.setSecondaryUnlocked(commander.ID, false)
+	}
 	if err := expireSkins(ctx, game.DB, commander.ID, now); err != nil {
 		return err
 	}

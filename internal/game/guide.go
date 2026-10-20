@@ -35,3 +35,30 @@ func (game *Game) handleCommonFlag(client *connection.Client, req *protobuf.CS_1
 	}
 	return client.Send(&protobuf.SC_11020{Result: result(nil)})
 }
+
+// handleStoryList marks several stories as seen at once
+// (UpdateStoryListCommand, the stories the client hasn't played yet); they
+// come back in SC_11003.story_list like CS_11017's.
+func (game *Game) handleStoryList(client *connection.Client, req *protobuf.CS_11032) error {
+	err := game.DB.InTx(context.Background(), func(queries *db.Queries) error {
+		for _, id := range req.GetStoryIds() {
+			if err := queries.AddStory(context.Background(), db.AddStoryParams{CommanderID: client.CommanderID, StoryID: id}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return client.Send(&protobuf.SC_11033{Result: result(nil)})
+}
+
+// handleCancelCommonFlag clears a client flag set by CS_11019
+// (CancelCommonFlagCommand); the client drops it whatever the result.
+func (game *Game) handleCancelCommonFlag(client *connection.Client, req *protobuf.CS_11021) error {
+	if err := game.DB.DeleteCommonFlag(context.Background(), db.DeleteCommonFlagParams{CommanderID: client.CommanderID, FlagID: req.GetFlagId()}); err != nil {
+		return err
+	}
+	return client.Send(&protobuf.SC_11022{Result: result(nil)})
+}
