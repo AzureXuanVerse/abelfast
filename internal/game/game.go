@@ -211,6 +211,8 @@ func (game *Game) Register() {
 	packets.HandleLenient(game.handleSellItems)
 	packets.Handle(game.handleUseItem)
 	packets.Handle(game.handleQuickExchangeBlueprint)
+	packets.Handle(game.handleGetPhantomQuestProgress)
+	packets.Handle(game.handleFinishPhantomQuest)
 	packets.Handle(game.handleUseShipExpBooks)
 	packets.Handle(game.handleExchangeRing)
 	packets.Handle(game.handleComposeItem)

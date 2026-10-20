@@ -119,11 +119,14 @@ func skinList(ctx context.Context, queries *db.Queries, commanderID uint32, now 
 }
 
 // expireSkins forgets the commander's time-limited skins that ran out, and
-// puts the ships that wore them back in their default skin, as the client
-// did when they ran out (ShipSkinProxy:addExpireTimer).
+// puts the ships and skin shadows that wore them back in their default skin,
+// as the client did when they ran out (ShipSkinProxy:addExpireTimer).
 func expireSkins(ctx context.Context, store *db.Store, commanderID uint32, now time.Time) error {
 	return store.InTx(ctx, func(queries *db.Queries) error {
 		if err := queries.ResetExpiredShipSkins(ctx, db.ResetExpiredShipSkinsParams{CommanderID: commanderID, Now: now.Unix()}); err != nil {
+			return err
+		}
+		if err := queries.ResetExpiredShadowSkins(ctx, db.ResetExpiredShadowSkinsParams{CommanderID: commanderID, Now: now.Unix()}); err != nil {
 			return err
 		}
 		return queries.DeleteExpiredSkins(ctx, db.DeleteExpiredSkinsParams{CommanderID: commanderID, Now: now.Unix()})
@@ -198,9 +201,10 @@ func (tx *Tx) buySkin(goods shopGoods, count uint32, now time.Time) error {
 // skin_id 0 for its default one. The client sends one per ship when a skin is
 // put on several ships at once (ChangeShipSkinPage), and the main skin of a
 // change skin. On result 0 it updates the ship, and the secretary when it is
-// that ship, itself. The shadow skins (skin_shadow, technology phantoms)
-// aren't kept and are refused. No official capture has it: the reply is
-// built from the Lua alone.
+// that ship, itself. A non-zero skin_shadow puts it on one of the ship's
+// unlocked skin shadows (technology phantoms, CS_12210) instead, under the
+// same rules (BayProxy.CanUseShareSkinPhantoms). No official capture has it:
+// the reply is built from the Lua alone.
 func (game *Game) handleSetShipSkin(client *connection.Client, req *protobuf.CS_12202) error {
 	ctx := context.Background()
 	err := game.tx(ctx, client, func(tx *Tx) error {
@@ -212,12 +216,9 @@ func (game *Game) handleSetShipSkin(client *connection.Client, req *protobuf.CS_
 	return client.Send(&protobuf.SC_12203{Result: result(err)})
 }
 
-// setShipSkin puts a skin on one of the commander's ships if ShipFashionView
-// lets it wear it.
+// setShipSkin puts a skin on one of the commander's ships, or on its skin
+// shadow shadow when it isn't 0, if ShipFashionView lets it wear it.
 func (tx *Tx) setShipSkin(shipID, skinID, shadow uint32, now time.Time) error {
-	if shadow != 0 {
-		return errRefused
-	}
 	ship, err := tx.GetShip(tx.ctx, db.GetShipParams{ID: shipID, CommanderID: tx.commanderID})
 	if errors.Is(err, sql.ErrNoRows) {
 		return errRefused
@@ -230,6 +231,13 @@ func (tx *Tx) setShipSkin(shipID, skinID, shadow uint32, now time.Time) error {
 		}
 	} else {
 		skinID = 0
+	}
+	if shadow != 0 {
+		updated, err := tx.SetShipSkinShadowSkin(tx.ctx, db.SetShipSkinShadowSkinParams{SkinID: skinID, ShipID: shipID, ShadowID: shadow})
+		if err == nil && updated == 0 {
+			err = errRefused // not one of its unlocked shadows
+		}
+		return err
 	}
 	return tx.SetShipSkin(tx.ctx, db.SetShipSkinParams{SkinID: skinID, ID: shipID, CommanderID: tx.commanderID})
 }

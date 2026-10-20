@@ -969,6 +969,12 @@ type ShipSkill struct {
 	Exp     uint32
 }
 
+type ShipSkinShadow struct {
+	ShipID   uint32
+	ShadowID uint32
+	SkinID   uint32
+}
+
 type ShipSpweapon struct {
 	ShipID     uint32
 	SpweaponID uint32

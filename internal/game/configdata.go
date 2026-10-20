@@ -55,5 +55,6 @@ func loadGameData() error {
 		loadWorldItemData,
 		loadWorldTaskData,
 		loadWorldSirenData,
+		loadPhantomQuestData,
 	)
 }

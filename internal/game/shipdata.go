@@ -52,6 +52,8 @@ type shipTemplate struct {
 	// 2) or META (Ship:isMetaShip, a ship_meta_breakout id) ship, which
 	// ShipStatus.canDestroyShip never lets retire
 	unretirable bool
+	// a research (blueprint) ship, Ship:isBluePrintShip
+	blueprint bool
 	// its ship_data_statistics skin_id, the skin it wears by default
 	defaultSkin uint32
 }
@@ -497,7 +499,8 @@ func loadShipData() error {
 		row.Rarity, row.Nationality, row.Type = stat.Rarity, stat.Nationality, stat.Type
 		row.locked = stat.Lock
 		_, meta := metas[id]
-		row.unretirable = meta || blueprints[id/10]
+		row.blueprint = blueprints[id/10]
+		row.unretirable = meta || row.blueprint
 		row.defaultSkin = stat.SkinID
 		if id%10 == 1 {
 			shipTemplates[id] = row

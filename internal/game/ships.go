@@ -149,7 +149,7 @@ func fullShipInfo(ship db.Ship, equips []db.ShipEquipment, skills []db.ShipSkill
 
 // shipList is SC_12001, BayProxy's ships: the SHIPINFO of each of ships
 // (the commander's, by id) with their slots, skills, enhancements,
-// retrofits and augments.
+// retrofits, augments and unlocked skin shadows.
 func shipList(ctx context.Context, queries *db.Queries, commanderID uint32, ships []db.Ship) (*protobuf.SC_12001, error) {
 	equips, err := queries.ListShipEquipmentsByCommander(ctx, commanderID)
 	if err != nil {
@@ -183,11 +183,20 @@ func shipList(ctx context.Context, queries *db.Queries, commanderID uint32, ship
 	for _, skill := range skills {
 		skillsByShip[skill.ShipID] = append(skillsByShip[skill.ShipID], skill)
 	}
+	shadows, err := queries.ListShipSkinShadowsByCommander(ctx, commanderID)
+	if err != nil {
+		return nil, err
+	}
+	shadowsByShip := map[uint32][]db.ShipSkinShadow{}
+	for _, shadow := range shadows {
+		shadowsByShip[shadow.ShipID] = append(shadowsByShip[shadow.ShipID], shadow)
+	}
 	msg := &protobuf.SC_12001{Shiplist: make([]*protobuf.SHIPINFO, len(ships))}
 	for i, ship := range ships {
 		msg.Shiplist[i] = fullShipInfo(ship, equipsByShip[ship.ID], skillsByShip[ship.ID])
 		msg.Shiplist[i].StrengthList = strengthInfo(strengthsByShip[ship.ID])
 		msg.Shiplist[i].TransformList = transformInfo(transformsByShip[ship.ID])
+		msg.Shiplist[i].SkinShadowList = skinShadowList(shadowsByShip[ship.ID])
 	}
 	if err := setShipSpWeapons(ctx, queries, commanderID, msg.Shiplist); err != nil {
 		return nil, err

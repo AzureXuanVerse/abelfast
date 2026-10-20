@@ -42,24 +42,30 @@ func (game *Game) handleChangeSecretaries(client *connection.Client, req *protob
 		if len(characters) == 0 || len(characters) > limit {
 			return errRefused
 		}
-		seen := map[uint32]bool{}
+		seen := map[[2]uint32]bool{} // ShipPhantom.PackMark
 		for _, character := range characters {
-			// belfast keeps no ship phantoms: only the ship itself
-			if seen[character.GetKey()] || character.GetValue() != 0 {
+			// the ship itself (0) or one of its unlocked skin shadows
+			mark := [2]uint32{character.GetKey(), character.GetValue()}
+			if seen[mark] {
 				return errRefused
 			}
-			seen[character.GetKey()] = true
+			seen[mark] = true
 			if _, err := tx.GetShip(ctx, db.GetShipParams{ID: character.GetKey(), CommanderID: client.CommanderID}); errors.Is(err, sql.ErrNoRows) {
 				return errRefused
 			} else if err != nil {
 				return err
+			}
+			if ok, err := hasSkinShadow(ctx, tx.Queries, character.GetKey(), character.GetValue()); err != nil {
+				return err
+			} else if !ok {
+				return errRefused
 			}
 		}
 		if err := tx.DeleteSecretaries(ctx, client.CommanderID); err != nil {
 			return err
 		}
 		for i, character := range characters {
-			if err := tx.SetSecretary(ctx, db.SetSecretaryParams{CommanderID: client.CommanderID, Position: uint32(i + 1), ShipID: character.GetKey(), PhantomID: 0}); err != nil {
+			if err := tx.SetSecretary(ctx, db.SetSecretaryParams{CommanderID: client.CommanderID, Position: uint32(i + 1), ShipID: character.GetKey(), PhantomID: character.GetValue()}); err != nil {
 				return err
 			}
 		}
