@@ -579,6 +579,28 @@ type DormTheme struct {
 	Theme       []byte
 }
 
+type EquipCode struct {
+	ID          uint32
+	GroupID     uint32
+	CommanderID uint32
+	Eqcode      string
+	Likes       uint32
+	SharedAt    int64
+}
+
+type EquipCodeLike struct {
+	ShareID     uint32
+	CommanderID uint32
+	LikedAt     int64
+}
+
+type EquipCodeReport struct {
+	ShareID     uint32
+	CommanderID uint32
+	ReportType  uint32
+	ReportedAt  int64
+}
+
 type Fleet struct {
 	CommanderID uint32
 	FleetID     uint32

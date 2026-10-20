@@ -376,6 +376,10 @@ func (game *Game) Register() {
 	packets.Handle(game.handleReviewDiscussion)
 	packets.Handle(game.handleLikeShip)
 	packets.Handle(game.handleReportDiscussion)
+	packets.Handle(game.handleRequestEquipCodes)
+	packets.Handle(game.handleShareEquipCode)
+	packets.Handle(game.handleLikeEquipCode)
+	packets.Handle(game.handleReportEquipCode)
 }
 
 // login is what the login burst is built from, loaded once per CS_11001.
