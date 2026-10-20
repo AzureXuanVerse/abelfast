@@ -182,12 +182,14 @@ func (q *Queries) ListDormShips(ctx context.Context, commanderID uint32) ([]Dorm
 }
 
 const listDormThemes = `-- name: ListDormThemes :many
-SELECT pos, theme FROM dorm_themes WHERE commander_id = ? ORDER BY pos
+SELECT pos, theme, theme_id, upload_time FROM dorm_themes WHERE commander_id = ? ORDER BY pos
 `
 
 type ListDormThemesRow struct {
-	Pos   uint32
-	Theme []byte
+	Pos        uint32
+	Theme      []byte
+	ThemeID    string
+	UploadTime int64
 }
 
 func (q *Queries) ListDormThemes(ctx context.Context, commanderID uint32) ([]ListDormThemesRow, error) {
@@ -199,7 +201,12 @@ func (q *Queries) ListDormThemes(ctx context.Context, commanderID uint32) ([]Lis
 	var items []ListDormThemesRow
 	for rows.Next() {
 		var i ListDormThemesRow
-		if err := rows.Scan(&i.Pos, &i.Theme); err != nil {
+		if err := rows.Scan(
+			&i.Pos,
+			&i.Theme,
+			&i.ThemeID,
+			&i.UploadTime,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -324,17 +331,23 @@ func (q *Queries) SetDormShipPop(ctx context.Context, arg SetDormShipPopParams) 
 }
 
 const setDormTheme = `-- name: SetDormTheme :exec
-INSERT INTO dorm_themes (commander_id, pos, theme) VALUES (?, ?, ?)
-ON CONFLICT (commander_id, pos) DO UPDATE SET theme = excluded.theme
+INSERT INTO dorm_themes (commander_id, pos, theme, theme_id) VALUES (?, ?, ?, ?)
+ON CONFLICT (commander_id, pos) DO UPDATE SET theme = excluded.theme, theme_id = excluded.theme_id, upload_time = 0
 `
 
 type SetDormThemeParams struct {
 	CommanderID uint32
 	Pos         uint32
 	Theme       []byte
+	ThemeID     string
 }
 
 func (q *Queries) SetDormTheme(ctx context.Context, arg SetDormThemeParams) error {
-	_, err := q.db.ExecContext(ctx, setDormTheme, arg.CommanderID, arg.Pos, arg.Theme)
+	_, err := q.db.ExecContext(ctx, setDormTheme,
+		arg.CommanderID,
+		arg.Pos,
+		arg.Theme,
+		arg.ThemeID,
+	)
 	return err
 }

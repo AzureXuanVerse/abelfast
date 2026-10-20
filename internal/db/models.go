@@ -577,6 +577,20 @@ type DormTheme struct {
 	CommanderID uint32
 	Pos         uint32
 	Theme       []byte
+	ThemeID     string
+	UploadTime  int64
+}
+
+type DormThemeFav struct {
+	CommanderID uint32
+	ThemeID     string
+	UploadTime  int64
+	FavedAt     int64
+}
+
+type DormThemeLike struct {
+	ThemeID     string
+	CommanderID uint32
 }
 
 type EquipCode struct {

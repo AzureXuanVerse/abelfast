@@ -115,13 +115,21 @@ var (
 	furnitureShop  map[uint32]furnitureGoods
 	furnitureStart []*protobuf.FURNITUREPUTINFO
 	dormSettings   dormGameset
+	// dormOpenLevel is open_systems_limited's CourtYardMediator level, the
+	// commander level the backyard opens at (SystemOpenMgr:isOpenSystem)
+	dormOpenLevel uint32
 )
 
 func loadDormData() error {
 	var shop map[uint32]json.RawMessage
 	var start map[uint32]furnitureInitConfig
 	var gameset map[string]uint32
+	var systems map[uint32]struct {
+		Mediator string `json:"mediator"`
+		Level    uint32 `json:"level"`
+	}
 	err := gamedata.LoadAll(
+		gamedata.Load("open_systems_limited", &systems),
 		gamedata.Load("dorm_data_template", &dormLevels),
 		gamedata.Load("furniture_data_template", &furnitures),
 		gamedata.Load("furniture_shop_template", &shop),
@@ -133,6 +141,15 @@ func loadDormData() error {
 	)
 	if err != nil {
 		return err
+	}
+	dormOpenLevel = 0
+	for _, row := range systems {
+		if row.Mediator == "CourtYardMediator" {
+			dormOpenLevel = row.Level
+		}
+	}
+	if dormOpenLevel == 0 {
+		return gamedata.Missing("open_systems_limited", "CourtYardMediator")
 	}
 	for level := uint32(1); level <= dormMaxLevel; level++ {
 		if row, ok := dormLevels[level]; !ok || row.Time == 0 {
@@ -914,88 +931,6 @@ func (tx *Tx) addTrophyProgress(trophyID, amount uint32) error {
 	}
 	tx.push(push)
 	return nil
-}
-
-// dormThemes are the commander's theme templates, by slot.
-func dormThemes(ctx context.Context, queries *db.Queries, commanderID uint32) ([]*protobuf.DORMTHEME, error) {
-	rows, err := queries.ListDormThemes(ctx, commanderID)
-	if err != nil {
-		return nil, err
-	}
-	themes := make([]*protobuf.DORMTHEME, 0, len(rows))
-	for _, row := range rows {
-		theme := &protobuf.DORMTHEME{}
-		if err := proto.Unmarshal(row.Theme, theme); err != nil {
-			return nil, fmt.Errorf("dorm theme %d: %w", row.Pos, err)
-		}
-		themes = append(themes, theme)
-	}
-	return themes, nil
-}
-
-// handleThemeTemplates answers BackYardGetThemeTemplateCommand for the
-// commander's own templates (CS_19105, typ 2), sent when the decoration
-// mode opens. The shared and favourite templates are other commanders'
-// (CS_19117 / CS_19115): belfast has none, the list is empty.
-func (game *Game) handleThemeTemplates(client *connection.Client, req *protobuf.CS_19105) error {
-	reply := &protobuf.SC_19106{Result: proto.Uint32(0)}
-	if req.GetTyp() == themeTemplateCustom {
-		themes, err := dormThemes(context.Background(), game.DB.Queries, client.CommanderID)
-		if err != nil {
-			return err
-		}
-		reply.ThemeList = themes
-	}
-	return client.Send(reply)
-}
-
-// handleSaveThemeTemplate answers AddBackYardThemeTemplateCommand
-// (CS_19109): the arrangement saved in template slot pos (1-10), named,
-// with the md5 of its preview pictures (kept by the client), never shared
-// (upload_time 0). Its id is the commander id then pos
-// (BackYardBaseThemeTemplate.BuildId).
-func (game *Game) handleSaveThemeTemplate(client *connection.Client, req *protobuf.CS_19109) error {
-	pos := req.GetPos()
-	var err error
-	if pos < 1 || pos > dormThemeSlots {
-		err = errRefused
-	} else {
-		theme, marshalErr := proto.Marshal(&protobuf.DORMTHEME{
-			Id:               proto.String(fmt.Sprintf("%d%d", client.CommanderID, pos)),
-			Name:             proto.String(req.GetName()),
-			FurniturePutList: req.GetFurniturePutList(),
-			UserId:           proto.Uint32(client.CommanderID),
-			Pos:              proto.Uint32(pos),
-			LikeCount:        proto.Uint32(0),
-			FavCount:         proto.Uint32(0),
-			UploadTime:       proto.Uint32(0),
-			IconImageMd5:     proto.String(req.GetIconImageMd5()),
-			ImageMd5:         proto.String(req.GetImageMd5()),
-		})
-		if marshalErr != nil {
-			return marshalErr
-		}
-		err = game.DB.SetDormTheme(context.Background(), db.SetDormThemeParams{CommanderID: client.CommanderID, Pos: pos, Theme: theme})
-		if err != nil {
-			return err
-		}
-	}
-	code := int32(*result(err))
-	return client.Send(&protobuf.SC_19110{Result: proto.Int32(code)})
-}
-
-// handleDeleteThemeTemplate answers BackYardDeleteThemeTemplateCommand
-// (CS_19123): template slot pos is emptied.
-func (game *Game) handleDeleteThemeTemplate(client *connection.Client, req *protobuf.CS_19123) error {
-	deleted, err := game.DB.DeleteDormTheme(context.Background(), db.DeleteDormThemeParams{CommanderID: client.CommanderID, Pos: req.GetPos()})
-	if err != nil {
-		return err
-	}
-	var refusal error
-	if deleted == 0 {
-		refusal = errRefused
-	}
-	return client.Send(&protobuf.SC_19124{Result: proto.Int32(int32(*result(refusal)))})
 }
 
 // extendDorm applies the backyard's shop_template type 0 extensions

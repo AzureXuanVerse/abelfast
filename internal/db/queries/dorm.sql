@@ -44,11 +44,11 @@ INSERT INTO dorm_floors (commander_id, floor, layout) VALUES (?, ?, ?)
 ON CONFLICT (commander_id, floor) DO UPDATE SET layout = excluded.layout;
 
 -- name: ListDormThemes :many
-SELECT pos, theme FROM dorm_themes WHERE commander_id = ? ORDER BY pos;
+SELECT pos, theme, theme_id, upload_time FROM dorm_themes WHERE commander_id = ? ORDER BY pos;
 
 -- name: SetDormTheme :exec
-INSERT INTO dorm_themes (commander_id, pos, theme) VALUES (?, ?, ?)
-ON CONFLICT (commander_id, pos) DO UPDATE SET theme = excluded.theme;
+INSERT INTO dorm_themes (commander_id, pos, theme, theme_id) VALUES (?, ?, ?, ?)
+ON CONFLICT (commander_id, pos) DO UPDATE SET theme = excluded.theme, theme_id = excluded.theme_id, upload_time = 0;
 
 -- name: DeleteDormTheme :execrows
 DELETE FROM dorm_themes WHERE commander_id = ? AND pos = ?;
