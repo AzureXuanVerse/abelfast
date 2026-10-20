@@ -127,6 +127,10 @@ func (game *Game) activityList(ctx context.Context, commander db.Commander) (*pr
 	if err != nil {
 		return nil, err
 	}
+	keyValues, err := activityKeyValues(ctx, game.DB.Queries, commander.ID)
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now()
 	own, err := commanderActivities(ctx, game.DB.Queries, commander.ID, now)
 	if err != nil {
@@ -168,6 +172,11 @@ func (game *Game) activityList(ctx context.Context, commander db.Commander) (*pr
 				return nil, err
 			}
 		}
+		for _, list := range info.Date1KeyValueList {
+			if values, ok := keyValues[config.ID][list.GetKey()]; ok {
+				list.ValueList = values
+			}
+		}
 		reply.ActivityList = append(reply.ActivityList, info)
 	}
 	return reply, nil
@@ -186,7 +195,7 @@ func activityInfo(config activityConfig, state db.CommanderActivity, stopTime ui
 		Data1List: state.Data1List,
 		GroupList: fleets,
 	}
-	if config.Type == activityTypeIslandDrawAward {
+	if config.Type == activityTypeIslandDrawAward || config.Type == activityTypeVirtualBag {
 		info.Date1KeyValueList = []*protobuf.KEYVALUELIST_P11{{Key: proto.Uint32(1)}}
 	}
 	return info
@@ -216,6 +225,7 @@ func (game *Game) commanderActivity(ctx context.Context, commanderID, id uint32,
 //   - monthly sign-in (cmd 1): activity_month_sign[month].dayN for the Nth
 //     sign-in of the month, once per day.
 //   - task list (cmd 1): accepts the activity's tasks.
+//   - feast: FeastOpCommand's cmds, see feastOperation.
 //
 // Anything else, or a refused operation, gets result 1 (activity_op_error).
 func (game *Game) handleActivityOperation(client *connection.Client, req *protobuf.CS_11202) error {
@@ -225,6 +235,9 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 	config, open, err := game.commanderActivity(ctx, client.CommanderID, req.GetActivityId(), now)
 	if err != nil {
 		return err
+	}
+	if open && config.Type == activityTypeFeast {
+		return game.feastOperation(client, config, req)
 	}
 	activityType := config.Type
 	if !open || req.GetCmd() != 1 {

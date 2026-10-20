@@ -72,5 +72,6 @@ func loadGameData() error {
 		loadMiniGameData,
 		loadAtelierData,
 		loadCityRebuildData,
+		loadFeastData,
 	)
 }

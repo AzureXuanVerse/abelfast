@@ -367,6 +367,8 @@ func (game *Game) Register() {
 	packets.Handle(game.handleCityRebuildResult)
 	packets.Handle(game.handleCityRebuildLevel)
 	packets.Handle(game.handleCityRebuildStart)
+	packets.Handle(game.handleFeastData)
+	packets.Handle(game.handleFeastRandomShips)
 	packets.Handle(game.handleEmojiInfo)
 	packets.Handle(game.handleLimitChallenge)
 	packets.Handle(game.handleLimitChallengeAward)

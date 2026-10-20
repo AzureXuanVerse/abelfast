@@ -200,6 +200,14 @@ type CommanderActivity struct {
 	Data1List   IDList
 }
 
+type CommanderActivityKeyValue struct {
+	CommanderID uint32
+	ActivityID  uint32
+	ListKey     uint32
+	ItemKey     uint32
+	Value       uint32
+}
+
 type CommanderActivityTask struct {
 	CommanderID uint32
 	ActID       uint32
@@ -378,6 +386,28 @@ type CommanderExercise struct {
 	Rivals        IDList
 	ShopRefreshes uint32
 	ShopDay       int64
+}
+
+type CommanderFeast struct {
+	CommanderID uint32
+	ActivityID  uint32
+	RefreshTime int64
+}
+
+type CommanderFeastInvitation struct {
+	CommanderID uint32
+	ActivityID  uint32
+	GroupID     uint32
+	State       uint32
+	Gift        uint32
+}
+
+type CommanderFeastShip struct {
+	CommanderID  uint32
+	ActivityID   uint32
+	GroupID      uint32
+	Bubble       uint32
+	SpeechBubble uint32
 }
 
 type CommanderFurniture struct {

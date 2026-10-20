@@ -26,6 +26,8 @@ type taskConfig struct {
 	// cruise mission vouchers (QUICK_TASK_PASS_TICKET_ID) finishing the
 	// task at once costs, 0 when it can't be (QuickTaskCommand)
 	QuickFinish uint32 `json:"quick_finish"`
+	// the server-only drop it gives, award_display showing what's in it
+	Award uint32 `json:"award"`
 
 	awards [][]uint32 // award_display
 	target taskTarget // target_id
