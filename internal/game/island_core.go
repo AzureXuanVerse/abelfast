@@ -235,6 +235,7 @@ func newIsland(commanderID uint32, now uint32) *islandState {
 		extra:       map[string]json.RawMessage{},
 	}
 	islandFishingDefaults(state)
+	islandSocialRefresh(state, serverNow())
 	return state
 }
 
@@ -272,6 +273,7 @@ func readIsland(ctx context.Context, queries *db.Queries, commanderID uint32) (*
 	if err := json.Unmarshal([]byte(row.Extra), &state.extra); err != nil {
 		return nil, fmt.Errorf("island %d extra: %w", commanderID, err)
 	}
+	islandSocialRefresh(state, serverNow())
 	return state, nil
 }
 

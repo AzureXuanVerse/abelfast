@@ -243,7 +243,7 @@ func (game *Game) enterIsland(ctx context.Context, client *connection.Client, is
 		if islandID == 0 && code != "" {
 			owner, err := tx.GetIslandByInviteCode(ctx, code)
 			if errors.Is(err, sql.ErrNoRows) {
-				refusal = resultFailed
+				refusal = islandVisitBadCode
 				return nil
 			}
 			if err != nil {
@@ -265,7 +265,7 @@ func (game *Game) enterIsland(ctx context.Context, client *connection.Client, is
 			refusal = resultFailed
 			return nil
 		}
-		refusal, err = game.islandVisitAllowed(tx, client, owner)
+		refusal, err = game.islandVisitAllowed(tx, client, owner, code != "")
 		return err
 	})
 	if err != nil {
