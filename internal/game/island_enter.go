@@ -324,6 +324,10 @@ func (game *Game) handleIslandData(client *connection.Client, req *protobuf.CS_2
 			state = newIsland(req.GetIslandId(), uint32(serverNow().Unix()))
 		}
 		if state.commanderID == client.CommanderID {
+			// the daily and weekly task offers of the day
+			if _, _, err := refreshIslandTasks(state, serverNow()); err != nil {
+				return err
+			}
 			reply.Island = state.island
 			reply.PlayerPosition = state.position
 			return nil

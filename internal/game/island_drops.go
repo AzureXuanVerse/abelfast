@@ -2,6 +2,7 @@ package game
 
 import (
 	"encoding/json"
+	"maps"
 	"slices"
 	"time"
 
@@ -137,11 +138,13 @@ func (tx *Tx) addIslandDrops(drops []*protobuf.DROPINFO) error {
 	}
 	now := serverNow()
 	public, private := state.public(), state.private()
+	obtained := map[uint32]uint32{}
 	for _, drop := range drops {
 		id, count := drop.GetId(), drop.GetNumber()
 		switch drop.GetType() {
 		case dropTypeIslandItem:
 			state.addIslandItem(id, count)
+			obtained[id] += count
 		case dropTypeIslandOverflow:
 			found := false
 			for _, item := range private.ItemListCache {
@@ -230,6 +233,13 @@ func (tx *Tx) addIslandDrops(drops []*protobuf.DROPINFO) error {
 			}
 		case dropTypeIslandSeasonPt:
 			private.Season.Pt = proto.Uint32(private.Season.GetPt() + count)
+		}
+	}
+	tx.islandBookItemsObtained(state, obtained)
+	for _, id := range slices.Sorted(maps.Keys(obtained)) {
+		// IslandTaskTargetType.OBTAIN
+		if err := tx.islandTaskEvent(islandTargetObtain, obtained[id], id); err != nil {
+			return err
 		}
 	}
 	return nil
