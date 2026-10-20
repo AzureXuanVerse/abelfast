@@ -524,8 +524,10 @@ func (tx *Tx) researchCatchupDrop(config researchConfig) ([]*protobuf.DROPINFO, 
 	return drops, tx.grantDrops(drops)
 }
 
-// claimResearch gives a project's rewards and drops its condition task.
+// claimResearch gives a project's rewards, counts it for the "complete N
+// research projects" tasks and drops its condition task.
 func (tx *Tx) claimResearch(config researchConfig) (*protobuf.TECHNOLOGYDROP, error) {
+	tx.event(TaskEvent{SubType: TaskSubResearch, Count: 1})
 	drops := researchDrops(config)
 	if err := tx.grantDrops(drops); err != nil {
 		return nil, err

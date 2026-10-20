@@ -33,6 +33,7 @@ const (
 	TaskSubScrapGear     = 41   // pieces of gear disassembled
 	TaskSubCraftGear     = 42   // gear crafted
 	TaskSubAcademyLevel  = 85   // canteen / merchant level (absolute)
+	TaskSubResearch      = 110  // Research Academy projects claimed
 	TaskSubHandbookPhase = 114  // commander manual tasks claimed, target: page id
 	TaskSubUseItem       = 120  // items used, target: item id
 	TaskSubSpendOil      = 121  // oil spent
