@@ -271,3 +271,48 @@ func (game *Game) handleUpdateCustomFleet(client *connection.Client, req *protob
 	}
 	return client.Send(&protobuf.SC_13108{Result: result(nil)})
 }
+
+// handleRemoveEliteTargetShip takes a ship out of every elite fleet
+// (RemoveEliteTargerShipCommand, CS_13111): sent once the commander agrees
+// to move a ship that is in a hard mode or support fleet (ShipStatus
+// inElite / inSupport, retrofitting, ChapterProxy:RemoveUnitFromSupportFleet).
+// The client replaces all its elite fleets with fleet_list
+// (ChapterProxy:setEliteCache) and reads nothing else, so the reply is the
+// whole saved list, as SC_13001 has it. Nothing was captured: built from the
+// Lua alone.
+func (game *Game) handleRemoveEliteTargetShip(client *connection.Client, req *protobuf.CS_13111) error {
+	ctx := context.Background()
+	reply := &protobuf.SC_13112{}
+	err := game.tx(ctx, client, func(tx *Tx) error {
+		ships, err := tx.ListShipsByCommander(ctx, tx.commanderID)
+		if err != nil {
+			return err
+		}
+		fleets, err := eliteFleets(ctx, tx.Queries, tx.commanderID, ships)
+		if err != nil {
+			return err
+		}
+		for _, fleet := range fleets {
+			removed := false
+			for _, teams := range [][]*protobuf.TEAM_INFO{fleet.MainTeam, fleet.SubmarineTeam, fleet.SupportTeam} {
+				for _, team := range teams {
+					if i := slices.Index(team.ShipList, req.GetShipId()); i >= 0 {
+						team.ShipList = slices.Delete(team.ShipList, i, i+1)
+						removed = true
+					}
+				}
+			}
+			if removed {
+				if err := saveEliteFleet(ctx, tx.Queries, tx.commanderID, fleet); err != nil {
+					return err
+				}
+			}
+		}
+		reply.FleetList = fleets
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return client.Send(reply)
+}
