@@ -96,7 +96,7 @@ func (game *Game) friendInfo(commander db.Commander) *protobuf.FRIEND_INFO {
 }
 
 // detailInfo is a commander's profile card (resumeLayer, the search page):
-// battle and exercise counts aren't kept, they read 0; no medals shown.
+// battle and exercise counts aren't kept, they read 0.
 func (game *Game) detailInfo(ctx context.Context, commander db.Commander) (*protobuf.DETAIL_INFO, error) {
 	ships, err := game.DB.CountShips(ctx, commander.ID)
 	if err != nil {
@@ -106,8 +106,13 @@ func (game *Game) detailInfo(ctx context.Context, commander db.Commander) (*prot
 	if err != nil {
 		return nil, err
 	}
+	medals, err := displayMedals(ctx, game.DB.Queries, commander.ID)
+	if err != nil {
+		return nil, err
+	}
 	friend := game.friendInfo(commander)
 	return &protobuf.DETAIL_INFO{
+		MedalId:         medals,
 		Id:              friend.Id,
 		Name:            friend.Name,
 		Title:           proto.Uint32(commander.Rank),

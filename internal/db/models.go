@@ -247,6 +247,12 @@ type CommanderCryptolalium struct {
 	StoryID     uint32
 }
 
+type CommanderDisplayMedal struct {
+	CommanderID uint32
+	Position    uint32
+	MedalID     uint32
+}
+
 type CommanderDorm struct {
 	CommanderID          uint32
 	Level                uint32
@@ -489,6 +495,12 @@ type CommanderTrophy struct {
 	TrophyID    uint32
 	Progress    uint32
 	Timestamp   uint32
+}
+
+type CommanderTrophyClaim struct {
+	CommanderID uint32
+	TrophyID    uint32
+	ClaimedAt   int64
 }
 
 type CommanderVirtualItem struct {

@@ -908,7 +908,11 @@ func (tx *Tx) addTrophyProgress(trophyID, amount uint32) error {
 	if err := tx.SetTrophy(tx.ctx, db.SetTrophyParams{CommanderID: tx.commanderID, TrophyID: trophyID, Progress: progress}); err != nil {
 		return err
 	}
-	tx.push(&protobuf.SC_17002{ProgressList: []*protobuf.ACHIEVEMENT_INFO{{Id: proto.Uint32(trophyID), Progress: proto.Uint32(progress)}}})
+	push, err := trophyProgress(tx.ctx, tx.Queries, tx.commanderID, trophyID)
+	if err != nil {
+		return err
+	}
+	tx.push(push)
 	return nil
 }
 

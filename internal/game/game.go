@@ -201,6 +201,8 @@ func (game *Game) Register() {
 	packets.Handle(game.handleModShip)
 	packets.Handle(game.handleRemouldShip)
 	packets.Handle(game.handleCollectionAward)
+	packets.Handle(game.handleTrophyClaim)
+	packets.Handle(game.handleChangeMedalDisplay)
 	packets.Handle(game.handleUpgradeShipEquipment)
 	packets.Handle(game.handleUpgradeEquipment)
 	packets.Handle(game.handleComposeEquipment)

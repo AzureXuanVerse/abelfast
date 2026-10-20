@@ -426,13 +426,9 @@ func collectionState(ctx context.Context, queries *db.Queries, commanderID uint3
 	if err != nil {
 		return nil, err
 	}
-	trophies, err := queries.ListTrophies(ctx, commanderID)
+	trophies, err := loadTrophyState(ctx, queries, commanderID)
 	if err != nil {
 		return nil, err
-	}
-	stored := map[uint32]db.CommanderTrophy{}
-	for _, trophy := range trophies {
-		stored[trophy.TrophyID] = trophy
 	}
 	hearts, err := queries.ListShipHeartCounts(ctx)
 	if err != nil {
@@ -450,13 +446,7 @@ func collectionState(ctx context.Context, queries *db.Queries, commanderID uint3
 	if err != nil {
 		return nil, err
 	}
-	msg := &protobuf.SC_17001{DailyDiscuss: proto.Uint32(daily), ShipAwardList: awards}
-	for _, id := range archiveTrophies {
-		trophy := stored[id]
-		msg.ProgressList = append(msg.ProgressList, &protobuf.ACHIEVEMENT_INFO{
-			Id: proto.Uint32(id), Progress: proto.Uint32(trophy.Progress), Timestamp: proto.Uint32(trophy.Timestamp),
-		})
-	}
+	msg := &protobuf.SC_17001{DailyDiscuss: proto.Uint32(daily), ShipAwardList: awards, ProgressList: trophies.unlocked()}
 	for _, group := range groups {
 		if !archiveGroups[group.GroupID] {
 			continue
@@ -506,9 +496,7 @@ func recordShipGroup(ctx context.Context, queries *db.Queries, ship db.Ship) (*p
 	if err := queries.SetTrophy(ctx, db.SetTrophyParams{CommanderID: ship.CommanderID, TrophyID: archiveCountTrophy, Progress: uint32(groups)}); err != nil {
 		return nil, err
 	}
-	return &protobuf.SC_17002{ProgressList: []*protobuf.ACHIEVEMENT_INFO{{
-		Id: proto.Uint32(archiveCountTrophy), Progress: proto.Uint32(uint32(groups)),
-	}}}, nil
+	return trophyProgress(ctx, queries, ship.CommanderID, archiveCountTrophy)
 }
 
 // shipGroupBest is what a ship counts for in its archive entry, as

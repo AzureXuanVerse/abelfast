@@ -239,8 +239,11 @@ type itemConfig struct {
 // medal_template row
 type medalConfig struct {
 	Start      uint32          `json:"start"` // 0 for a medal's first tier
+	Next       uint32          `json:"next"`  // the tier unlocked once this one is claimed
+	Hide       uint32          `json:"hide"`
 	TargetType uint32          `json:"target_type"`
 	TargetID   json.RawMessage `json:"target_id"`
+	TargetNum  uint32          `json:"target_num"`
 }
 
 // medal_template.target_type
@@ -270,11 +273,14 @@ var (
 	// nationTrophies are the faction medals' sub-medals, nationalities in
 	// descending order (as the official server sends them).
 	nationTrophies []nationTrophy
+	// medalTemplates are the medal_template rows, by id.
+	medalTemplates map[uint32]medalConfig
 )
 
 // loadMedals builds archiveTrophies, archiveCountTrophy and nationTrophies.
 func loadMedals(medals map[uint32]medalConfig) error {
 	archiveTrophies = nil
+	medalTemplates = medals
 	nations := map[uint32]*nationTrophy{}
 	for _, id := range slices.Sorted(maps.Keys(medals)) {
 		medal := medals[id]
@@ -318,6 +324,7 @@ func loadMedals(medals map[uint32]medalConfig) error {
 	if archiveCountTrophy == 0 {
 		return gamedata.Missing("medal_template", "archive medal")
 	}
+	loadTrophyChains()
 	nationTrophies = nil
 	for _, nationality := range slices.Backward(slices.Sorted(maps.Keys(nations))) {
 		nationTrophies = append(nationTrophies, *nations[nationality])
