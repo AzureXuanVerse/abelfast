@@ -301,6 +301,9 @@ func (game *Game) handleFinishStage(client *connection.Client, req *protobuf.CS_
 		if err := tx.grantDrops(reply.DropInfo); err != nil {
 			return err
 		}
+		if err := tx.recordChapterDrops(session.template.id, reply.DropInfo); err != nil {
+			return err
+		}
 		if err := tx.addClassProficiency(proficiency, time.Now()); err != nil {
 			return err
 		}

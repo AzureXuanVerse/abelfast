@@ -541,8 +541,9 @@ func (tx *Tx) endChapterAuto(now time.Time) (*protobuf.SC_13015, error) {
 		if template == nil {
 			continue
 		}
+		var sortie []*protobuf.DROPINFO
 		for range config.EnemyTimes {
-			drops = append(drops, scenarioDrops(template, expeditionTemplate{})...)
+			sortie = append(sortie, scenarioDrops(template, expeditionTemplate{})...)
 		}
 		boss := expeditionTemplate{Type: expeditionTypeBoss}
 		if ids := gamedata.IDs(config.Boss); len(ids) > 0 {
@@ -550,7 +551,11 @@ func (tx *Tx) endChapterAuto(now time.Time) (*protobuf.SC_13015, error) {
 				boss = known
 			}
 		}
-		drops = append(drops, scenarioDrops(template, boss)...)
+		sortie = append(sortie, scenarioDrops(template, boss)...)
+		if err := tx.recordChapterDrops(battle.ChapterID, sortie); err != nil {
+			return nil, err
+		}
+		drops = append(drops, sortie...)
 		expBooks += config.ExpBooks
 		tx.event(
 			TaskEvent{SubType: TaskSubWin, Count: config.EnemyTimes + 1},

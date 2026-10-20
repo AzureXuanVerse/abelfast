@@ -231,6 +231,7 @@ func (game *Game) Register() {
 	packets.Handle(game.handleRenameFleet)
 	packets.Handle(game.handleTracking13101)
 	packets.Handle(game.handleUpdateCustomFleet)
+	packets.Handle(game.handleChapterDropShips)
 	packets.Handle(game.handleChapterOp)
 	packets.Handle(game.handleChapterBattleResult)
 	packets.Handle(game.handleRemasterInfo)

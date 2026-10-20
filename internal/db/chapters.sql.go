@@ -9,6 +9,21 @@ import (
 	"context"
 )
 
+const addChapterDropShip = `-- name: AddChapterDropShip :exec
+INSERT INTO chapter_drop_ships (commander_id, chapter_id, ship_id) VALUES (?, ?, ?) ON CONFLICT DO NOTHING
+`
+
+type AddChapterDropShipParams struct {
+	CommanderID uint32
+	ChapterID   uint32
+	ShipID      uint32
+}
+
+func (q *Queries) AddChapterDropShip(ctx context.Context, arg AddChapterDropShipParams) error {
+	_, err := q.db.ExecContext(ctx, addChapterDropShip, arg.CommanderID, arg.ChapterID, arg.ShipID)
+	return err
+}
+
 const deleteChapterState = `-- name: DeleteChapterState :exec
 DELETE FROM chapter_states WHERE commander_id = ?
 `
@@ -53,6 +68,38 @@ func (q *Queries) GetChapterState(ctx context.Context, commanderID uint32) (Chap
 	var i ChapterState
 	err := row.Scan(&i.CommanderID, &i.State, &i.Ambushed)
 	return i, err
+}
+
+const listChapterDropShips = `-- name: ListChapterDropShips :many
+SELECT ship_id FROM chapter_drop_ships WHERE commander_id = ? AND chapter_id = ? ORDER BY rowid
+`
+
+type ListChapterDropShipsParams struct {
+	CommanderID uint32
+	ChapterID   uint32
+}
+
+func (q *Queries) ListChapterDropShips(ctx context.Context, arg ListChapterDropShipsParams) ([]uint32, error) {
+	rows, err := q.db.QueryContext(ctx, listChapterDropShips, arg.CommanderID, arg.ChapterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uint32
+	for rows.Next() {
+		var ship_id uint32
+		if err := rows.Scan(&ship_id); err != nil {
+			return nil, err
+		}
+		items = append(items, ship_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listChapterEliteFleets = `-- name: ListChapterEliteFleets :many

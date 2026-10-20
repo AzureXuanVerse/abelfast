@@ -110,6 +110,12 @@ type ChapterAutoTicket struct {
 	Count       uint32
 }
 
+type ChapterDropShip struct {
+	CommanderID uint32
+	ChapterID   uint32
+	ShipID      uint32
+}
+
 type ChapterEliteFleet struct {
 	CommanderID uint32
 	Formation   uint32

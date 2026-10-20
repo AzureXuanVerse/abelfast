@@ -32,3 +32,9 @@ SELECT * FROM chapter_elite_fleets WHERE commander_id = ? ORDER BY formation;
 -- name: SaveChapterEliteFleet :exec
 INSERT INTO chapter_elite_fleets (commander_id, formation, fleet) VALUES (?, ?, ?)
 ON CONFLICT (commander_id, formation) DO UPDATE SET fleet = excluded.fleet;
+
+-- name: AddChapterDropShip :exec
+INSERT INTO chapter_drop_ships (commander_id, chapter_id, ship_id) VALUES (?, ?, ?) ON CONFLICT DO NOTHING;
+
+-- name: ListChapterDropShips :many
+SELECT ship_id FROM chapter_drop_ships WHERE commander_id = ? AND chapter_id = ? ORDER BY rowid;
