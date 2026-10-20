@@ -132,7 +132,22 @@ var (
 		colors     []uint32
 		season     uint32
 		scene      uint32
+		// GUESS: the official server opens the island's systems (the main
+		// screen's buttons, island_main_btns ability_id), scenes and
+		// production sites as the story goes, by rules no client table
+		// holds (no reward lists those abilities); belfast opens every one
+		// from the start: the island_ability_template rows of
+		// IslandAblityAgency.TYPE_SYSTEM (but the event ones, effect
+		// 990000+), TYPE_PLACE and TYPE_MAP.
+		abilities []uint32
 	}
+	islandAbilities map[uint32]islandAbilityConfig
+)
+
+// IslandAblityAgency.TYPE_*
+const (
+	islandAbilitySystem = 1
+	islandAbilityMap    = 11
 )
 
 // loadIslandLifeData reads the tables of every island subsystem.
@@ -162,6 +177,8 @@ func loadIslandCoreData() error {
 		gamedata.Load("island_dress_template", &islandDresses),
 		gamedata.Load("island_dress_colordiff_template", &islandDressColors),
 		loadIslandDropData,
+		loadIslandDropTimes,
+		gamedata.Load("island_ability_template", &islandAbilities),
 	)
 	if err != nil {
 		return err
@@ -181,6 +198,17 @@ func loadIslandCoreData() error {
 	for _, id := range append(slices.Clone(islandStart.dress), islandStart.ownedDress...) {
 		if _, ok := islandDresses[id]; !ok {
 			return gamedata.Missing("island_dress_template", "dress %d", id)
+		}
+	}
+	islandStart.abilities = nil
+	for _, id := range slices.Sorted(maps.Keys(islandAbilities)) {
+		switch ability := islandAbilities[id]; ability.Type {
+		case islandAbilitySystem:
+			if ability.Effect < 990000 {
+				islandStart.abilities = append(islandStart.abilities, id)
+			}
+		case islandAbilityPlace, islandAbilityMap:
+			islandStart.abilities = append(islandStart.abilities, id)
 		}
 	}
 	islandStart.season = islandSetInt("season_now")
@@ -227,19 +255,37 @@ func newIsland(commanderID uint32, now uint32) *islandState {
 			UserDress:      dress,
 		},
 	}
-	for _, id := range slices.Sorted(maps.Keys(islandPlaces)) {
-		if islandPlaces[id].UnlockType == 0 {
-			island.PublicData.BuildList = append(island.PublicData.BuildList, islandNewBuilding(id))
-		}
-	}
 	state := &islandState{
 		commanderID: commanderID,
 		island:      protocol.FillRequired(island),
 		extra:       map[string]json.RawMessage{},
 	}
+	islandStartingSites(state)
 	islandFishingDefaults(state)
 	islandSocialRefresh(state, serverNow())
 	return state
+}
+
+// islandStartingSites gives an island the abilities it opens with
+// (islandStart.abilities) and the production sites there from the start or
+// opened by those abilities (islandNewBuilding), without telling the client:
+// it runs before the island is sent (SC_21201).
+func islandStartingSites(state *islandState) {
+	public := state.public()
+	for _, id := range islandStart.abilities {
+		if !slices.Contains(public.AbilityList, id) {
+			public.AbilityList = append(public.AbilityList, id)
+		}
+	}
+	for _, id := range slices.Sorted(maps.Keys(islandPlaces)) {
+		open := islandPlaces[id].UnlockType == 0 || slices.ContainsFunc(public.AbilityList, func(ability uint32) bool {
+			config := islandAbilities[ability]
+			return config.Type == islandAbilityPlace && config.Effect == id
+		})
+		if open && !slices.ContainsFunc(public.BuildList, func(build *protobuf.PB_ISLAND_BUILD) bool { return build.GetId() == id }) {
+			public.BuildList = append(public.BuildList, islandNewBuilding(id))
+		}
+	}
 }
 
 // readIsland loads a commander's island; nil when it has none yet.
@@ -260,13 +306,8 @@ func readIsland(ctx context.Context, queries *db.Queries, commanderID uint32) (*
 	}
 	protocol.FillRequired(state.island)
 	islandFishingDefaults(state)
-	// the sites there from the start, also on an island made before one was
-	for _, id := range slices.Sorted(maps.Keys(islandPlaces)) {
-		public := state.public()
-		if islandPlaces[id].UnlockType == 0 && !slices.ContainsFunc(public.BuildList, func(build *protobuf.PB_ISLAND_BUILD) bool { return build.GetId() == id }) {
-			public.BuildList = append(public.BuildList, islandNewBuilding(id))
-		}
-	}
+	// also on an island made before belfast opened them
+	islandStartingSites(state)
 	for _, build := range state.public().BuildList {
 		repairIslandBuilding(build)
 	}

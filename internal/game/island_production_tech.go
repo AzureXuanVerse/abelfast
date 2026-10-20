@@ -183,7 +183,7 @@ func (game *Game) handleIslandUnlockTech(client *connection.Client, req *protobu
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandFinishTech answers IslandFinishTechImmdCommand (CS_21522): a
@@ -214,5 +214,5 @@ func (game *Game) handleIslandFinishTech(client *connection.Client, req *protobu
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }

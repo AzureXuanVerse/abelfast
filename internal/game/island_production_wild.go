@@ -246,7 +246,7 @@ func (game *Game) handleIslandWildGather(client *connection.Client, req *protobu
 	if push != nil {
 		game.tellIsland(client, client.CommanderID, &protobuf.SC_21528{IslandId: proto.Uint32(client.CommanderID), GatherList: []*protobuf.PB_ISLAND_GATHER_PUSH{push}})
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandWildGatherSign answers IslandWildGatherSignCommand (CS_21526):
@@ -301,7 +301,7 @@ func (game *Game) handleIslandWildGatherSign(client *connection.Client, req *pro
 	if push != nil {
 		game.tellIsland(client, islandID, &protobuf.SC_21528{IslandId: proto.Uint32(islandID), GatherList: []*protobuf.PB_ISLAND_GATHER_PUSH{push}})
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandWildCollect answers IslandWildCollectCommand (CS_21529): the
@@ -343,7 +343,7 @@ func (game *Game) handleIslandWildCollect(client *connection.Client, req *protob
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandWildCollectSign answers IslandWildCollectSignCommand

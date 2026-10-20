@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"github.com/ggmolly/belfast/internal/gamedata"
 	"github.com/ggmolly/belfast/internal/protobuf"
@@ -264,4 +265,60 @@ func (state *islandState) addIslandDress(id, count uint32, now time.Time) {
 	ships.HadDress = append(ships.HadDress, &protobuf.PB_ISLAND_DRESS_NUM{
 		Id: proto.Uint32(id), Num: proto.Uint32(count), Read: proto.Uint32(0), Time: proto.Uint32(uint32(now.Unix())),
 	})
+}
+
+// islandDropTimeConfig is an island_drop_time_set row: the id of the
+// DROP_TYPE_TIMESTAMP drop that goes with a timed island reward (drop_type,
+// link_id).
+type islandDropTimeConfig struct {
+	DropType uint32 `json:"drop_type"`
+	LinkID   uint32 `json:"link_id"`
+}
+
+// islandDropTimes are the island_drop_time_set ids by drop type and id.
+var islandDropTimes map[[2]uint32]uint32
+
+func loadIslandDropTimes() error {
+	var rows map[uint32]islandDropTimeConfig
+	if err := gamedata.Load("island_drop_time_set", &rows)(); err != nil {
+		return err
+	}
+	islandDropTimes = make(map[[2]uint32]uint32, len(rows))
+	for id, row := range rows {
+		islandDropTimes[[2]uint32{row.DropType, row.LinkID}] = id
+	}
+	return nil
+}
+
+// islandStamped adds to a reply's drop_list the DROP_TYPE_TIMESTAMP drop of
+// every speed-up ticket in it: IslandDropHelper.AddItems reads a ticket's
+// start of validity from it (GetIslandTimestamps) and fails without one.
+// The time is the start of the server day, from which IslandTicket counts a
+// ticket's days.
+func islandStamped[M proto.Message](reply M) M {
+	message := reply.ProtoReflect()
+	field := message.Descriptor().Fields().ByName("drop_list")
+	if field == nil || !field.IsList() || field.Message() == nil || field.Message().Name() != "DROPINFO" {
+		return reply
+	}
+	list := message.Get(field).List()
+	seen := map[uint32]bool{}
+	var stamps []*protobuf.DROPINFO
+	for i := range list.Len() {
+		drop := list.Get(i).Message().Interface().(*protobuf.DROPINFO)
+		if drop.GetType() == dropTypeTimestamp {
+			seen[drop.GetId()] = true
+		}
+		if drop.GetType() != dropTypeIslandTicket {
+			continue
+		}
+		if id, ok := islandDropTimes[[2]uint32{dropTypeIslandTicket, drop.GetId()}]; ok && !seen[id] {
+			seen[id] = true
+			stamps = append(stamps, dropInfo(dropTypeTimestamp, id, uint32(startOfDay(serverNow()).Unix())))
+		}
+	}
+	for _, stamp := range stamps {
+		list.Append(protoreflect.ValueOfMessage(stamp.ProtoReflect()))
+	}
+	return reply
 }

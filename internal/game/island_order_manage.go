@@ -315,7 +315,7 @@ func (game *Game) handleIslandRestaurantOpen(client *connection.Client, req *pro
 			game.tellIsland(client, islandID, &protobuf.SC_21225{IslandId: proto.Uint32(islandID), Trade: reply.TradeData})
 		}
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandRestaurantClose answers IslandCloseRestaurantCommand
@@ -391,5 +391,5 @@ func (game *Game) handleIslandRestaurantClose(client *connection.Client, req *pr
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }

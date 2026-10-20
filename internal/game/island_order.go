@@ -842,7 +842,7 @@ func (game *Game) handleIslandOrderSubmit(client *connection.Client, req *protob
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // maybeUrgentOrder may bring an urgent order (SC_21407) after a common one
@@ -916,7 +916,7 @@ func (game *Game) handleIslandOrderSubmitUrgent(client *connection.Client, req *
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandOrderSubmitFirm answers IslandSubmitOrderCommand for a fixed
@@ -987,7 +987,7 @@ func (game *Game) handleIslandOrderSubmitFirm(client *connection.Client, req *pr
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandOrderReplace answers IslandReplaceOrderCommand (CS_21403): a
@@ -1015,7 +1015,7 @@ func (game *Game) handleIslandOrderReplace(client *connection.Client, req *proto
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandOrderTendency answers IslandSetOrderTendencyCommand
@@ -1071,5 +1071,5 @@ func (game *Game) handleIslandOrderFavorAward(client *connection.Client, req *pr
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }

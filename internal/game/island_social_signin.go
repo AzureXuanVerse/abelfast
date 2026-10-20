@@ -154,7 +154,7 @@ func (game *Game) handleIslandSignIn(client *connection.Client, req *protobuf.CS
 			game.deliver(client, owner, update)
 		}
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // onIsland tells whether a commander is on an island.
@@ -205,7 +205,7 @@ func (game *Game) handleIslandSignInInvite(client *connection.Client, req *proto
 		return nil
 	})
 	if errors.Is(err, errIslandUndo) {
-		return client.Send(reply)
+		return client.Send(islandStamped(reply))
 	}
 	if err != nil {
 		return err
@@ -213,7 +213,7 @@ func (game *Game) handleIslandSignInInvite(client *connection.Client, req *proto
 	for _, id := range invited {
 		game.deliver(client, id, notice)
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandGiftTags answers IslandGetGiftTagCommand (CS_21315): for the
@@ -248,5 +248,5 @@ func (game *Game) handleIslandGiftTags(client *connection.Client, req *protobuf.
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }

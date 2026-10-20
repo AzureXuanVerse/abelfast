@@ -230,7 +230,7 @@ func (game *Game) handleIslandShipOrderOp(client *connection.Client, req *protob
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandShipOrderLoad answers IslandShipOrderOpCommand's loading
@@ -299,7 +299,7 @@ func (game *Game) handleIslandShipOrderLoad(client *connection.Client, req *prot
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandShipOrderReset answers IslandResetShipOrderCommand (CS_21429
@@ -331,7 +331,7 @@ func (game *Game) handleIslandShipOrderReset(client *connection.Client, req *pro
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandShipOrderExchange answers IslandExchangeShipOrderCommand
@@ -369,7 +369,7 @@ func (game *Game) handleIslandShipOrderExchange(client *connection.Client, req *
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // randomPick draws n distinct entries of ids (all of them when fewer).

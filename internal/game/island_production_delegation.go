@@ -289,7 +289,7 @@ func (game *Game) handleIslandStartDelegation(client *connection.Client, req *pr
 	if appoint != nil {
 		game.tellIsland(client, client.CommanderID, &protobuf.SC_21220{IslandId: proto.Uint32(client.CommanderID), AppointData: appoint})
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // shipWorking tells whether a character runs a delegation anywhere.
@@ -362,7 +362,7 @@ func (game *Game) handleIslandAddDelegation(client *connection.Client, req *prot
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandFinishDelegation answers IslandFinishDelegationCommand
@@ -447,7 +447,7 @@ func (game *Game) handleIslandFinishDelegation(client *connection.Client, req *p
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandDelegationAward answers IslandGetDelegationAwardCommand
@@ -581,7 +581,7 @@ func (game *Game) handleIslandDelegationAward(client *connection.Client, req *pr
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // productionMadeEvents counts what a site made for the island tasks: the

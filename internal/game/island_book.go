@@ -191,7 +191,7 @@ func (game *Game) handleIslandBookUnlock(client *connection.Client, req *protobu
 		return err
 	}
 	reply.Result = proto.Uint32(0)
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // islandShipOwned tells whether the island has a character
@@ -263,7 +263,7 @@ func (game *Game) handleIslandBookPoints(client *connection.Client, req *protobu
 		return err
 	}
 	reply.Result = proto.Uint32(0)
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandBookAward answers IslandGetPointAwardCommand (CS_21347, lv
@@ -305,5 +305,5 @@ func (game *Game) handleIslandBookAward(client *connection.Client, req *protobuf
 		return err
 	}
 	reply.Result = proto.Uint32(0)
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }

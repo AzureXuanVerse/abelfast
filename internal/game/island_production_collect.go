@@ -180,7 +180,7 @@ func (game *Game) handleIslandSlotCollect(client *connection.Client, req *protob
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handArea is a field of a site, nil if it has none such.
@@ -268,7 +268,7 @@ func (game *Game) handleIslandHandPlant(client *connection.Client, req *protobuf
 	if len(reply.HandList) > 0 {
 		game.tellIsland(client, client.CommanderID, &protobuf.SC_21221{IslandId: proto.Uint32(client.CommanderID), HandList: reply.HandList})
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandHandPlantAward answers IslandSlotHandPlantAwardCommand
@@ -323,7 +323,7 @@ func (game *Game) handleIslandHandPlantAward(client *connection.Client, req *pro
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandStopHandPlant answers IslandStopHandPlantHalfWayCommand
@@ -356,7 +356,7 @@ func (game *Game) handleIslandStopHandPlant(client *connection.Client, req *prot
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // IslandAutoCollectHelper.SelectType - 1, as CS_21539 sends it
@@ -523,7 +523,7 @@ func (game *Game) handleIslandAutoCollect(client *connection.Client, req *protob
 	if len(gathered) > 0 {
 		game.tellIsland(client, client.CommanderID, &protobuf.SC_21528{IslandId: proto.Uint32(client.CommanderID), GatherList: gathered})
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandAutoCollectData answers IslandGetAutoCollectionCommand
@@ -543,5 +543,5 @@ func (game *Game) handleIslandAutoCollectData(client *connection.Client, req *pr
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }

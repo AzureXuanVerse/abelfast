@@ -197,7 +197,7 @@ func (game *Game) handleIslandUpgrade(client *connection.Client, req *protobuf.C
 	if reply.GetRet() != 0 {
 		reply.DropList = nil
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandName answers SetIslandNameCommand (CS_21004): the island's
@@ -251,7 +251,7 @@ func (game *Game) handleIslandProsperityAward(client *connection.Client, req *pr
 	if reply.GetRet() != 0 {
 		reply.DropList = nil
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandStorageUpgrade answers UpgradeIslandInventoryCommand
@@ -347,7 +347,7 @@ func (game *Game) handleIslandOverflow(client *connection.Client, req *protobuf.
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandConvert answers IslandConvertSeasonPtCommand (CS_21014, the
@@ -439,7 +439,7 @@ func (game *Game) handleIslandExchange(client *connection.Client, req *protobuf.
 	if reply.GetResult() != 0 {
 		reply.DropList = nil
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // islandCapacity is how many slots the warehouse has

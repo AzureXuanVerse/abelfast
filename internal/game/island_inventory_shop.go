@@ -3,6 +3,7 @@ package game
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"slices"
 	"time"
 
@@ -150,7 +151,7 @@ func (game *Game) handleIslandShop(client *connection.Client, req *protobuf.CS_2
 	} else {
 		reply.Result = proto.Uint32(0)
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandShopBuy answers IslandShopOpCommand's SHOP_BUY_COMMODITY
@@ -259,7 +260,7 @@ func (game *Game) handleIslandShopBuy(client *connection.Client, req *protobuf.C
 	if reply.GetResult() != 0 {
 		reply.DropList = nil
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandShopRefresh answers IslandShopOpCommand's
@@ -302,5 +303,19 @@ func (game *Game) handleIslandShopRefresh(client *connection.Client, req *protob
 	if reply.GetResult() != 0 {
 		reply.ShopInfo = nil
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
+}
+
+// islandShopsUpdate lists in private.shop_list every shop the commander may
+// see now and drops the others, for the island's data (SC_21201): the shop
+// page reads the first shop to show from that list as soon as it opens
+// (IslandShopAgency:GetInitShowingShop), before its own requests come back.
+func islandShopsUpdate(state *islandState, now time.Time) {
+	for _, id := range slices.Sorted(maps.Keys(islandNormalShops)) {
+		if state.islandShopOpen(id, now) {
+			state.islandShop(id)
+		} else {
+			state.dropIslandShop(id)
+		}
+	}
 }

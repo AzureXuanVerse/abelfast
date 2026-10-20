@@ -328,6 +328,8 @@ func (game *Game) handleIslandData(client *connection.Client, req *protobuf.CS_2
 			if _, _, err := refreshIslandTasks(state, serverNow()); err != nil {
 				return err
 			}
+			// the shops it may see
+			islandShopsUpdate(state, serverNow())
 			// the characters' daily greetings and skills
 			islandShipsDaily(state, serverNow())
 			// its orders and restaurants as of now
@@ -396,6 +398,8 @@ func (game *Game) handleIslandEnterMap(client *connection.Client, req *protobuf.
 }
 
 // handleIslandExit answers ExitIslandCommand (CS_21204): off the island.
+//
+//belfast:static
 func (game *Game) handleIslandExit(client *connection.Client, req *protobuf.CS_21204) error {
 	game.leaveIsland(context.Background(), client)
 	return client.Send(&protobuf.SC_21205{Result: proto.Uint32(0)})
@@ -404,6 +408,8 @@ func (game *Game) handleIslandExit(client *connection.Client, req *protobuf.CS_2
 // handleIslandHeartbeat takes IslandHearBeatMgr's beat (CS_21215, every
 // IslandConst.HEART_BEAT_INTERVAL seconds on an island, no reply). The
 // visitors' log pushes (SC_21216) are sent as visits happen.
+//
+//belfast:static
 func (game *Game) handleIslandHeartbeat(client *connection.Client, req *protobuf.CS_21215) error {
 	world := &game.islands
 	world.mu.Lock()
@@ -435,6 +441,8 @@ func (game *Game) handleIslandSync(client *connection.Client, req *protobuf.CS_2
 // seat (slot) of a scene object (a bench, a plaza furniture: type
 // IslandConst.SYNC_TYPE_*), setting its status. A seat someone else holds is
 // refused (result 1); the others see the object change (SC_21207).
+//
+//belfast:static
 func (game *Game) handleIslandSyncControl(client *connection.Client, req *protobuf.CS_21209) error {
 	islandID, here := game.islandOf(client)
 	if !here || islandID != req.GetIslandId() {
@@ -505,6 +513,8 @@ func (game *Game) handleIslandRecordPosition(client *connection.Client, req *pro
 // connection came back while on an island): 0 when the commander is still
 // there on this connection, else non-zero and the client enters again
 // (GAME.ISLAND_ON_RECONNECT).
+//
+//belfast:static
 func (game *Game) handleIslandReconnect(client *connection.Client, req *protobuf.CS_21230) error {
 	islandID, here := game.islandOf(client)
 	if !here || islandID != req.GetIslandId() {

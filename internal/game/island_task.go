@@ -343,7 +343,7 @@ func (game *Game) handleIslandTaskRefresh(client *connection.Client, req *protob
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandTaskAccept answers IslandAcceptTaskCommand (CS_21032): the
@@ -379,7 +379,7 @@ func (game *Game) handleIslandTaskAccept(client *connection.Client, req *protobu
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandTaskTrace answers SetIslandTraceTaskCommand (CS_21034): the
@@ -413,7 +413,7 @@ func (game *Game) handleIslandTaskUpdate(client *connection.Client, req *protobu
 	target, ok := islandTaskTargets[req.GetTargetId()]
 	if !ok || !slices.Contains(islandClientTargets, target.Type) {
 		reply.Result = result(errRefused)
-		return client.Send(reply)
+		return client.Send(islandStamped(reply))
 	}
 	err := game.tx(context.Background(), client, func(tx *Tx) error {
 		state, err := tx.island()
@@ -434,7 +434,7 @@ func (game *Game) handleIslandTaskUpdate(client *connection.Client, req *protobu
 		return err
 	}
 	reply.Result = proto.Uint32(0)
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // submitIslandTask finishes a running task (IslandSubmitTaskCommand): its
@@ -503,7 +503,7 @@ func (game *Game) handleIslandTaskSubmit(client *connection.Client, req *protobu
 		return err
 	}
 	reply.Result = proto.Uint32(0)
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandTaskSubmitAll answers IslandSubmitTaskOneStepCommand
@@ -531,7 +531,7 @@ func (game *Game) handleIslandTaskSubmitAll(client *connection.Client, req *prot
 		return err
 	}
 	reply.Result = proto.Uint32(0)
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // islandSeasonEnd is when a development season ends.
@@ -571,7 +571,7 @@ func (game *Game) handleIslandSeasonPtAward(client *connection.Client, req *prot
 		return err
 	}
 	reply.Result = proto.Uint32(0)
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandSeasonReset answers IslandResetSeasonCommand (CS_21024, sent
@@ -606,7 +606,7 @@ func (game *Game) handleIslandSeasonReset(client *connection.Client, req *protob
 		return err
 	}
 	reply.Result = proto.Uint32(0)
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // IslandAchievementType values the server counts
@@ -713,7 +713,7 @@ func (game *Game) handleIslandAchievementAward(client *connection.Client, req *p
 		return err
 	}
 	reply.Result = proto.Uint32(0)
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // IslandAchievementType.GetRuntimeTypes: records the client counts from the

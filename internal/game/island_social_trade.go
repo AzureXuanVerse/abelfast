@@ -197,7 +197,7 @@ func (game *Game) handleIslandTrade(client *connection.Client, req *protobuf.CS_
 	if err != nil && !errors.Is(err, errIslandUndo) {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandTradePrice answers IslandGetFriendTradeRankCommand (CS_21243,
@@ -223,7 +223,7 @@ func (game *Game) handleIslandTradePrice(client *connection.Client, req *protobu
 	if err != nil {
 		return err
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
 
 // handleIslandTradeInvite answers IslandInviteTradeCommand (CS_21245):
@@ -272,7 +272,7 @@ func (game *Game) handleIslandTradeInvite(client *connection.Client, req *protob
 		return nil
 	})
 	if errors.Is(err, errIslandUndo) {
-		return client.Send(reply)
+		return client.Send(islandStamped(reply))
 	}
 	if err != nil {
 		return err
@@ -280,5 +280,5 @@ func (game *Game) handleIslandTradeInvite(client *connection.Client, req *protob
 	for _, id := range invited {
 		game.deliver(client, id, notice)
 	}
-	return client.Send(reply)
+	return client.Send(islandStamped(reply))
 }
