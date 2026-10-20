@@ -24,9 +24,10 @@ import (
 // lightest and heaviest, cups) and the fish's item goes to its warehouse.
 // The others on the island watch it (SC_21232 cast, SC_21233 end).
 //
-// Nothing in the tables or on the wiki says which fish bite where, how
-// often, or how heavy they are: the pool, rates and weights below are
-// GUESSES.
+// The wiki (Recent News, Season II update) says only that "upgrading your
+// fishing rod in Island Tech or changing lure will help attract different
+// types of fish"; nothing says which fish bite where, how often, or how
+// heavy they are: the rates and weights below are GUESSES.
 
 // IslandConst.FISHING_OP_*: how a cast ended (CS_21062 end_result)
 const islandFishingSuccess = 3
@@ -63,6 +64,12 @@ type islandFishConfig struct {
 	Hard   uint32 `json:"hard"`
 }
 
+// islandFishRodConfig is an island_fish_rod row: a rod and the hardest fish
+// it lands.
+type islandFishRodConfig struct {
+	Hard uint32 `json:"hard"`
+}
+
 // islandCast is a cast waiting for its end (CS_21062).
 type islandCast struct {
 	Island uint32 `json:"island"`
@@ -75,7 +82,7 @@ type islandCast struct {
 var (
 	islandFishes     map[uint32]islandFishConfig
 	islandFishPoints map[uint32]struct{}
-	islandFishRods   map[uint32]struct{}
+	islandFishRods   map[uint32]islandFishRodConfig
 	// a bait's usage_arg pairs {fish, rate change}
 	islandBaitPattern = regexp.MustCompile(`\{(\d+),(-?\d+)\}`)
 )
@@ -97,7 +104,8 @@ func (game *Game) registerIslandFishing() {
 // islandFishingDefaults gives an island the first fishing rod: the client
 // can't fish without one (IslandFishingOpView:InitArgs asserts
 // island_fish_rod[fish_rod]) and the better ones come from abilities.
-// GUESS: the first rod is there from the start.
+// The first rod is there from the start (wiki, Recent News, Season II
+// update: rods are upgraded in Island Tech, the fishing rod abilities).
 func islandFishingDefaults(state *islandState) {
 	fish := state.private().FishSys
 	if fish == nil || fish.GetFishRod() != 0 || len(islandFishRods) == 0 {
@@ -123,15 +131,21 @@ func (state *islandState) islandBait() uint32 {
 	return islandDefaultBait
 }
 
-// pickIslandFish draws the fish that bites and its weight in grams with its
-// cup. GUESSES: every fish bites anywhere, at 1000 / 700 / 400 / 150 for
-// rarity 1 to 4, plus the bait's rate changes (its usage_arg {fish, change}
-// pairs, read as the same scale); the weight is uniform within
-// 300 x hard to 1500 x hard grams, the bottom 5% a min cup, the top 5% a max
-// cup.
-func pickIslandFish(bait uint32) (uint32, uint32, uint32) {
+// pickIslandFish draws the fish that bites on rod and its weight in grams
+// with its cup. The rod and the lure change which fish come (wiki, Recent
+// News, Season II update): a rod draws the fish up to its hard
+// (island_fish_rod 3 / 6 / 9 against island_fish 1 to 8, so each Island
+// Tech rod adds the next fish tier). GUESSES: the threshold on hard, that
+// every fish bites at any point, at 1000 / 700 / 400 / 150 for rarity 1 to
+// 4, plus the bait's rate changes (its usage_arg {fish, change} pairs, read
+// as the same scale); the weight is uniform within 300 x hard to 1500 x
+// hard grams, the bottom 5% a min cup, the top 5% a max cup.
+func pickIslandFish(bait, rod uint32) (uint32, uint32, uint32) {
 	rates := map[uint32]int{}
 	for id, fish := range islandFishes {
+		if config, ok := islandFishRods[rod]; ok && fish.Hard > config.Hard {
+			continue
+		}
 		rates[id] = []int{1000, 1000, 700, 400, 150}[min(fish.Rarity, 4)]
 	}
 	for _, match := range islandBaitPattern.FindAllStringSubmatch(string(islandItems[bait].UsageArg), -1) {
@@ -195,7 +209,7 @@ func (game *Game) handleIslandFishingCast(client *connection.Client, req *protob
 		}
 		islandFishingDefaults(state)
 		rod = state.private().GetFishSys().GetFishRod()
-		fish, weight, cup := pickIslandFish(state.islandBait())
+		fish, weight, cup := pickIslandFish(state.islandBait(), rod)
 		if fish == 0 {
 			return errRefused
 		}
