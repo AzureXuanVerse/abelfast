@@ -328,6 +328,8 @@ func (game *Game) handleIslandData(client *connection.Client, req *protobuf.CS_2
 			if _, _, err := refreshIslandTasks(state, serverNow()); err != nil {
 				return err
 			}
+			// the characters' daily greetings and skills
+			islandShipsDaily(state, serverNow())
 			reply.Island = state.island
 			reply.PlayerPosition = state.position
 			return nil
