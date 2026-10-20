@@ -265,6 +265,34 @@ type CommanderBuildState struct {
 	ExchangeCount uint32
 }
 
+type CommanderCityRebuild struct {
+	CommanderID  uint32
+	ActivityID   uint32
+	Pt           int64
+	SummaryPt    int64
+	MaxLevel     uint32
+	CurLevel     uint32
+	MaxDisplay   uint32
+	FightTime    int64
+	LeftHp       int64
+	AwardedLevel uint32
+}
+
+type CommanderCityRebuildBuff struct {
+	CommanderID uint32
+	ActivityID  uint32
+	BuffGroup   uint32
+	Level       uint32
+}
+
+type CommanderCityRebuildUnit struct {
+	CommanderID uint32
+	ActivityID  uint32
+	UnitID      uint32
+	Done        bool
+	StartTime   int64
+}
+
 type CommanderCollectionAward struct {
 	CommanderID uint32
 	StoreupID   uint32

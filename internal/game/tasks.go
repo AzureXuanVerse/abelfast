@@ -60,6 +60,8 @@ var taskAbsoluteSubTypes = map[uint32]bool{
 	TaskSubCruisePt:     true,
 	TaskSubStars:        true,
 	TaskSubTechPoints:   true,
+	TaskSubCityDPS:      true,
+	TaskSubCityWave:     true,
 }
 
 // Sub types a newly accepted task starts from what the commander already did.
@@ -77,6 +79,8 @@ var taskInheritedSubTypes = map[uint32]bool{
 	TaskSubCruisePt:     true,
 	TaskSubStars:        true,
 	TaskSubTechPoints:   true,
+	TaskSubCityDPS:      true,
+	TaskSubCityWave:     true,
 }
 
 // item_virtual_data_statistics ids earned from tasks (drop type 8)

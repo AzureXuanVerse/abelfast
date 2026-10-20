@@ -162,7 +162,13 @@ func (game *Game) activityList(ctx context.Context, commander db.Commander) (*pr
 		case activityTypeMonthSign:
 			state = monthSignState(state, now)
 		}
-		reply.ActivityList = append(reply.ActivityList, activityInfo(config, state, stopTime, fleets[config.ID]))
+		info := activityInfo(config, state, stopTime, fleets[config.ID])
+		if config.Type == activityTypeCityRebuild {
+			if info.Date1KeyValueList, err = cityRebuildBag(ctx, game.DB.Queries, commander.ID, config.ID); err != nil {
+				return nil, err
+			}
+		}
+		reply.ActivityList = append(reply.ActivityList, info)
 	}
 	return reply, nil
 }

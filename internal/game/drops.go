@@ -103,6 +103,11 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 			if err := tx.addWorldBossSummonPt(id, count); err != nil {
 				return err
 			}
+		case kind == dropTypeVItem && cityRebuild.ptItems[id] != 0:
+			// a City Rebuild activity's koban, kept by its city
+			if err := tx.addCityRebuildPt(cityRebuild.ptItems[id], count); err != nil {
+				return err
+			}
 		case kind == dropTypeMetaPt:
 			if err := tx.addMetaPt(id, count); err != nil {
 				return err
