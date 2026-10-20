@@ -484,6 +484,27 @@ func (game *Game) Register() {
 	packets.Handle(game.handleEducateRefresh)
 	packets.Handle(game.handleEducateBuyCollect)
 	packets.Handle(game.handleEducateCharacter)
+	// Private Quarters (apartment): rooms, Intimacy, gifts, furniture
+	packets.Handle(game.handleApartmentRoomUnlock)
+	packets.Handle(game.handleApartmentTriggerFavor)
+	packets.Handle(game.handleApartmentLevelUp)
+	packets.Handle(game.handleApartmentReplaceFurniture)
+	packets.Handle(game.handleApartmentGiveGift)
+	packets.Handle(game.handleApartmentCollectItem)
+	packets.Handle(game.handleApartmentChangeSkin)
+	packets.Handle(game.handleApartmentTalk)
+	packets.Handle(game.handleSelectDorm3dEnter)
+	packets.Handle(game.handleApartmentInvite)
+	packets.Handle(game.handleApartmentSetCall)
+	packets.Handle(game.handleApartmentVisit)
+	packets.Handle(game.handleApartmentHideParts)
+	// Private Quarters (apartment): Juustagram, chats, phone calls
+	packets.Handle(game.handleApartmentEvents)
+	packets.Handle(game.handleApartmentInsMark)
+	packets.Handle(game.handleApartmentInsReply)
+	packets.Handle(game.handleApartmentChatBackground)
+	packets.Handle(game.handleApartmentChatCare)
+	packets.Handle(game.handleApartmentChatTopic)
 	// meowfficers and the cattery
 	packets.Handle(game.handleBuyMeowfficerBoxes)
 	packets.Handle(game.handleTrainMeowfficerBox)
@@ -660,8 +681,10 @@ var loginBurst = []loginPush{
 		return game.dorm(l.ctx, l.queries, l.commander, l.ships)
 	},
 	func(game *Game, l *login) (proto.Message, error) { return energyTick(l.commander, l.now.Unix()), nil },
-	// ApartmentProxy / Dorm3dInsProxy: no dorm 3D
-	empty[protobuf.SC_28000](),
+	// ApartmentProxy / Dorm3dInsProxy: the Private Quarters
+	func(game *Game, l *login) (proto.Message, error) {
+		return apartmentLogin(l.ctx, l.queries, l.commander.ID, l.now)
+	},
 	func(game *Game, l *login) (proto.Message, error) {
 		return mailCounts(l.ctx, l.queries, l.commander.ID)
 	},
@@ -723,6 +746,10 @@ func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.
 		return err
 	}
 	if _, err := game.resetWeekIfDue(ctx, commander.ID, now); err != nil {
+		return err
+	}
+	// a weekly fixed task the commander reached the level of this week
+	if _, err := acceptTasks(ctx, game.DB.Queries, commander.ID, weeklyFixedTasksAt(commander.Level), uint32(now.Unix())); err != nil {
 		return err
 	}
 	ships, err := game.DB.ListShipsByCommander(ctx, commander.ID)

@@ -27,6 +27,50 @@ type ActivityFleetShip struct {
 	ShipID      uint32
 }
 
+type ApartmentFurniture struct {
+	CommanderID uint32
+	RoomID      uint32
+	FurnitureID uint32
+	SlotID      uint32
+}
+
+type ApartmentGift struct {
+	CommanderID uint32
+	GiftID      uint32
+	Number      uint32
+	UsedNumber  uint32
+}
+
+type ApartmentHiddenPart struct {
+	CommanderID uint32
+	ShipGroup   uint32
+	SkinID      uint32
+	Parts       IDList
+}
+
+type ApartmentRoom struct {
+	CommanderID uint32
+	RoomID      uint32
+	Collections IDList
+	Ships       IDList
+}
+
+type ApartmentShip struct {
+	CommanderID uint32
+	ShipGroup   uint32
+	FavorLv     uint32
+	FavorExp    uint32
+	DailyFavor  uint32
+	FavorDay    uint32
+	Triggers    IDList
+	Dialogues   IDList
+	Skins       IDList
+	CurSkin     uint32
+	Name        string
+	NameCd      uint32
+	VisitTime   uint32
+}
+
 type AttireFrame struct {
 	CommanderID uint32
 	DropType    uint32
@@ -223,6 +267,48 @@ type CommanderActivityTask struct {
 	TaskID      uint32
 	Progress    uint32
 	Finished    bool
+}
+
+type CommanderApartment struct {
+	CommanderID uint32
+	VigorUsed   uint32
+	VigorDay    uint32
+	VisitDay    uint32
+}
+
+type CommanderApartmentChat struct {
+	CommanderID uint32
+	ShipGroup   uint32
+	CareFlag    uint32
+	CurBack     uint32
+	CurCommID   uint32
+}
+
+type CommanderApartmentEvent struct {
+	CommanderID uint32
+	ShipGroup   uint32
+	EventType   uint32
+	Value       uint32
+}
+
+type CommanderApartmentInsContent struct {
+	CommanderID uint32
+	Type        uint32
+	ContentID   uint32
+	ShipGroup   uint32
+	Time        uint32
+	ReadFlag    uint32
+	GoodFlag    uint32
+	ExitTime    uint32
+}
+
+type CommanderApartmentInsReply struct {
+	CommanderID uint32
+	Type        uint32
+	ContentID   uint32
+	ReplyKey    uint32
+	Value       uint32
+	Time        uint32
 }
 
 type CommanderAppearance struct {

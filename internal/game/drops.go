@@ -33,7 +33,8 @@ const (
 // skins (for good or for a time, as the client adds them: Drop's
 // DROP_TYPE_SKIN and DROP_TYPE_SKIN_TIMELIMIT cases, model/vo/drop.lua),
 // gear skins (the gear skin box) and meowfficers (grantMeowfficers, pushed
-// in SC_25039), Atelier materials, augment modules (pushed in SC_14200),
+// in SC_25039), the Private Quarters' furniture, gifts and outfits,
+// Atelier materials, augment modules (pushed in SC_14200),
 // activities' own items (in their virtual bag), recording the task progress
 // they cause. Frames, emojis...
 // have no storage yet and are only logged.
@@ -138,6 +139,11 @@ func (tx *Tx) grantDrops(drops []*protobuf.DROPINFO) error {
 		case kind > dropTypeUseActivityDrop && kind != dropTypeRyza && activityDropTypes[kind].ActivityID != 0:
 			// an activity's own items, kept in its virtual bag
 			if err := tx.addActivityItem(activityDropTypes[kind].ActivityID, id, count); err != nil {
+				return err
+			}
+		case kind == dropTypeDorm3dFurniture || kind == dropTypeDorm3dGift || kind == dropTypeDorm3dSkin:
+			// the Private Quarters' furniture, gifts and outfits
+			if err := tx.addDorm3dDrop(kind, id, count); err != nil {
 				return err
 			}
 		case kind == dropTypeMeowfficer:

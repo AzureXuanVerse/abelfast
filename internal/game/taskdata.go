@@ -104,6 +104,12 @@ var (
 	// names end in "奖励任务", bonus task, and the capture has 2)
 	weeklyBonusTasks uint32
 
+	// weeklyFixedTasks are the TYPE_NEW_WEEKLY tasks every commander open
+	// to them gets each week besides the draw (gameset weekly_fixed_task:
+	// 7311, the Private Quarters' "Interact with shipgirls ... for 3
+	// days", which SelectDorm3DScene reads unchecked)
+	weeklyFixedTasks []uint32
+
 	// weeklyTargets are the weekly mission points each phase of the weekly
 	// reward bar needs (gameset weekly_target, WeekTaskProgress.targets), and
 	// weeklyPhaseDrops what each phase gives (gameset weekly_drop_client,
@@ -139,6 +145,7 @@ func loadTaskData() error {
 		},
 		func() error { return gamedata.GamesetDescription("weekly_target", &weeklyTargets) },
 		func() error { return gamedata.GamesetDescription("weekly_drop_client", &weeklyPhaseDrops) },
+		func() error { return gamedata.GamesetDescription("weekly_fixed_task", &weeklyFixedTasks) },
 	)
 	if err != nil {
 		return err

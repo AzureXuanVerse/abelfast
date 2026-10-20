@@ -240,18 +240,35 @@ func starterTasks(level uint32) []uint32 {
 	return append(tasks, weeklyBonusDraw(level)...)
 }
 
+// weeklyFixedTasksAt are the weeklyFixedTasks open at level.
+func weeklyFixedTasksAt(level uint32) []uint32 {
+	var ids []uint32
+	for _, id := range weeklyFixedTasks {
+		if config, ok := taskConfigs[id]; ok && config.Level <= level {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
 // weeklyBonusDraw draws the weeklyBonusTasks TYPE_NEW_WEEKLY tasks a
-// commander at level is offered for a week.
+// commander at level is offered for a week, after the weeklyFixedTasks
+// open at level.
 func weeklyBonusDraw(level uint32) []uint32 {
-	var bonus []uint32
+	var fixed, bonus []uint32
 	for id, config := range taskConfigs {
-		if config.Level <= level && config.Type == taskTypeNewWeekly {
+		switch {
+		case config.Level > level || config.Type != taskTypeNewWeekly:
+		case slices.Contains(weeklyFixedTasks, id):
+			fixed = append(fixed, id)
+		default:
 			bonus = append(bonus, id)
 		}
 	}
+	slices.Sort(fixed)
 	slices.Sort(bonus)
 	rand.Shuffle(len(bonus), func(i, j int) { bonus[i], bonus[j] = bonus[j], bonus[i] })
-	return bonus[:min(int(weeklyBonusTasks), len(bonus))]
+	return append(fixed, bonus[:min(int(weeklyBonusTasks), len(bonus))]...)
 }
 
 // grantTasksStarter gives a new commander the capture's SC_20001 tasks: the

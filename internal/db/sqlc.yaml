@@ -70,3 +70,21 @@ sql:
           - column: commander_auction.item_list
             go_type:
               type: IDList
+          - column: apartment_ships.triggers
+            go_type:
+              type: IDList
+          - column: apartment_ships.dialogues
+            go_type:
+              type: IDList
+          - column: apartment_ships.skins
+            go_type:
+              type: IDList
+          - column: apartment_hidden_parts.parts
+            go_type:
+              type: IDList
+          - column: apartment_rooms.collections
+            go_type:
+              type: IDList
+          - column: apartment_rooms.ships
+            go_type:
+              type: IDList

@@ -28,6 +28,7 @@ func loadGameData() error {
 		loadItemData,
 		loadSpWeaponData,
 		loadEducateData,
+		loadApartmentData,
 		loadNewCommander,
 		loadStarterFurniture,
 		loadDormData,
@@ -79,5 +80,6 @@ func loadGameData() error {
 		loadIslandData,
 		loadAuctionData,
 		loadPlayRoomData,
+		loadApartmentInsData,
 	)
 }
