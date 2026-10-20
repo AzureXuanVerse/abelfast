@@ -298,7 +298,8 @@ func islandOrdersUpdate(state *islandState, now time.Time) (*islandOrderChanges,
 		if extra.Week != 0 {
 			orders.TimeSlotNum = proto.Uint32(0)
 			orders.Favor = proto.Uint32(0)
-			// GUESS: the order level rewards can be had again with the exp
+			// the request ratings are weekly ("weekly ratings", Recent
+			// News/2025, season reset), so their rewards can be had again
 			orders.GetFavor_ = nil
 		}
 		extra.Week = weekStart
@@ -612,10 +613,13 @@ func (state *islandState) dailyOrderLimit() uint32 {
 	return islandSetInt("order_daily_limit_num") + state.islandAbilityTotal(islandAbilityOrderDailyCount)
 }
 
-// orderItemPool is the items an order can ask for. GUESS: the island's
-// materials (island_item_data_template type 1 with an order_price, no
-// seeds) it holds, and the raw ones (below 3000: crops, ore, wood, animal
-// products) it can produce (no tech_id, or a finished technology).
+// orderItemPool is the items an order or a transport job can ask for: never
+// one whose production is still locked (its tech_id technology unfinished,
+// as IslandDropDescribeInfo reads it), "locked production items will no
+// longer appear in newly refreshed orders" (Recent News/2025, the Request and
+// Transport Job refresh change). GUESS the rest: the island's materials
+// (island_item_data_template type 1 with an order_price, no seeds) it holds,
+// and the raw ones (below 3000: crops, ore, wood, animal products).
 func (state *islandState) orderItemPool() (owned, all []uint32) {
 	finished := state.public().GetTech().GetFinishList()
 	for _, id := range slices.Sorted(maps.Keys(islandOrderItems)) {
@@ -623,11 +627,14 @@ func (state *islandState) orderItemPool() (owned, all []uint32) {
 		if item.Type != 1 || item.OrderPrice == 0 || islandOrderSeedItems[id] {
 			continue
 		}
+		if item.TechID != 0 && !slices.Contains(finished, item.TechID) {
+			continue
+		}
 		have := state.islandItemCount(id) > 0
 		if have {
 			owned = append(owned, id)
 		}
-		if have || id < 3000 && (item.TechID == 0 || slices.Contains(finished, item.TechID)) {
+		if have || id < 3000 {
 			all = append(all, id)
 		}
 	}
@@ -846,10 +853,12 @@ func (game *Game) handleIslandOrderSubmit(client *connection.Client, req *protob
 }
 
 // maybeUrgentOrder may bring an urgent order (SC_21407) after a common one
-// was delivered. GUESS: island_set order_special_probability[1] percent of
-// the time, in the urgent slots the island has (their TYPE_ORDER ability)
-// with no urgent order on, while fewer than order_special_limit_num were
-// done this week.
+// was delivered ("completing Requests can also occasionally spawn Urgent
+// requests", Island Planner), while fewer than order_special_limit_num were
+// done this week (the "weekly urgent requests limit", Recent News/2025).
+// GUESS: island_set order_special_probability[1] percent of the time, in the
+// urgent slots the island has (their TYPE_ORDER ability) with no urgent order
+// on.
 func (state *islandState) maybeUrgentOrder(tx *Tx, now time.Time) error {
 	orders := state.orders()
 	if orders.GetTimeSlotNum() >= islandSetInt("order_special_limit_num") {
