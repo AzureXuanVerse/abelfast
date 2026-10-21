@@ -35,12 +35,15 @@ const (
 // which every light pool ship can join (destroyers, light cruisers, vanguard
 // sailing ships). The official server's draw gave Hatsuharu (301211).
 
-// rarityByRateName maps the rate_tip labels to ship_data_statistics rarity.
-// rate_tip is display text (view/ship/buildship/buildshiphelpwindow.lua) and
-// the only place the rates are; its labels are those of gametip
-// index_rare2..5, but "Ultra Rare" where index_rare6 says "Ultra", so they
-// are matched here rather than read from gametip.
-var rarityByRateName = map[string]uint32{"Common": 2, "Rare": 3, "Elite": 4, "Super Rare": 5, "Ultra Rare": 6}
+// rarityByRateName maps the English rate labels of the display texts (tech
+// packs, commander_build_rate_tip) to ship_data_statistics rarity: those of
+// gametip index_rare2..5, but "Ultra Rare" where index_rare6 says "Ultra",
+// so they are matched here rather than read from gametip. The other regions
+// label the cat box rates R, SR and SSR.
+var rarityByRateName = map[string]uint32{
+	"Common": 2, "Rare": 3, "Elite": 4, "Super Rare": 5, "Ultra Rare": 6,
+	"R": 3, "SR": 4, "SSR": 5,
+}
 
 // buildTimes are the construction times of the ships (base template id ->
 // seconds), server-side data the client never sees and no table has:

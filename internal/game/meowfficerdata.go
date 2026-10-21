@@ -137,8 +137,10 @@ type meowfficerBoxRate struct {
 	item, weight uint32
 }
 
-// rateTipEntry is a "Label: N%" of a rate tip.
-var rateTipEntry = regexp.MustCompile(`([A-Za-z][A-Za-z ]*): (\d+)%`)
+// rateTipEntry is a "Label: N%" of a rate tip, the label being the Latin
+// letters before the rate: "Super Rare: 5%" in EN, "SSR 5%" or "喵箱SSR 5%"
+// in the other regions.
+var rateTipEntry = regexp.MustCompile(`([A-Za-z][A-Za-z ]*?)\s*[:：]?\s*(\d+)%`)
 
 func loadMeowfficerData() error {
 	var items map[uint32]struct {
@@ -222,8 +224,9 @@ func loadMeowfficerDuplicates(restores map[uint32]dropRestore) {
 const meowfficerDuplicateGold = 2000
 
 // loadMeowfficerBoxRates reads the purchase rates out of
-// commander_build_rate_tip ("Rare: 60%; Elite: 35%; Super Rare: 5%."), the
-// labels being the cat rarities of a pool's boxes.
+// commander_build_rate_tip ("Rare: 60%; Elite: 35%; Super Rare: 5%.", "SSR
+// 5%、SR 35%、R 60%" outside EN), the labels being the cat rarities of a
+// pool's boxes.
 func loadMeowfficerBoxRates() error {
 	gametip, err := gamedata.Gametip()
 	if err != nil {
