@@ -250,14 +250,21 @@ func loadNewEducateData() error {
 		gamedata.Load("child2_site_display", &neSites),
 		gamedata.Load("child2_site_event_group", &neEvents),
 		gamedata.Load("child2_chat", &neChats),
+		// TW's gameset has neither (its client would fail opening the choose
+		// layer or ending a round past the last): no exhausted tokens, no
+		// endless factors there
 		func() error {
-			return gamedata.GamesetDescription("child2_pool_exhausted_token", &neExhausted)
+			_, err := gamedata.Feature(func() error {
+				return gamedata.GamesetDescription("child2_pool_exhausted_token", &neExhausted)
+			})
+			return err
 		},
 		func() error {
-			return gamedata.GamesetDescription("child2_endless_loop_extra_factor", &easy)
-		},
-		func() error {
-			return gamedata.GamesetDescription("child2_endless_loop_extra_factor_hard", &hard)
+			_, err := gamedata.Feature(
+				func() error { return gamedata.GamesetDescription("child2_endless_loop_extra_factor", &easy) },
+				func() error { return gamedata.GamesetDescription("child2_endless_loop_extra_factor_hard", &hard) },
+			)
+			return err
 		},
 		func() (err error) {
 			values, err := gamedata.Gameset()
