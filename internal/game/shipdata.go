@@ -428,7 +428,6 @@ func loadShipData() error {
 	var equips map[uint32]equipTemplateConfig
 	var equipStats map[uint32]equipStatisticsConfig
 	var gameset map[string]uint32
-	var gametip map[string]string
 	var shipTypes map[uint32]shipTypeConfig
 	var shipStars map[uint32]shipStarConfig
 	var metas map[uint32]json.RawMessage
@@ -450,10 +449,6 @@ func loadShipData() error {
 		loadBuildTimes,
 		func() (err error) {
 			gameset, err = gamedata.Gameset()
-			return err
-		},
-		func() (err error) {
-			gametip, err = gamedata.Gametip()
 			return err
 		},
 	)
@@ -622,7 +617,7 @@ func loadShipData() error {
 			itemPrices[id] = [2]uint32{price[0], price[1]}
 		}
 	}
-	readItemUses(items, techPackGear(equips, equipStats), gametip)
+	readItemUses(items, techPackGear(equips, equipStats))
 	readLessonBooks(items)
 	readMetaLessonBooks(items)
 	if err := readShipExpBooks(items); err != nil {

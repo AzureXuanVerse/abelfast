@@ -15,6 +15,7 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/gamedata"
+	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -202,43 +203,91 @@ func techPackGear(templates map[uint32]equipTemplateConfig, stats map[uint32]equ
 	return gear
 }
 
-// nationTips are the gametip names of the nations (Nation.Nation2Name,
-// model/const/nation.lua) a tech pack can be of.
-var nationTips = map[string]uint32{
-	"word_shipNation_baiYing":   1,
-	"word_shipNation_huangJia":  2,
-	"word_shipNation_chongYing": 3,
-	"word_shipNation_tieXue":    4,
-	"word_shipNation_dongHuang": 5,
-	"word_shipNation_saDing":    6,
-	"word_shipNation_beiLian":   7,
-	"word_shipNation_ziyou":     8,
-	"word_shipNation_weixi":     9,
-}
-
-// packRatePatterns read a tech pack's display lines once their color tags
-// are stripped: "40% chance to receive Rare gear.", and the one rarity
-// packs: "Contains Common gear", "Guaranteed to receive Super Rare gear".
-var (
-	packRatePattern = regexp.MustCompile(`(\d+)% chance to receive (Super Rare|Common|Rare|Elite) gear`)
-	packOnlyPattern = regexp.MustCompile(`(?:Contains|Guaranteed to receive) (Super Rare|Common|Rare|Elite) gear`)
-)
-
-// readTechPack is the fallback draw of a tech pack, from what the client
-// shows of it: a rarity by the rates of its display text ("40% chance to
-// receive Rare gear"), then any graded +0 gear of that rarity of the nation
-// whose name's first word is a word of the item's name ("T2 Sakura Tech
-// Pack"). nil when either can't be read (the starter submarine box, the
-// gear development packs).
-func readTechPack(row itemConfig, gear []packGear, gametip map[string]string) *dropPack {
-	words := strings.Fields(row.Name)
+// techPackNation is a tech pack's nation (Nation, model/const/nation.lua):
+// the packs are numbered 300<nation><tier> (30011 T1 Eagle to 30045 T5 Iron
+// Blood, as their names say in every region), and a pack outside that
+// numbering (30206, a T3 Sakura display sample) is of the numbered pack
+// whose name, in the region's own text, its name contains. 0 when neither
+// says (the starter submarine box, the gear development packs).
+func techPackNation(id uint32, row itemConfig, items map[uint32]itemConfig) uint32 {
+	if nation, tier := id/10%10, id%10; id/100 == 300 && nation > 0 && tier > 0 {
+		return nation
+	}
 	nationality, found := uint32(0), 0
-	for key, nation := range nationTips {
-		if name := strings.Fields(gametip[key]); len(name) > 0 && slices.Contains(words, name[0]) {
-			nationality, found = nation, found+1
+	for other, pack := range items {
+		if other/100 == 300 && other/10%10 > 0 && other%10 > 0 && pack.Name != "" && strings.Contains(row.Name, pack.Name) {
+			nationality, found = other/10%10, found+1
 		}
 	}
 	if found != 1 {
+		return 0
+	}
+	return nationality
+}
+
+// packRate and packColor read a tech pack's display lines, worded in the
+// region's language: "40% chance to receive <color=#3dc6ff>Rare
+// gear</color>.", "40%几率获得<color=#3dc6ff>稀有装备</color>".
+var (
+	packRate  = regexp.MustCompile(`(\d+)\s*%`)
+	packColor = regexp.MustCompile(`<color=#([0-9A-Fa-f]{6})>`)
+)
+
+// gearRarityByColor are the gear colors by rarity of
+// RecordShipEquipmentCommand (controller/command/ship/
+// recordshipequipmentcommand.lua, indexed by rarity - 1), the other palette
+// the pack texts color their gear with (TW's all, some of EN's); the rest
+// use rarityByRateColor's.
+var gearRarityByColor = map[string]uint32{"60a9ff": 3, "966af6": 4, "fff157": 5}
+
+// techPackOutcomes reads a tech pack's draw from its display text without
+// its words: after the first line, one line per outcome, its weight the
+// rate on it, its rarity the color of its gear (Common uncolored); the
+// last line of a pack that combines (compose_number) is the hint saying
+// so. A single outcome may have no rate; several without one (TW's
+// "較低機率獲得...", lower chance) can't be read: nil.
+func techPackOutcomes(row itemConfig) [][2]uint32 {
+	var lines []string
+	for _, line := range strings.Split(row.Display, "\n")[1:] {
+		if strings.TrimSpace(line) != "" {
+			lines = append(lines, line)
+		}
+	}
+	if n := len(lines); n > 0 && row.ComposeNumber > 0 {
+		lines = lines[:n-1]
+	}
+	var outcomes [][2]uint32
+	for _, line := range lines {
+		rarity := uint32(shipRarityGray) // gear rarities count as ships'
+		if match := packColor.FindStringSubmatch(line); match != nil {
+			color := strings.ToLower(match[1])
+			found, ok := rarityByRateColor[color]
+			if !ok {
+				found, ok = gearRarityByColor[color]
+			}
+			if !ok {
+				return nil
+			}
+			rarity = found
+		}
+		weight := uint64(100) // the only outcome
+		if match := packRate.FindStringSubmatch(line); match != nil {
+			weight, _ = strconv.ParseUint(match[1], 10, 32)
+		} else if len(lines) > 1 {
+			return nil
+		}
+		outcomes = append(outcomes, [2]uint32{uint32(weight), rarity})
+	}
+	return outcomes
+}
+
+// readTechPack is the fallback draw of a tech pack, from what the client
+// shows of it: a rarity by the outcomes of its display text, then any
+// graded +0 gear of that rarity of its nation. nil when either can't be
+// read.
+func readTechPack(id uint32, row itemConfig, gear []packGear, items map[uint32]itemConfig) *dropPack {
+	nationality := techPackNation(id, row, items)
+	if nationality == 0 {
 		return nil
 	}
 	byRarity := map[uint32][][]uint32{}
@@ -247,16 +296,9 @@ func readTechPack(row itemConfig, gear []packGear, gametip map[string]string) *d
 			byRarity[piece.rarity] = append(byRarity[piece.rarity], []uint32{dropTypeEquip, piece.id, 1})
 		}
 	}
-	display := rateTipTags.ReplaceAllString(row.Display, "")
 	var pack dropPack
-	for _, match := range packRatePattern.FindAllStringSubmatch(display, -1) {
-		rate, err := strconv.ParseUint(match[1], 10, 32)
-		if err == nil {
-			pack.Groups = append(pack.Groups, packGroup{uint32(rate), byRarity[rarityByRateName[match[2]]]})
-		}
-	}
-	if match := packOnlyPattern.FindStringSubmatch(display); len(pack.Groups) == 0 && match != nil {
-		pack.Groups = []packGroup{{100, byRarity[rarityByRateName[match[1]]]}}
+	for _, outcome := range techPackOutcomes(row) {
+		pack.Groups = append(pack.Groups, packGroup{outcome[0], byRarity[outcome[1]]})
 	}
 	// a rate whose rarity has no gear is a misread: no pack rather than
 	// one that may give nothing
@@ -268,9 +310,10 @@ func readTechPack(row itemConfig, gear []packGear, gametip map[string]string) *d
 
 // readItemUses reads the usage of the item_data_statistics rows belfast
 // opens.
-func readItemUses(items map[uint32]itemConfig, gear []packGear, gametip map[string]string) {
+func readItemUses(items map[uint32]itemConfig, gear []packGear) {
 	itemUses = make(map[uint32]itemUse, len(items))
 	itemComposes = map[uint32]itemCompose{}
+	var unread []uint32 // tech packs whose text gives no draw
 	for id, row := range items {
 		readItemCompose(id, row.itemUseConfig)
 		use := itemUse{usage: row.Usage}
@@ -280,7 +323,10 @@ func readItemUses(items map[uint32]itemConfig, gear []packGear, gametip map[stri
 		case usageDrop:
 			use.contents = icons
 			if len(icons) == 0 && row.Type == itemTypeEquipBox {
-				use.pack = readTechPack(row, gear, gametip)
+				use.pack = readTechPack(id, row, gear, items)
+				if use.pack == nil && techPackNation(id, row, items) != 0 {
+					unread = append(unread, id)
+				}
 			}
 		case usageDropTemplate:
 			var template []uint32
@@ -320,6 +366,10 @@ func readItemUses(items map[uint32]itemConfig, gear []packGear, gametip map[stri
 			use.skin = readSkinUse(row, icons, items)
 		}
 		itemUses[id] = use
+	}
+	if len(unread) > 0 {
+		slices.Sort(unread)
+		logger.WithFields("Items", logger.FieldValue("packs", unread)).Info("tech packs whose text gives no rates: drop_packs.json is their only draw")
 	}
 }
 
