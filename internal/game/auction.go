@@ -183,7 +183,7 @@ func loadAuctionData() error {
 	}
 	auction.settings["preorder_open"] = gameset["auction_preorder_open"]
 
-	auction.byGameType = map[uint32]uint32{}
+	auction.byGameType, auction.preorder = map[uint32]uint32{}, 0
 	for _, id := range slices.Sorted(maps.Keys(auction.sessions)) {
 		session := auction.sessions[id]
 		for _, entry := range session.ValueRange {
@@ -216,6 +216,7 @@ func loadAuctionData() error {
 		return gamedata.Missing("auction_session", "the ordered box (game_type 0)")
 	}
 
+	auction.oneHit = nil
 	for _, id := range slices.Sorted(maps.Keys(rounds)) {
 		value, err := strconv.ParseFloat(strings.TrimSpace(rounds[id].OneHit), 64)
 		if err != nil {
