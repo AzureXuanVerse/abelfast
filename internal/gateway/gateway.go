@@ -52,6 +52,24 @@ func (server Server) info() *protobuf.SERVERINFO {
 // the official gateway does (captured).
 var ProbeResponse = []byte("HTTP/1.1 200 OK\r\nContent-Type: text/plain;charset=utf-8\r\nContent-Length: 8\r\nConnection: keep-alive\r\n\r\nbad args")
 
+// Official are the official release gateways per region, the default
+// Upstream. EN is from the client's logcat (*all gate info), JP from
+// yostarmgr.lua (isRelease). CN, KR and TW name theirs only in the native
+// code: those are the gateways of nobbyfix/AzurLane-AssetDownloader
+// (client_config.json) and wess09/AzurLaneServerStatus (checker.py), which
+// agree on all five. Each answered a CS_10800 (2026-10-21) with its region's
+// client version (CN 9.7.398, KR 8.5.79, TW 8.5.200). CN is bilibili's
+// Android channel, whose version is the one AzurLaneLuaScripts dumps; its
+// iOS channel is line1-login-ios-blhx.bilibiligame.net:80 (9.7.401 that
+// day).
+var Official = map[string]string{
+	"EN": "blhxusgate.yo-star.com:80",
+	"JP": "blhxjploginapi.azurlane.jp:80",
+	"CN": "line1-login-bili-blhx.bilibiligame.net:80",
+	"KR": "bl-kr-gate.xdg.com:80",
+	"TW": "prod-all-login.azurlane.tw:10080",
+}
+
 // versionTTL is how long an upstream SC_10801 is reused.
 const versionTTL = 10 * time.Minute
 
