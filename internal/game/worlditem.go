@@ -43,7 +43,7 @@ const (
 
 // worldItemConfig is a world_item_data_template row.
 type worldItemConfig struct {
-	Name     string          `json:"name"`
+	Icon     string          `json:"icon"`
 	Display  string          `json:"display"`
 	Usage    string          `json:"usage"`
 	UsageArg json.RawMessage `json:"usage_arg"`
@@ -63,10 +63,31 @@ type worldEventComplete struct {
 	RewardBuff  []uint32   `json:"event_reward_slgbuff"` // [global buff, floors]
 }
 
-// itemName is the name of an item_data_statistics or
-// item_virtual_data_statistics row.
-type itemName struct {
-	Name string `json:"name"`
+// iconItem is the part of an item_data_statistics or
+// item_virtual_data_statistics row a world item is matched on: its icon,
+// and what a container lists (a bag box's usage_drop_appointed usage_arg,
+// a virtual container's display_icon).
+type iconItem struct {
+	Icon        string          `json:"icon"`
+	Usage       string          `json:"usage"`
+	UsageArg    json.RawMessage `json:"usage_arg"`
+	DisplayIcon json.RawMessage `json:"display_icon"`
+}
+
+// containerContents reads a container's list of [type, id, count], nil when raw
+// isn't one.
+func containerContents(raw json.RawMessage) []dropRef {
+	var drops [][]uint32
+	if json.Unmarshal(raw, &drops) != nil {
+		return nil
+	}
+	var pool []dropRef
+	for _, drop := range drops {
+		if len(drop) >= 2 {
+			pool = append(pool, dropRef{drop[0], drop[1]})
+		}
+	}
+	return pool
 }
 
 // worldResource is WorldConst.ResourceID, the Supply Shop Vouchers (a
@@ -82,43 +103,51 @@ var (
 	worldEventCompletes map[uint32]worldEventComplete
 
 	// usage_drop's drop tables are the server's; what an item gives is read
-	// from its name: a bag item of the same name (Nanoceramic Alloy, T1
-	// Ordnance Testing Report...), else a container virtual item of the
-	// same name whose display_icon lists what it turns into (T1
-	// Development Materials Container, dropPools), and the patterns of
-	// worldLoggerPattern / worldGearPartPattern.
-	worldBagNames     map[string]uint32 // lower-cased item_data_statistics name to id
-	worldVirtualNames map[string]uint32 // lower-cased item_virtual_data_statistics name to id
-	worldGearParts    map[uint32][]uint32
+	// from its icon, an asset name every region shares (the names and
+	// texts are translated): the bag item it is (Props/<id>: Nanoceramic
+	// Alloy, T1 Ordnance Testing Report...), else the container of the same
+	// icon (T1 Development Materials Container, Universal T4 Part), else a
+	// coordinate logger (worldLoggerIcon).
+	worldBagIDs         map[uint32]bool // item_data_statistics ids whose icon is Props/<id>
+	worldContainerIcons map[string][]dropRef
 )
 
-// worldLoggerPattern reads a coordinate logger ("R2 Coordinate Logger", "R4
-// Siren Coordinate Logger", or "Coordinate Logger" / "Siren Coordinate
-// Logger" with the corrosion level, or range, in its display text: "a
-// Corrosion level of 4-6"): it opens into one of the coordinates items
-// (usage_world_map, Siren ones with usage_arg [1]) of the treasure maps
-// (world_chapter_colormask teasure_chapter) of that hazard level.
+// worldLoggerIcon reads a coordinate logger's icon: Wluopanputong2..6 the
+// R2..R6 loggers, Wsairenluopanputong4..6 the Siren ones, without a digit
+// the ones whose display text gives the corrosion level, or range ("a
+// Corrosion level of 4-6", "侵蚀等级4-6"): it opens into one of the
+// coordinates items (usage_world_map, Siren ones with usage_arg [1]) of the
+// treasure maps (world_chapter_colormask teasure_chapter) of that hazard
+// level. Nothing structured gives the digit-less ones' levels: the client
+// sends usage_drop items as is (WorldItem.UsageDrop,
+// mod/experiment/world/model/worlditem.lua) and their usage_arg
+// (1000021-1000023) is a server drop table no table holds (world_event_data
+// 1000021 is an unrelated event); their other fields (rarity, scrap value)
+// don't follow the levels, and the tables naming them (item 99985,
+// world_task_data 219400-219600) only hand them out. So the digits of the
+// text, which every region writes the same way.
 var (
-	worldLoggerPattern      = regexp.MustCompile(`^(?:R(\d+) )?(Siren )?Coordinate Logger$`)
-	worldLoggerLevelPattern = regexp.MustCompile(`Corrosion level of (\d+)(?:-(\d+))?`)
+	worldLoggerIcon  = regexp.MustCompile(`^Props/W(sairen)?luopanputong(\d*)$`)
+	worldLoggerLevel = regexp.MustCompile(`(\d+)(?:-(\d+))?`)
 )
 
 // worldLoggerLevels overrides a logger's levels where its text is wrong:
-// the wiki's Operation Siren page has Coordinate Logger 2100001, whose
-// text says "Corrosion level of 4", open R3 and R4 zones.
+// the wiki's Operation Siren page has Coordinate Logger 2100001, whose EN
+// text says "Corrosion level of 4", open R3 and R4 zones, as the other
+// regions' texts say (3-4).
 var worldLoggerLevels = map[uint32][2]uint64{2100001: {3, 4}}
 
 // loggerLevels are the hazard levels coordinate logger id opens (match is
-// its worldLoggerPattern match).
+// its worldLoggerIcon match).
 func loggerLevels(id uint32, item worldItemConfig, match []string) (low, high uint64) {
-	if match[1] != "" {
-		low, _ = strconv.ParseUint(match[1], 10, 32)
+	if match[2] != "" {
+		low, _ = strconv.ParseUint(match[2], 10, 32)
 		return low, low
 	}
 	if levels, ok := worldLoggerLevels[id]; ok {
 		return levels[0], levels[1]
 	}
-	text := worldLoggerLevelPattern.FindStringSubmatch(item.Display)
+	text := worldLoggerLevel.FindStringSubmatch(item.Display)
 	if text == nil {
 		return 0, 0
 	}
@@ -130,16 +159,9 @@ func loggerLevels(id uint32, item worldItemConfig, match []string) (low, high ui
 	return low, high
 }
 
-// worldGearPartPattern reads "T4 Random Gear Part": one of the bag's "T4
-// ... Part" items (General, Main Gun, Torpedo, Anti-Air Gun, Aircraft).
-var (
-	worldGearPartPattern = regexp.MustCompile(`^T(\d+) Random Gear Part$`)
-	bagGearPartPattern   = regexp.MustCompile(`^T(\d+) .+ Part$`)
-)
-
 // loadWorldItemData reads the world items' tables.
 func loadWorldItemData() error {
-	var bag, virtual map[uint32]itemName
+	var bag, virtual map[uint32]iconItem
 	var gameset map[string]uint32
 	err := gamedata.LoadAll(
 		gamedata.Load("world_item_data_template", &worldItems),
@@ -157,21 +179,24 @@ func loadWorldItemData() error {
 	if worldResourceMax = gameset["world_resource_max"]; worldResourceMax == 0 {
 		return gamedata.Missing("gameset", "world_resource_max")
 	}
-	worldBagNames, worldVirtualNames, worldGearParts = map[string]uint32{}, map[string]uint32{}, map[uint32][]uint32{}
-	for _, id := range slices.Sorted(maps.Keys(bag)) {
-		name := strings.TrimSpace(bag[id].Name)
-		if _, ok := worldBagNames[strings.ToLower(name)]; !ok {
-			worldBagNames[strings.ToLower(name)] = id
-		}
-		if match := bagGearPartPattern.FindStringSubmatch(name); match != nil && !strings.Contains(name, "Random") {
-			tier, _ := strconv.ParseUint(match[1], 10, 32)
-			worldGearParts[uint32(tier)] = append(worldGearParts[uint32(tier)], id)
+	worldBagIDs, worldContainerIcons = map[uint32]bool{}, map[string][]dropRef{}
+	// the virtual containers first, then the bag boxes, the lowest id of an
+	// icon kept
+	for _, id := range slices.Sorted(maps.Keys(virtual)) {
+		if pool := containerContents(virtual[id].DisplayIcon); len(pool) > 0 && worldContainerIcons[virtual[id].Icon] == nil {
+			worldContainerIcons[virtual[id].Icon] = pool
 		}
 	}
-	for _, id := range slices.Sorted(maps.Keys(virtual)) {
-		name := strings.ToLower(strings.TrimSpace(virtual[id].Name))
-		if _, ok := worldVirtualNames[name]; !ok {
-			worldVirtualNames[name] = id
+	for _, id := range slices.Sorted(maps.Keys(bag)) {
+		row := bag[id]
+		if row.Icon == "Props/"+strconv.FormatUint(uint64(id), 10) {
+			worldBagIDs[id] = true
+		}
+		if row.Usage != "usage_drop_appointed" || worldContainerIcons[row.Icon] != nil {
+			continue
+		}
+		if pool := containerContents(row.UsageArg); len(pool) > 0 {
+			worldContainerIcons[row.Icon] = pool
 		}
 	}
 	return nil
@@ -183,14 +208,18 @@ func (item worldItemConfig) args() []uint32 {
 }
 
 // worldItemDrops draws what count of usage_drop world item id give, nil when
-// it can't be read (worldBagNames...).
+// it can't be read (worldBagIDs...).
 func worldItemDrops(id uint32, item worldItemConfig, count uint32) []*protobuf.DROPINFO {
-	name := strings.TrimSpace(item.Name)
 	var pool []dropRef
-	switch match := worldLoggerPattern.FindStringSubmatch(name); {
+	if bagID, ok := strings.CutPrefix(item.Icon, "Props/"); ok {
+		if bagID, err := strconv.ParseUint(bagID, 10, 32); err == nil && worldBagIDs[uint32(bagID)] {
+			return []*protobuf.DROPINFO{dropInfo(dropTypeItem, uint32(bagID), count)}
+		}
+	}
+	switch match := worldLoggerIcon.FindStringSubmatch(item.Icon); {
 	case match != nil:
 		low, high := loggerLevels(id, item, match)
-		siren := match[2] != ""
+		siren := match[1] != ""
 		for _, entrance := range worldEntrances {
 			for _, treasure := range entrance.TeasureChapter {
 				coordinates, ok := worldItems[treasure[0]]
@@ -205,18 +234,8 @@ func worldItemDrops(id uint32, item worldItemConfig, count uint32) []*protobuf.D
 				}
 			}
 		}
-	case worldGearPartPattern.MatchString(name):
-		tier, _ := strconv.ParseUint(worldGearPartPattern.FindStringSubmatch(name)[1], 10, 32)
-		for _, id := range worldGearParts[uint32(tier)] {
-			pool = append(pool, dropRef{dropTypeItem, id})
-		}
 	default:
-		if id, ok := worldBagNames[strings.ToLower(name)]; ok {
-			return []*protobuf.DROPINFO{dropInfo(dropTypeItem, id, count)}
-		}
-		if id, ok := worldVirtualNames[strings.ToLower(name)]; ok {
-			pool = dropPools[id]
-		}
+		pool = slices.Clone(worldContainerIcons[item.Icon])
 	}
 	if len(pool) == 0 {
 		return nil
