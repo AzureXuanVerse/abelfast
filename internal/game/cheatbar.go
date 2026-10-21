@@ -98,20 +98,16 @@ var barRules struct {
 	botTurn       uint32        // barbot_increase_probability_Z: GUESS, + per put this round
 }
 
-func loadCheatBarData() error {
-	var gameset map[string]uint32
-	var deck [][]uint32
-	var cardTime, shootTime, claim []uint32
-	err := gamedata.LoadAll(
-		func() (err error) { gameset, err = gamedata.Gameset(); return err },
-		func() error { return gamedata.GamesetDescription("bar_card", &deck) },
-		func() error { return gamedata.GamesetDescription("barbot_card_time", &cardTime) },
-		func() error { return gamedata.GamesetDescription("barbot_punishment_rotate_time", &shootTime) },
-		func() error { return gamedata.GamesetDescription("barbot_increase_probability_M", &claim) },
-	)
-	if err != nil {
-		return err
-	}
+// cheatBarSettings are the gameset descriptions of the cheat bar, read with
+// the lobby's (loadPlayRoomData): bar_card, barbot_card_time,
+// barbot_punishment_rotate_time, barbot_increase_probability_M.
+type cheatBarSettings struct {
+	deck                       [][]uint32
+	cardTime, shootTime, claim []uint32
+}
+
+func loadCheatBarData(gameset map[string]uint32, settings cheatBarSettings) error {
+	deck, cardTime, shootTime, claim := settings.deck, settings.cardTime, settings.shootTime, settings.claim
 	rules := &barRules
 	rules.deck, rules.realCards = nil, nil
 	for _, row := range deck {

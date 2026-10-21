@@ -123,6 +123,11 @@ var (
 	integralRankID []uint32             // their ids, same order
 	islandCharas   map[uint32]islandCharaConfig
 	islandBotLooks []uint32 // island_chara_template ids a bot can sit as
+	// playRoomsOn is whether the region has the lobby and the Cheater's
+	// Tavern: TW's gameset has none of their settings (bar_*, barbot_*,
+	// match_*), which its client reads as it opens them, so there no room
+	// is ever created (CS_23005 refused) and nothing else can start
+	playRoomsOn bool
 )
 
 // playRoomRules are the gameset settings of the lobby and matchmaking.
@@ -140,6 +145,7 @@ func loadPlayRoomData() error {
 	var ranks map[uint32]integralRankConfig
 	var gameset map[string]uint32
 	var growth, botWait [][]uint32
+	var bar cheatBarSettings
 	var nameCodes map[uint32]struct {
 		Name string `json:"name"`
 	}
@@ -149,11 +155,22 @@ func loadPlayRoomData() error {
 		gamedata.Load("island_integral_rank", &ranks),
 		gamedata.Load("island_chara_template", &islandCharas),
 		func() (err error) { gameset, err = gamedata.Gameset(); return err },
-		func() error { return gamedata.GamesetDescription("match_time_expand", &growth) },
-		func() error { return gamedata.GamesetDescription("barbot_match_waittime", &botWait) },
-		loadCheatBarData,
+		func() (err error) {
+			playRoomsOn, err = gamedata.Feature(
+				func() error { return gamedata.GamesetDescription("match_time_expand", &growth) },
+				func() error { return gamedata.GamesetDescription("barbot_match_waittime", &botWait) },
+				func() error { return gamedata.GamesetDescription("bar_card", &bar.deck) },
+				func() error { return gamedata.GamesetDescription("barbot_card_time", &bar.cardTime) },
+				func() error { return gamedata.GamesetDescription("barbot_punishment_rotate_time", &bar.shootTime) },
+				func() error { return gamedata.GamesetDescription("barbot_increase_probability_M", &bar.claim) },
+			)
+			return err
+		},
 	)
-	if err != nil {
+	if err != nil || !playRoomsOn {
+		return err
+	}
+	if err := loadCheatBarData(gameset, bar); err != nil {
 		return err
 	}
 	if len(ranks) == 0 {
@@ -1195,7 +1212,7 @@ func (game *Game) handlePlayRoomCreate(client *connection.Client, req *protobuf.
 	ctx := context.Background()
 	now := time.Now()
 	kind, gameType := req.GetType(), req.GetGameType()
-	if _, ok := modeRooms[gameType]; !ok || gameType == 0 || kind < playRoomCommon || kind > playRoomMatch ||
+	if _, ok := modeRooms[gameType]; !playRoomsOn || !ok || gameType == 0 || kind < playRoomCommon || kind > playRoomMatch ||
 		(kind == playRoomMatch && !cheatBarGame(gameType)) {
 		return client.Send(&protobuf.SC_23006{Result: result(errRefused)})
 	}
