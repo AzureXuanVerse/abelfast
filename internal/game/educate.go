@@ -6,10 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand/v2"
-	"regexp"
 	"slices"
-	"strings"
 
 	"google.golang.org/protobuf/proto"
 
@@ -207,6 +206,9 @@ type educateOptionConfig struct {
 	Result     []uint32        `json:"result"`
 	Display    [][3]int64      `json:"result_display"`
 	Time       tbWindow        `json:"time_limit"`
+	// 1 for the options the site panel marks as limited
+	// (EducateSiteOption:IsShowLimit): the contests
+	Limited uint32 `json:"is_limit"`
 }
 
 // countLimit is the option's {uses, refresh period in weeks}, ok false when
@@ -221,8 +223,9 @@ func (option educateOptionConfig) countLimit() (uses, period uint32, ok bool) {
 
 // child_site_option_branch row
 type educateBranchConfig struct {
-	Attr  json.RawMessage `json:"attr"` // [[attr, ">", value], ...]
-	Ratio uint32          `json:"ratio"`
+	Attr        json.RawMessage `json:"attr"` // [[attr, ">", value], ...]
+	Ratio       uint32          `json:"ratio"`
+	Performance []uint32        `json:"performance"`
 }
 
 // child_event row
@@ -375,7 +378,6 @@ func loadEducateData() error {
 	var attrs map[uint32]struct{}
 	var items map[uint32]struct {
 		Usage json.RawMessage `json:"usage_arg"`
-		Name  string          `json:"name"`
 	}
 	var mindFirst []json.RawMessage
 	var emotion []json.RawMessage
@@ -513,44 +515,82 @@ func loadEducateData() error {
 // item's usage_arg is the id of its drop on the official server, whose
 // first digits are the option's id (Trophy - Great Cook-Off 110504: the
 // cooking competition 1105, Photograph 131111: the Everyday Life Photo
-// 1311...). A competition's later rounds have the first round's name
-// with another ordinal ("The 2nd Art Contest"), or the same name, and give
-// the same trophy.
+// 1311...). A competition's later rounds give the same trophy: unconfirmed,
+// no capture has a later round, and the wiki (Project Identity: TB, cached
+// copy; the live wiki was down, 503, on 2026-10-21) only lists one trophy
+// per competition, won with "enough of the associated stat/skill", without
+// a word on repeated rounds. Nothing links them to the first round but the
+// structure, the names being translated with their ordinals ("The 2nd Art
+// Contest", 第二届, 第二回...):
+// an option with several results is a later round when it has the first
+// round's name (the Sketch repeats), when its branches replay the first
+// round's performances (child_site_option_branch performance: the three
+// contests of the Academy), or when both are contests (is_limit) of the
+// same child_site and it replays no other first round's performances.
 func educateItemsOf(items map[uint32]struct {
 	Usage json.RawMessage `json:"usage_arg"`
-	Name  string          `json:"name"`
 }) map[uint32][]uint32 {
-	round := func(name string) string {
-		var words []string
-		for _, word := range strings.Fields(name) {
-			if !educateOrdinal.MatchString(word) {
-				words = append(words, word)
+	performances := func(option educateOptionConfig) map[uint32]bool {
+		set := map[uint32]bool{}
+		for _, id := range option.Result {
+			for _, performance := range educateBranches[id].Performance {
+				set[performance] = true
 			}
 		}
-		return strings.Join(words, " ")
+		return set
 	}
-	linked := map[uint32][]uint32{}
+	replays := func(option, other map[uint32]bool) bool {
+		for performance := range option {
+			if other[performance] {
+				return true
+			}
+		}
+		return false
+	}
+	siteOf := map[uint32]uint32{}
+	for _, site := range sortedKeys(educateSites) {
+		for _, option := range educateSites[site].Option {
+			if _, ok := siteOf[option]; !ok {
+				siteOf[option] = site
+			}
+		}
+	}
+	// the first rounds: the options the items' drops name
+	firsts := map[uint32][]uint32{}
 	for _, id := range sortedKeys(items) {
 		drops := gamedata.IDs(items[id].Usage)
 		if len(drops) == 0 || drops[0] < 100000 {
 			continue
 		}
-		first, ok := educateOptions[drops[0]/100]
-		if !ok || first.Type != childOptionEvent {
-			continue
+		if first, ok := educateOptions[drops[0]/100]; ok && first.Type == childOptionEvent {
+			firsts[drops[0]/100] = append(firsts[drops[0]/100], id)
+		}
+	}
+	linked := map[uint32][]uint32{}
+	for _, firstID := range sortedKeys(firsts) {
+		first := educateOptions[firstID]
+		own := performances(first)
+		others := map[uint32]bool{}
+		for otherID := range firsts {
+			if otherID != firstID {
+				maps.Copy(others, performances(educateOptions[otherID]))
+			}
 		}
 		for _, optionID := range sortedKeys(educateOptions) {
 			option := educateOptions[optionID]
-			if optionID == drops[0]/100 || (len(first.Result) > 1 && len(option.Result) > 1 && option.Type == childOptionEvent && round(option.Name) == round(first.Name)) {
-				linked[optionID] = append(linked[optionID], id)
+			round := optionID == firstID
+			if !round && len(first.Result) > 1 && len(option.Result) > 1 && option.Type == childOptionEvent {
+				played := performances(option)
+				contest := first.Limited == 1 && option.Limited == 1 && siteOf[optionID] == siteOf[firstID] && !replays(played, others)
+				round = option.Name == first.Name || replays(played, own) || contest
+			}
+			if round {
+				linked[optionID] = append(linked[optionID], firsts[firstID]...)
 			}
 		}
 	}
 	return linked
 }
-
-// educateOrdinal matches "1st", "2nd", "3rd", "4th"...
-var educateOrdinal = regexp.MustCompile(`^\d+(st|nd|rd|th)$`)
 
 // sortedKeys are a table's ids in order.
 func sortedKeys[T any](table map[uint32]T) []uint32 {
