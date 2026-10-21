@@ -468,10 +468,7 @@ func loadEducateData() error {
 		_ = json.Unmarshal(ending.RawCond, &ending.Condition)
 		educateEndings[id] = ending
 	}
-	for id := range educateTasks {
-		educateTaskIDs = append(educateTaskIDs, id)
-	}
-	slices.Sort(educateTaskIDs)
+	educateTaskIDs = sortedKeys(educateTasks)
 	educateOptionItems = educateItemsOf(items)
 	if len(endTime) < 3 {
 		return gamedata.Missing("gameset", "child_end_data")
