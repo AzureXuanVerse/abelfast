@@ -5,6 +5,7 @@ import (
 	"math/rand/v2"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/ggmolly/belfast/internal/gamedata"
 )
@@ -92,8 +93,13 @@ type neBuffConfig struct {
 	NextLevel  uint32          `json:"next_level"`
 	TarotTag   uint32          `json:"tarot_tag"`
 	BenefitLvl uint32          `json:"benefit_level"`
+	Icon       string          `json:"item_icon"`
 	content    []uint32
 	visible    bool
+	// a tarot reading (see loadNewEducateData), and the tarot_tag of the
+	// card it reads (0: a reading of every card)
+	reading    bool
+	readingTag uint32
 }
 
 // child2_benefit row: one effect list of a buff.
@@ -140,6 +146,7 @@ type neGoodsConfig struct {
 	Price     int64           `json:"resource_num"`
 	PriceType uint32          `json:"resource_type"`
 	Refresh   uint32          `json:"is_refresh"`
+	Icon      string          `json:"icon"`
 }
 
 // child2_site_normal row: a work / travel site level.
@@ -320,6 +327,48 @@ func loadNewEducateData() error {
 			}
 		}
 		neBenefits[id] = benefit
+	}
+	// The tarot readings are the talents (NewEducateBuff.TYPE.TALENT) that,
+	// once obtained, have a reading picked (neEffGainBuff on neTrigObtain).
+	// Which card a reading reads only its name says ("Tarot Reading - The
+	// Sun" in EN), but the art is the same in every region: the shop sells
+	// it as buff_entry_N (child2_shop icon) and the card is buff_tarot_N.
+	readingArt := map[uint32]string{}
+	for _, id := range sortedKeys(neGoods) {
+		art, ok := strings.CutPrefix(neGoods[id].Icon, "buff_entry_")
+		if !ok {
+			continue
+		}
+		for _, buff := range gamedata.IDs(neGoods[id].GoodsList) {
+			if _, seen := readingArt[buff]; !seen {
+				readingArt[buff] = art
+			}
+		}
+	}
+	type cardArt struct {
+		character uint32
+		art       string
+	}
+	cardTags := map[cardArt]uint32{}
+	for _, buff := range neBuffs {
+		if art, ok := strings.CutPrefix(buff.Icon, "buff_tarot_"); ok && buff.Type == neBuffTarot {
+			cardTags[cardArt{buff.Character, art}] = buff.TarotTag
+		}
+	}
+	for id, buff := range neBuffs {
+		if buff.Type != neBuffTalent {
+			continue
+		}
+		for _, benefitID := range buff.content {
+			benefit := neBenefits[benefitID]
+			if benefit.Trigger == neTrigObtain && slices.ContainsFunc(benefit.effects, func(effect neEffect) bool { return effect.kind == neEffGainBuff }) {
+				buff.reading = true
+			}
+		}
+		if art, ok := readingArt[id]; ok && buff.reading {
+			buff.readingTag = cardTags[cardArt{buff.Character, art}]
+		}
+		neBuffs[id] = buff
 	}
 
 	nePlanGroups = map[uint32][]uint32{}

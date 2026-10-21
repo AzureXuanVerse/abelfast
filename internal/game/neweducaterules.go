@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"math/rand/v2"
 	"slices"
-	"strings"
 
 	"google.golang.org/protobuf/proto"
 
@@ -317,7 +316,7 @@ func (state *neState) effectDrops(buff uint32, effect neEffect, ctx *neCtx) []ne
 		if !ok {
 			return nil
 		}
-		if strings.HasPrefix(config.Name, "Tarot Reading") {
+		if config.reading {
 			return []neDrop{{neDropChoose, id, 1}}
 		}
 		return []neDrop{{neDropBuff, id, 1}}

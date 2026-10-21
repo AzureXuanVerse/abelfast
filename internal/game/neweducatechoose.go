@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"math/rand/v2"
 	"slices"
-	"strings"
 
 	"google.golang.org/protobuf/proto"
 
@@ -41,8 +40,8 @@ func (state *neState) popPriority(p *nePriority) {
 
 // choicePool is what a choice draws from: pool 0 is the round's tarot
 // choice (child2_round tarot_select: the character's tarot cards but the
-// one held); a "Tarot Reading - X" pool the readings of that card
-// (child2_benefit_list tarot_tag); another pool every reading. Readings
+// one held); a card's reading ("Tarot Reading - X") the readings of that
+// card (child2_benefit_list tarot_tag); another pool every reading. Readings
 // owned (or their level-up) and hidden ones are left out. The pools
 // themselves are server content: these are guesses from their names.
 func (state *neState) choicePool(p *nePriority) []uint32 {
@@ -56,12 +55,8 @@ func (state *neState) choicePool(p *nePriority) []uint32 {
 		}
 	} else {
 		tag := uint32(0)
-		if name, ok := strings.CutPrefix(neBuffs[p.Pool].Name, "Tarot Reading - "); ok {
-			for _, buff := range neBuffs {
-				if buff.Character == state.ID && buff.Type == neBuffTarot && buff.Name == "Tarot - "+name {
-					tag = buff.TarotTag
-				}
-			}
+		if pool := neBuffs[p.Pool]; pool.Character == state.ID {
+			tag = pool.readingTag
 		}
 		for id, buff := range neBuffs {
 			if buff.Character != state.ID || buff.Type != neBuffEntry || !buff.visible || buff.BenefitLvl > 1 {
