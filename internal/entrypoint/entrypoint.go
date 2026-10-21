@@ -2,11 +2,13 @@ package entrypoint
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
+
+	"github.com/spf13/cobra"
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/consts"
@@ -15,30 +17,66 @@ import (
 	"github.com/ggmolly/belfast/internal/gateway"
 	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/packets"
+	"github.com/ggmolly/belfast/internal/region"
 )
 
-func Run() {
-	if len(os.Args) > 1 && os.Args[1] == "mail" {
-		runMail(os.Args[2:])
-		return
-	}
-	if len(os.Args) > 1 && os.Args[1] == "notice" {
-		runNotice(os.Args[2:])
-		return
-	}
-	listen := flag.String("listen", "0.0.0.0:80", "listen address (gateway and game server share it)")
-	serverHost := flag.String("server-host", "127.0.0.1", "game server host handed to clients in the server list")
-	serverPort := flag.Uint("server-port", 80, "game server port handed to clients in the server list")
-	upstream := flag.String("upstream-gateway", "blhxusgate.yo-star.com:80", "official gateway, CS_10800 is relayed there for the asset hashes")
-	dbPath := flag.String("db", ".cache/belfast.db", "SQLite database path")
-	flag.Parse()
+// serveOptions are the server's flags (belfast without a subcommand).
+type serveOptions struct {
+	listen     string
+	serverHost string
+	serverPort uint
+	upstream   string
+}
 
-	if err := os.MkdirAll(filepath.Dir(*dbPath), 0o755); err != nil {
+func Run() {
+	if err := rootCommand().Execute(); err != nil {
+		os.Exit(1)
+	}
+}
+
+// rootCommand is `belfast [flags]`, the server, with the database tools as
+// subcommands. --region and --db apply to every command.
+func rootCommand() *cobra.Command {
+	var regionName, dbPath string
+	var opts serveOptions
+	root := &cobra.Command{
+		Use:          "belfast",
+		Short:        "Azur Lane private server: gateway and game server on one port",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			return region.Set(regionName)
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			serve(dbPath, opts)
+		},
+	}
+	persistent := root.PersistentFlags()
+	persistent.StringVar(&regionName, "region", region.Default, "client region ("+strings.Join(region.All, ", ")+"), the game data is read from $BELFAST_DATA/<region>")
+	persistent.StringVar(&dbPath, "db", ".cache/belfast.db", "SQLite database path")
+	root.RegisterFlagCompletionFunc("region", cobra.FixedCompletions(region.All, cobra.ShellCompDirectiveNoFileComp))
+
+	flags := root.Flags()
+	flags.StringVar(&opts.listen, "listen", "0.0.0.0:80", "listen address (gateway and game server share it)")
+	flags.StringVar(&opts.serverHost, "server-host", "127.0.0.1", "game server host handed to clients in the server list")
+	flags.UintVar(&opts.serverPort, "server-port", 80, "game server port handed to clients in the server list")
+	flags.StringVar(&opts.upstream, "upstream-gateway", "", "official gateway, CS_10800 is relayed there for the asset hashes (default: the region's official gateway)")
+
+	root.AddCommand(mailCommand(&dbPath), noticeCommand(&dbPath))
+	return root
+}
+
+func serve(dbPath string, opts serveOptions) {
+	upstream := opts.upstream
+	if upstream == "" {
+		upstream = gateway.Official[region.Current()]
+	}
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 		fatal(err)
 	}
-	store, err := db.Open(*dbPath)
+	store, err := db.Open(dbPath)
 	if err != nil {
-		fatal(fmt.Errorf("database %s: %w", *dbPath, err))
+		fatal(fmt.Errorf("database %s: %w", dbPath, err))
 	}
 	ticketKey, err := gateway.LoadTicketKey(context.Background(), store.Queries)
 	if err != nil {
@@ -46,15 +84,16 @@ func Run() {
 	}
 
 	gw := &gateway.Gateway{
-		Upstream:  *upstream,
+		Upstream:  upstream,
 		DB:        store,
 		TicketKey: ticketKey,
-		Servers:   []gateway.Server{{ID: 1, Name: "Belfast", Host: *serverHost, Port: uint32(*serverPort)}},
+		Servers:   []gateway.Server{{ID: 1, Name: "Belfast", Host: opts.serverHost, Port: uint32(opts.serverPort)}},
 	}
 	gw.Register()
-	(&game.Game{DB: store}).Register()
+	gameServer := &game.Game{DB: store}
+	gameServer.Register()
 
-	server := connection.NewServer(*listen, packets.Dispatch)
+	server := connection.NewServer(opts.listen, packets.Dispatch)
 	server.HTTPResponse = gateway.ProbeResponse
 
 	// wait for SIGINT

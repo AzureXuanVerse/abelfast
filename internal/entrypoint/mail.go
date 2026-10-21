@@ -2,13 +2,13 @@ package entrypoint
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ggmolly/belfast/internal/db"
@@ -16,50 +16,69 @@ import (
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
-// runMail is `belfast mail [flags]`: it stores a mail for a commander in the
-// database, next to a running server or not. The client sees it from the
+// mailCommand is `belfast mail [flags]`: it stores a mail for a commander in
+// the database, next to a running server or not. The client sees it from the
 // next SC_30001: its next login, or the end of its next battle. With
-// -compensate it is a compensation instead (SC_30101, at the next login).
-func runMail(args []string) {
-	flags := flag.NewFlagSet("mail", flag.ExitOnError)
-	dbPath := flags.String("db", ".cache/belfast.db", "SQLite database path")
-	commanderID := flags.Uint("commander", 0, "commander id, 0 for the only commander")
-	title := flags.String("title", "", "mail title")
-	sender := flags.String("sender", "", "sender, empty for the client's default (Headquarters)")
-	body := flags.String("body", "", `mail text, "\n" for a new line`)
-	attach := flags.String("attach", "", "attachments, type:id:count[,type:id:count...] (DROP_TYPE_*: 1 resource, 2 item, 3 equipment, 4 ship, 5 furniture, 7 skin, 8 virtual item, 9 gear skin, 25 meowfficer)")
-	compensate := flags.Duration("compensate", 0, "send a compensation expiring after this long (e.g. 72h) instead of a mail; the client sees it from its next login")
-	flags.Parse(args)
+// --compensate it is a compensation instead (SC_30101, at the next login).
+func mailCommand(dbPath *string) *cobra.Command {
+	var opts mailOptions
+	cmd := &cobra.Command{
+		Use:   "mail",
+		Short: "Send a mail (or a compensation) to a commander",
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, args []string) {
+			runMail(*dbPath, opts)
+		},
+	}
+	flags := cmd.Flags()
+	flags.UintVar(&opts.commander, "commander", 0, "commander id, 0 for the only commander")
+	flags.StringVar(&opts.title, "title", "", "mail title")
+	flags.StringVar(&opts.sender, "sender", "", "sender, empty for the client's default (Headquarters)")
+	flags.StringVar(&opts.body, "body", "", `mail text, "\n" for a new line`)
+	flags.StringVar(&opts.attach, "attach", "", "attachments, type:id:count[,type:id:count...] (DROP_TYPE_*: 1 resource, 2 item, 3 equipment, 4 ship, 5 furniture, 7 skin, 8 virtual item, 9 gear skin, 25 meowfficer)")
+	flags.DurationVar(&opts.compensate, "compensate", 0, "send a compensation expiring after this long (e.g. 72h) instead of a mail; the client sees it from its next login")
+	return cmd
+}
 
-	attachments, err := parseDrops(*attach)
+type mailOptions struct {
+	commander  uint
+	title      string
+	sender     string
+	body       string
+	attach     string
+	compensate time.Duration
+}
+
+func runMail(dbPath string, opts mailOptions) {
+	attachments, err := parseDrops(opts.attach)
 	if err != nil {
 		fatal(err)
 	}
 	if err := game.LoadGameData(); err != nil {
 		fatal(fmt.Errorf("game data: %w", err))
 	}
-	store, err := db.Open(*dbPath)
+	store, err := db.Open(dbPath)
 	if err != nil {
-		fatal(fmt.Errorf("database %s: %w", *dbPath, err))
+		fatal(fmt.Errorf("database %s: %w", dbPath, err))
 	}
 	ctx := context.Background()
-	commander := uint32(*commanderID)
+	commander := uint32(opts.commander)
 	if commander == 0 {
 		ids, err := store.ListCommanderIDs(ctx)
 		if err != nil {
 			fatal(err)
 		}
 		if len(ids) != 1 {
-			fatal(fmt.Errorf("%d commanders in %s, pick one with -commander", len(ids), *dbPath))
+			fatal(fmt.Errorf("%d commanders in %s, pick one with --commander", len(ids), dbPath))
 		}
 		commander = ids[0]
 	} else if _, err := store.GetCommander(ctx, commander); err != nil {
 		fatal(fmt.Errorf("commander %d: %w", commander, err))
 	}
-	mail := game.Mail{Title: *title, Sender: *sender, Content: *body, Attachments: attachments}
+	mail := game.Mail{Title: opts.title, Sender: opts.sender, Content: opts.body, Attachments: attachments}
 	now := time.Now()
-	if *compensate != 0 {
-		id, err := game.SendCompensation(ctx, store.Queries, commander, mail, now, now.Add(*compensate))
+	if opts.compensate != 0 {
+		id, err := game.SendCompensation(ctx, store.Queries, commander, mail, now, now.Add(opts.compensate))
 		if err != nil {
 			fatal(err)
 		}

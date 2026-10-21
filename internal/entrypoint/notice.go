@@ -2,79 +2,104 @@ package entrypoint
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/game"
 )
 
-const noticeUsage = `usage: belfast notice <add|list|update|delete> [flags]
-  add [flags]             store a new notice
-  list                    list the stored notices
-  update -id N [flags]    change the given fields, bumping the version
-  delete -id N            remove a notice
-Clients see the changes at their next login (bulletin board: game server
-login, gateway notices: account login).`
-
-// runNotice is `belfast notice <add|list|update|delete> [flags]`: it manages
-// belfast's announcements in the database, next to a running server or not.
-// The client gets them at its next login: the bulletin board in the login
-// burst (SC_11300), the gateway popups in SC_10021.
-func runNotice(args []string) {
-	if len(args) == 0 {
-		fatal(fmt.Errorf("%s", noticeUsage))
+// noticeCommand is `belfast notice <add|list|update|delete> [flags]`: it
+// manages belfast's announcements in the database, next to a running server
+// or not. The client gets them at its next login: the bulletin board in the
+// login burst (SC_11300), the gateway popups in SC_10021.
+func noticeCommand(dbPath *string) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "notice",
+		Short: "Manage the bulletin board and gateway notices",
+		Long: `Manage belfast's announcements. Clients see the changes at their next
+login (bulletin board: game server login, gateway notices: account login).`,
 	}
-	command, args := args[0], args[1:]
-	flags := flag.NewFlagSet("notice "+command, flag.ExitOnError)
-	dbPath := flags.String("db", ".cache/belfast.db", "SQLite database path")
-	id := flags.Uint("id", 0, "notice id (update, delete)")
-	kind := flags.String("kind", game.NoticeBoard, `"board" (in-game bulletin board) or "gateway" (popup after the account login, title and content only)`)
-	title := flags.String("title", "", `title, "list title&page title" to have the board show two`)
-	button := flags.String("button", "", "the board's tab label, the title when empty")
-	content := flags.String("content", "", `rich text (<size=35>, <color=#rrggbb>, <b>...), <banner>image url</banner> for an image, <segment/> to split; "\n" for a new line`)
-	contentFile := flags.String("content-file", "", "read the content from this file instead")
-	image := flags.String("image", "", "title image url, optionally prefixed by a jump: <config type = 1 param = 'url' /> opens a url, type = 2 param = 'scene name' a scene, type = 3 param = N an activity; the board then shows only the image")
-	timeDesc := flags.String("time", "", "date shown under the title, today (M/D/YYYY) when empty on add")
-	tag := flags.Uint("tag", 1, "board tab: 1 event, 2 system, 3 news")
-	icon := flags.Uint("icon", 7, "tab icon: 1 activity_common, 2 activity_summary, 3 activity_time_limit, 4 build_time_limit, 5 equibment_skin_new, 6 furniture_new, 7 info_common, 8 skin_new, 9 system_common")
-	priority := flags.Uint("priority", 0, "order, highest first; the highest one's tab opens first")
-	needLevel := flags.Uint("need-level", 0, "shown only to commanders above this level")
-	track := flags.String("track", "", "tracking tag sent to the SDK when a type 1 image link is opened")
-	unread := flags.Bool("unread", false, "update: give the notice a new id so its red dot shows again")
-	flags.Usage = func() {
-		fmt.Fprintln(flags.Output(), noticeUsage)
-		flags.PrintDefaults()
+	subcommand := func(name, short string, fields, id bool) *cobra.Command {
+		var opts noticeOptions
+		sub := &cobra.Command{
+			Use:   name,
+			Short: short,
+			Args:  cobra.NoArgs,
+			Run: func(sub *cobra.Command, args []string) {
+				runNotice(name, *dbPath, sub, opts)
+			},
+		}
+		flags := sub.Flags()
+		if id {
+			flags.UintVar(&opts.id, "id", 0, "notice id")
+			sub.MarkFlagRequired("id")
+		}
+		if fields {
+			flags.StringVar(&opts.kind, "kind", game.NoticeBoard, `"board" (in-game bulletin board) or "gateway" (popup after the account login, title and content only)`)
+			flags.StringVar(&opts.title, "title", "", `title, "list title&page title" to have the board show two`)
+			flags.StringVar(&opts.button, "button", "", "the board's tab label, the title when empty")
+			flags.StringVar(&opts.content, "content", "", `rich text (<size=35>, <color=#rrggbb>, <b>...), <banner>image url</banner> for an image, <segment/> to split; "\n" for a new line`)
+			flags.StringVar(&opts.contentFile, "content-file", "", "read the content from this file instead")
+			flags.StringVar(&opts.image, "image", "", "title image url, optionally prefixed by a jump: <config type = 1 param = 'url' /> opens a url, type = 2 param = 'scene name' a scene, type = 3 param = N an activity; the board then shows only the image")
+			flags.StringVar(&opts.timeDesc, "time", "", "date shown under the title, today (M/D/YYYY) when empty on add")
+			flags.UintVar(&opts.tag, "tag", 1, "board tab: 1 event, 2 system, 3 news")
+			flags.UintVar(&opts.icon, "icon", 7, "tab icon: 1 activity_common, 2 activity_summary, 3 activity_time_limit, 4 build_time_limit, 5 equibment_skin_new, 6 furniture_new, 7 info_common, 8 skin_new, 9 system_common")
+			flags.UintVar(&opts.priority, "priority", 0, "order, highest first; the highest one's tab opens first")
+			flags.UintVar(&opts.needLevel, "need-level", 0, "shown only to commanders above this level")
+			flags.StringVar(&opts.track, "track", "", "tracking tag sent to the SDK when a type 1 image link is opened")
+		}
+		if name == "update" {
+			flags.BoolVar(&opts.unread, "unread", false, "give the notice a new id so its red dot shows again")
+		}
+		return sub
 	}
-	flags.Parse(args)
+	cmd.AddCommand(
+		subcommand("add", "Store a new notice", true, false),
+		subcommand("list", "List the stored notices", false, false),
+		subcommand("update", "Change the given fields, bumping the version", true, true),
+		subcommand("delete", "Remove a notice", false, true),
+	)
+	return cmd
+}
 
+type noticeOptions struct {
+	id                                                                uint
+	kind, title, button, content, contentFile, image, timeDesc, track string
+	tag, icon, priority, needLevel                                    uint
+	unread                                                            bool
+}
+
+func runNotice(command, dbPath string, cmd *cobra.Command, opts noticeOptions) {
 	set := map[string]bool{}
-	flags.Visit(func(f *flag.Flag) { set[f.Name] = true })
-	if *contentFile != "" {
-		data, err := os.ReadFile(*contentFile)
+	cmd.Flags().Visit(func(f *pflag.Flag) { set[f.Name] = true })
+	if opts.contentFile != "" {
+		data, err := os.ReadFile(opts.contentFile)
 		if err != nil {
 			fatal(err)
 		}
-		*content = string(data)
+		opts.content = string(data)
 		set["content"] = true
 	} else {
-		*content = strings.ReplaceAll(*content, `\n`, "\n")
+		opts.content = strings.ReplaceAll(opts.content, `\n`, "\n")
 	}
 
-	store, err := db.Open(*dbPath)
+	store, err := db.Open(dbPath)
 	if err != nil {
-		fatal(fmt.Errorf("database %s: %w", *dbPath, err))
+		fatal(fmt.Errorf("database %s: %w", dbPath, err))
 	}
 	ctx := context.Background()
 	// apply copies the flags given on the command line onto notice
 	apply := func(notice *db.Notice) {
 		strs := map[string]struct{ field, value *string }{
-			"kind": {&notice.Kind, kind}, "title": {&notice.Title, title}, "button": {&notice.BtnTitle, button},
-			"content": {&notice.Content, content}, "image": {&notice.TitleImage, image}, "time": {&notice.TimeDesc, timeDesc},
-			"track": {&notice.Track, track},
+			"kind": {&notice.Kind, &opts.kind}, "title": {&notice.Title, &opts.title}, "button": {&notice.BtnTitle, &opts.button},
+			"content": {&notice.Content, &opts.content}, "image": {&notice.TitleImage, &opts.image}, "time": {&notice.TimeDesc, &opts.timeDesc},
+			"track": {&notice.Track, &opts.track},
 		}
 		for name, f := range strs {
 			if set[name] {
@@ -85,8 +110,8 @@ func runNotice(args []string) {
 			field *uint32
 			value *uint
 		}{
-			"tag": {&notice.TagType, tag}, "icon": {&notice.Icon, icon}, "priority": {&notice.Priority, priority},
-			"need-level": {&notice.NeedLevel, needLevel},
+			"tag": {&notice.TagType, &opts.tag}, "icon": {&notice.Icon, &opts.icon}, "priority": {&notice.Priority, &opts.priority},
+			"need-level": {&notice.NeedLevel, &opts.needLevel},
 		}
 		for name, f := range uints {
 			if set[name] {
@@ -97,7 +122,7 @@ func runNotice(args []string) {
 
 	switch command {
 	case "add":
-		notice := db.Notice{Kind: *kind, Version: 1, TagType: uint32(*tag), Icon: uint32(*icon), TimeDesc: time.Now().Format("1/2/2006")}
+		notice := db.Notice{Kind: opts.kind, Version: 1, TagType: uint32(opts.tag), Icon: uint32(opts.icon), TimeDesc: time.Now().Format("1/2/2006")}
 		apply(&notice)
 		if notice.BtnTitle == "" {
 			notice.BtnTitle = notice.Title
@@ -122,9 +147,9 @@ func runNotice(args []string) {
 			}
 		}
 	case "update":
-		notice, err := store.GetNotice(ctx, uint32(*id))
+		notice, err := store.GetNotice(ctx, uint32(opts.id))
 		if err != nil {
-			fatal(fmt.Errorf("notice %d: %w", *id, err))
+			fatal(fmt.Errorf("notice %d: %w", opts.id, err))
 		}
 		apply(&notice)
 		notice.Version++
@@ -133,7 +158,7 @@ func runNotice(args []string) {
 		}
 		newID := notice.ID
 		err = store.InTx(ctx, func(queries *db.Queries) error {
-			if !*unread {
+			if !opts.unread {
 				params := createNoticeParams(notice)
 				return queries.UpdateNotice(ctx, db.UpdateNoticeParams{
 					Kind: params.Kind, Version: params.Version, BtnTitle: params.BtnTitle, Title: params.Title,
@@ -157,16 +182,14 @@ func runNotice(args []string) {
 			fmt.Printf("notice %d updated to version %d\n", notice.ID, notice.Version)
 		}
 	case "delete":
-		deleted, err := store.DeleteNotice(ctx, uint32(*id))
+		deleted, err := store.DeleteNotice(ctx, uint32(opts.id))
 		if err != nil {
 			fatal(err)
 		}
 		if deleted == 0 {
-			fatal(fmt.Errorf("no notice %d", *id))
+			fatal(fmt.Errorf("no notice %d", opts.id))
 		}
-		fmt.Printf("notice %d deleted\n", *id)
-	default:
-		fatal(fmt.Errorf("notice %q: %s", command, noticeUsage))
+		fmt.Printf("notice %d deleted\n", opts.id)
 	}
 }
 
