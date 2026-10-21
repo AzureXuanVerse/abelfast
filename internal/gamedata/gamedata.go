@@ -15,6 +15,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"sync"
 
@@ -34,6 +35,12 @@ func RegionDir() string {
 	return filepath.Join(Dir(), region.Current())
 }
 
+// errAbsent is wrapped by the errors for a table or gameset setting the
+// region's data doesn't have at all: a feature its client hasn't received
+// yet (KR and TW lag behind EN), see Feature. One that is there but
+// unreadable is another error.
+var errAbsent = errors.New("absent")
+
 // Missing is the error for a table lacking a row or value the server needs.
 func Missing(table, format string, args ...any) error {
 	return fmt.Errorf("config table %s in %s: no %s", table, RegionDir(), fmt.Sprintf(format, args...))
@@ -49,17 +56,23 @@ func ServerFile(name string) ([]byte, error) {
 	return data, err
 }
 
-// file reads a table's file, an error when it is missing or has no rows.
+// file reads a table's file, an error when it is missing (errAbsent when the
+// region has no such file at all) or has no rows.
 func file(name string) ([]byte, error) {
 	var raw []byte
 	var err error
+	found := false
 	for _, sub := range []string{"sharecfgdata", "ShareCfg"} {
 		raw, err = os.ReadFile(filepath.Join(RegionDir(), sub, name+".json"))
+		found = found || !errors.Is(err, fs.ErrNotExist)
 		if err == nil && len(bytes.TrimSpace(raw)) > 2 {
 			break
 		}
 	}
-	if err == nil && len(bytes.TrimSpace(raw)) <= 2 {
+	switch {
+	case !found:
+		err = errAbsent
+	case err == nil && len(bytes.TrimSpace(raw)) <= 2, errors.Is(err, fs.ErrNotExist):
 		err = errors.New("no rows")
 	}
 	if err != nil {
@@ -218,7 +231,10 @@ func GamesetDescription(key string, value any) error {
 		return fmt.Errorf("config table gameset: %w", err)
 	}
 	row, ok := rows[key]
-	if !ok || json.Unmarshal(row.Description, value) != nil {
+	if !ok {
+		return fmt.Errorf("config table gameset in %s: no %s: %w", RegionDir(), key, errAbsent)
+	}
+	if json.Unmarshal(row.Description, value) != nil {
 		return Missing("gameset", "%s description", key)
 	}
 	return nil
@@ -230,6 +246,27 @@ func Load[T any](name string, table *map[uint32]T) func() error {
 		*table, err = Table[T](name)
 		return err
 	}
+}
+
+// Feature runs the loads of a feature some regions' clients don't have yet,
+// one table or setting each: off (false, nil) when the region lacks every
+// one of them, else on with LoadAll's error, so a feature partly there
+// fails.
+func Feature(loads ...func() error) (bool, error) {
+	absent := make([]bool, len(loads))
+	wrapped := make([]func() error, len(loads))
+	for i, load := range loads {
+		wrapped[i] = func() error {
+			err := load()
+			absent[i] = errors.Is(err, errAbsent)
+			return err
+		}
+	}
+	err := LoadAll(wrapped...)
+	if !slices.Contains(absent, false) {
+		return false, nil
+	}
+	return true, err
 }
 
 // LoadAll runs independent loads concurrently.
