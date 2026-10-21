@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/ggmolly/belfast/internal/gamedata"
 	"github.com/ggmolly/belfast/internal/logger"
@@ -396,12 +397,21 @@ var (
 // BuildShipPool.BUILD_POOL_MARK_* in model/vo/buildshippool.lua).
 var buildPoolNames = map[uint32]string{1: "special", 2: "light", 3: "heavy"}
 
-// rateTipPattern reads a rate_tip line once its color tags are stripped:
-// "Super Rare: 7%".
+// rateTipLine reads a construction pool's rate_tip line (display text,
+// view/ship/buildship/buildshiphelpwindow.lua, and the only place the rates
+// are): "<color=#ffde38>Super Rare</color>: 7%", "Common: 28.8%". Every
+// region translates the labels (超稀有舰船：7%, SSレア：7%, SSR：7%), so the
+// rarity comes from the color (rarityByRateColor), the uncolored line being
+// Common.
 var (
-	rateTipTags    = regexp.MustCompile(`<[^>]*>`)
-	rateTipPattern = regexp.MustCompile(`^([A-Za-z ]+): ([0-9.]+)%`)
+	rateTipTags = regexp.MustCompile(`<[^>]*>`)
+	rateTipLine = regexp.MustCompile(`^(?:<color=#([0-9A-Fa-f]{6})>[^<]*</color>|[^<]*?)\s*[:：]\s*([0-9.]+)%`)
 )
+
+// rarityByRateColor are the rate_tip colors by ship rarity, the same in every
+// region: COLOR_BLUE, COLOR_PURPLE and COLOR_YELLOW of const.lua, and the
+// Ultra Rare red of ItemRarity.colors (model/const/itemrarity.lua).
+var rarityByRateColor = map[string]uint32{"3dc6ff": 3, "d797ff": 4, "ffde38": 5, "ff5e39": 6}
 
 // loadShipData builds the ship, construction and equipment data: ships as
 // obtained (base templates, id ending in 1, that have statistics), the
@@ -563,12 +573,15 @@ func loadShipData() error {
 		// then the rate-up ships
 		tipRates := map[uint32]float64{}
 		for _, tip := range pool.RateTip {
-			match := rateTipPattern.FindStringSubmatch(rateTipTags.ReplaceAllString(tip, ""))
+			match := rateTipLine.FindStringSubmatch(tip)
 			if match == nil {
 				continue
 			}
 			rate, err := strconv.ParseFloat(match[2], 64)
-			rarity, named := rarityByRateName[match[1]]
+			rarity, named := uint32(shipRarityGray), true
+			if match[1] != "" {
+				rarity, named = rarityByRateColor[strings.ToLower(match[1])]
+			}
 			if _, seen := tipRates[rarity]; err != nil || !named || seen {
 				continue
 			}
