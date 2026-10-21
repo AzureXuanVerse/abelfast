@@ -633,7 +633,8 @@ func empty[M any, PM interface {
 
 // loginBurst is what the official server pushes for CS_11001, in its order
 // (capture #010 to #049): everything before SC_11002 lands in the proxies the
-// client just registered, SC_11002 then starts them.
+// client just registered, SC_11002 then starts them. A push returning nil is
+// one the region's client doesn't have.
 var loginBurst = []loginPush{
 	// PlayerProxy: server clock
 	func(game *Game, l *login) (proto.Message, error) {
@@ -744,8 +745,12 @@ var loginBurst = []loginPush{
 	func(game *Game, l *login) (proto.Message, error) {
 		return permanentState(l.ctx, l.queries, l.commander.ID)
 	},
-	// ActivityRemasterProxy: the Capsule Reruns picked
+	// ActivityRemasterProxy: the Capsule Reruns picked, in the regions that
+	// have them
 	func(game *Game, l *login) (proto.Message, error) {
+		if !reruns {
+			return nil, nil
+		}
 		return rerunState(l.ctx, l.queries, l.commander.ID)
 	},
 	// ServerNoticeProxy: the bulletin board
@@ -807,6 +812,9 @@ func (game *Game) handleLoadPlayerData(client *connection.Client, req *protobuf.
 		push, err := build(game, l)
 		if err != nil {
 			return err
+		}
+		if push == nil {
+			continue
 		}
 		if err := client.Send(push); err != nil {
 			return err

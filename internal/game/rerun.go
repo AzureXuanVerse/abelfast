@@ -42,14 +42,20 @@ type rerunTimer struct {
 var (
 	rerunConfigs map[uint32]rerunConfig
 	rerunTimers  map[uint32]rerunTimer
+	// reruns is whether the region has Capsule Reruns: KR and TW have neither
+	// table nor ActivityRemasterProxy, and no CS_11214 / SC_11213 / SC_11215
+	// in their protocol, so their clients are never sent SC_11213 and never
+	// send CS_11214 (refused: no rerun configs)
+	reruns bool
 )
 
 func loadRerunData() error {
-	err := gamedata.LoadAll(
+	var err error
+	reruns, err = gamedata.Feature(
 		gamedata.Load("activity_re", &rerunConfigs),
 		gamedata.Load("activity_re_timer", &rerunTimers),
 	)
-	if err != nil {
+	if err != nil || !reruns {
 		return err
 	}
 	for id, config := range rerunConfigs {
