@@ -637,7 +637,7 @@ func empty[M any, PM interface {
 var loginBurst = []loginPush{
 	// PlayerProxy: server clock
 	func(game *Game, l *login) (proto.Message, error) {
-		return &protobuf.SC_11000{Timestamp: proto.Uint32(uint32(l.now.Unix())), Monday_0OclockTimestamp: proto.Uint32(mondayReference)}, nil
+		return &protobuf.SC_11000{Timestamp: proto.Uint32(uint32(l.now.Unix())), Monday_0OclockTimestamp: proto.Uint32(uint32(mondayReference()))}, nil
 	},
 	func(game *Game, l *login) (proto.Message, error) { return game.playerInfo(l.ctx, l.commander, l.ships) },
 	// PlayerProxy: no benefit buffs
@@ -754,7 +754,7 @@ var loginBurst = []loginPush{
 	func(game *Game, l *login) (proto.Message, error) {
 		return &protobuf.SC_11002{
 			Timestamp:               proto.Uint32(uint32(l.now.Unix())),
-			Monday_0OclockTimestamp: proto.Uint32(mondayReference),
+			Monday_0OclockTimestamp: proto.Uint32(uint32(mondayReference())),
 			ShipCount:               proto.Uint32(uint32(len(l.ships))),
 		}, nil
 	},

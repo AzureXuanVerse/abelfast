@@ -6,10 +6,14 @@ import (
 	"github.com/ggmolly/belfast/internal/gamedata"
 )
 
-// mondayReference is the "monday_0oclock_timestamp" the official EN servers
-// send (SC_11000, SC_11002): Monday 2020-11-23 00:00 in UTC-7. The client
-// derives its weekly resets from it.
-const mondayReference = 1606114800
+// mondayReference is the "monday_0oclock_timestamp" sent in SC_11000 and
+// SC_11002: Monday 2020-11-23 00:00, server time (the official EN servers
+// send 1606114800, its UTC-7). The client derives its weekly resets and its
+// idea of the server's clock from it (TimeMgr:_SetServerTime_, which anchors
+// on the same date).
+func mondayReference() int64 {
+	return time.Date(2020, time.November, 23, 0, 0, 0, 0, gamedata.Zone()).Unix()
+}
 
 const (
 	day  = 24 * time.Hour
@@ -31,15 +35,15 @@ const (
 // mondayReference (the captured season started 153 seasons after it).
 const exerciseSeasonLength = 2 * week
 
-// serverNow is the current time on the EN servers' clock.
+// serverNow is the current time on the region's server clock.
 func serverNow() time.Time {
-	return time.Now().In(gamedata.Zone)
+	return time.Now().In(gamedata.Zone())
 }
 
 // startOfDay returns the midnight, server time, that began now's day.
 func startOfDay(now time.Time) time.Time {
-	local := now.In(gamedata.Zone)
-	return time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, gamedata.Zone)
+	local := now.In(gamedata.Zone())
+	return time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, gamedata.Zone())
 }
 
 // nextDay returns the next midnight, server time.
@@ -50,20 +54,20 @@ func nextDay(now time.Time) time.Time {
 // nextMonth returns the start of the month after now, server time: when the
 // monthly shops refresh.
 func nextMonth(now time.Time) time.Time {
-	local := now.In(gamedata.Zone)
-	return time.Date(local.Year(), local.Month()+1, 1, 0, 0, 0, 0, gamedata.Zone)
+	local := now.In(gamedata.Zone())
+	return time.Date(local.Year(), local.Month()+1, 1, 0, 0, 0, 0, gamedata.Zone())
 }
 
 // startOfMonth returns the midnight, server time, that began now's month:
 // when the monthly counts start again.
 func startOfMonth(now time.Time) time.Time {
-	local := now.In(gamedata.Zone)
-	return time.Date(local.Year(), local.Month(), 1, 0, 0, 0, 0, gamedata.Zone)
+	local := now.In(gamedata.Zone())
+	return time.Date(local.Year(), local.Month(), 1, 0, 0, 0, 0, gamedata.Zone())
 }
 
 // sameServerDay tells whether a and b fall on the same day, server time.
 func sameServerDay(a, b time.Time) bool {
-	a, b = a.In(gamedata.Zone), b.In(gamedata.Zone)
+	a, b = a.In(gamedata.Zone()), b.In(gamedata.Zone())
 	return a.Year() == b.Year() && a.YearDay() == b.YearDay()
 }
 
@@ -71,7 +75,7 @@ func sameServerDay(a, b time.Time) bool {
 // given length following each other from mondayReference (the weeks, the
 // exercise seasons).
 func periodStart(now time.Time, period time.Duration) time.Time {
-	reference := time.Unix(mondayReference, 0)
+	reference := time.Unix(mondayReference(), 0)
 	return reference.Add(now.Sub(reference).Truncate(period))
 }
 

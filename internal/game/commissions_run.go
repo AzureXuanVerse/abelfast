@@ -198,7 +198,7 @@ func commissionInfo(row db.CommanderCommission, ships []uint32) *protobuf.COLLEC
 // (EventProxy:checkNightEvent: from night_collection_begin to
 // night_collection_end the next day, server hours); false outside it.
 func nightCommissionUntil(now time.Time) (time.Time, bool) {
-	day, hour := startOfDay(now), uint32(now.In(gamedata.Zone).Hour())
+	day, hour := startOfDay(now), uint32(now.In(gamedata.Zone()).Hour())
 	end := time.Duration(nightCommissionEnd) * time.Hour
 	switch {
 	case hour >= nightCommissionBegin:

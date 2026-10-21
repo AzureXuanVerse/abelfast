@@ -75,7 +75,7 @@ func (config islandTicketConfig) end(now time.Time) uint32 {
 		if json.Unmarshal(config.ExpirationTime, &parts) != nil {
 			return 0
 		}
-		return uint32(time.Date(parts[0][0], time.Month(parts[0][1]), parts[0][2], parts[1][0], parts[1][1], parts[1][2], 0, gamedata.Zone).Unix())
+		return uint32(time.Date(parts[0][0], time.Month(parts[0][1]), parts[0][2], parts[1][0], parts[1][1], parts[1][2], 0, gamedata.Zone()).Unix())
 	case 1:
 		return uint32(startOfDay(now).Unix()) + 86400*config.Duration - 1
 	}

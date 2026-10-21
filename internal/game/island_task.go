@@ -538,7 +538,7 @@ func (game *Game) handleIslandTaskSubmitAll(client *connection.Client, req *prot
 // islandSeasonEnd is when a development season ends.
 func islandSeasonEnd(config islandSeasonConfig) time.Time {
 	end := config.Time[1]
-	return time.Date(end[0][0], time.Month(end[0][1]), end[0][2], end[1][0], end[1][1], end[1][2], 0, gamedata.Zone)
+	return time.Date(end[0][0], time.Month(end[0][1]), end[0][2], end[1][0], end[1][1], end[1][2], 0, gamedata.Zone())
 }
 
 // handleIslandSeasonPtAward answers IslandGetSeasonPtAwardCommand

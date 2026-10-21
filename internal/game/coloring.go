@@ -182,7 +182,7 @@ func (activity coloringActivity) paintable(index, current int, now time.Time) bo
 	if index == 0 || activity.start.IsZero() {
 		return true
 	}
-	days := int(startOfDay(now.In(gamedata.Zone)).Sub(startOfDay(activity.start.In(gamedata.Zone))) / day)
+	days := int(startOfDay(now.In(gamedata.Zone())).Sub(startOfDay(activity.start.In(gamedata.Zone()))) / day)
 	return index < days+1
 }
 

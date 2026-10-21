@@ -29,7 +29,7 @@ func (game *Game) handleGMCommand(client *connection.Client, req *protobuf.CS_11
 		now := time.Now()
 		return client.Send(&protobuf.SC_11101{
 			Result: result(nil),
-			Msg:    proto.String(fmt.Sprintf("CMD:%s Result:ok %d %s", cmd, now.Unix(), now.In(gamedata.Zone).Format(time.DateTime))),
+			Msg:    proto.String(fmt.Sprintf("CMD:%s Result:ok %d %s", cmd, now.Unix(), now.In(gamedata.Zone()).Format(time.DateTime))),
 		})
 	}
 	return client.Send(&protobuf.SC_11101{

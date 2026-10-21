@@ -104,7 +104,7 @@ func loadGameRoomData() error {
 		if json.Unmarshal(room.UnlockTime, &unlock) != nil {
 			return gamedata.Missing("game_room_template", "%d unlock_time", id)
 		}
-		room.unlock = time.Date(unlock[0][0], time.Month(unlock[0][1]), unlock[0][2], unlock[1][0], unlock[1][1], unlock[1][2], 0, gamedata.Zone)
+		room.unlock = time.Date(unlock[0][0], time.Month(unlock[0][1]), unlock[0][2], unlock[1][0], unlock[1][1], unlock[1][2], 0, gamedata.Zone())
 		rooms[id] = room
 	}
 	goods, err := gamedata.Table[miniGameGoodsConfig]("gameroom_shop_template")

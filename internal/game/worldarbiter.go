@@ -93,7 +93,7 @@ func (state *worldState) arbiterMonth(now time.Time) uint32 {
 	if state.Arbiter.First == 0 || state.Arbiter.First == start {
 		return 0
 	}
-	return uint32(now.In(gamedata.Zone).Month())
+	return uint32(now.In(gamedata.Zone()).Month())
 }
 
 // arbiterOpen tells whether the Forward Base is open (its open_stage).

@@ -141,7 +141,7 @@ func loadWorldPortData() error {
 	if len(newShopDate) != 3 {
 		return gamedata.Missing("gameset", "world_newshop_date")
 	}
-	worldPortSettings.newShopDate = time.Date(int(newShopDate[0]), time.Month(newShopDate[1]), int(newShopDate[2]), 0, 0, 0, 0, gamedata.Zone)
+	worldPortSettings.newShopDate = time.Date(int(newShopDate[0]), time.Month(newShopDate[1]), int(newShopDate[2]), 0, 0, 0, 0, gamedata.Zone())
 	worldPortSettings.brokenPrice = gameset["world_port_service_2_price"]
 	worldPortSettings.brokenBuff = gameset["world_death_buff"]
 	if worldPortSettings.brokenPrice == 0 || worldPortSettings.brokenBuff == 0 {
@@ -278,7 +278,7 @@ const (
 // the last one cut short by the next month.
 func worldPortRotation(now time.Time) (start, end time.Time) {
 	month := startOfMonth(now)
-	n := (now.In(gamedata.Zone).Day() - 1) / worldPortRotationDays
+	n := (now.In(gamedata.Zone()).Day() - 1) / worldPortRotationDays
 	start = month.AddDate(0, 0, n*worldPortRotationDays)
 	end = start.AddDate(0, 0, worldPortRotationDays)
 	if next := nextMonth(now); end.After(next) {

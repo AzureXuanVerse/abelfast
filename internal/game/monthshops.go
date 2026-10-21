@@ -89,7 +89,7 @@ func loadMonthShops() error {
 // monthKey is the month purchases of the monthly shops count in: year * 100
 // + month, server time.
 func monthKey(now time.Time) uint32 {
-	now = now.In(gamedata.Zone)
+	now = now.In(gamedata.Zone())
 	return uint32(now.Year()*100 + int(now.Month()))
 }
 
@@ -99,7 +99,7 @@ func monthKey(now time.Time) uint32 {
 // normal_shop_list (ShopsProxy, ShamBattleShop:update, FragmentShop:update).
 // The official capture's account bought nothing and gets only the month.
 func monthShopInfo(ctx context.Context, queries *db.Queries, commanderID uint32, now time.Time) (*protobuf.SC_16200, error) {
-	month := uint32(now.In(gamedata.Zone).Month())
+	month := uint32(now.In(gamedata.Zone()).Month())
 	rows, err := queries.ListMonthShopPurchases(ctx, db.ListMonthShopPurchasesParams{CommanderID: commanderID, Month: monthKey(now)})
 	if err != nil {
 		return nil, err
@@ -153,7 +153,7 @@ func (tx *Tx) buyMonthShopGoods(shopType, id, count uint32, now time.Time) ([]*p
 	if !ok || count == 0 {
 		return nil, errRefused
 	}
-	shop := monthShops[uint32(now.In(gamedata.Zone).Month())]
+	shop := monthShops[uint32(now.In(gamedata.Zone()).Month())]
 	month := monthKey(now)
 	var stock []uint32
 	switch shopType {

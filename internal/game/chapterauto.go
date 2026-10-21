@@ -150,7 +150,7 @@ func chapterAutoFixTime(chapterID, record uint32) uint32 {
 func chapterTicketExpiry(dropArg json.RawMessage, now time.Time) int64 {
 	var date [2][3]int
 	if json.Unmarshal(dropArg, &date) == nil {
-		return time.Date(date[0][0], time.Month(date[0][1]), date[0][2], date[1][0], date[1][1], date[1][2], 0, gamedata.Zone).Unix()
+		return time.Date(date[0][0], time.Month(date[0][1]), date[0][2], date[1][0], date[1][1], date[1][2], 0, gamedata.Zone()).Unix()
 	}
 	var arg []json.RawMessage
 	var kind string
@@ -161,16 +161,16 @@ func chapterTicketExpiry(dropArg json.RawMessage, now time.Time) int64 {
 	if len(arg) > 1 {
 		_ = json.Unmarshal(arg[1], &n)
 	}
-	local := now.In(gamedata.Zone)
+	local := now.In(gamedata.Zone())
 	switch kind {
 	case "day":
 		return nextDay(now).AddDate(0, 0, n).Unix()
 	case "week":
 		return periodStart(now, week).Add(time.Duration(n+1) * week).Unix()
 	case "month":
-		return time.Date(local.Year(), local.Month()+time.Month(n)+1, 1, 0, 0, 0, 0, gamedata.Zone).Unix()
+		return time.Date(local.Year(), local.Month()+time.Month(n)+1, 1, 0, 0, 0, 0, gamedata.Zone()).Unix()
 	case "year":
-		return time.Date(local.Year()+n+1, 1, 1, 0, 0, 0, 0, gamedata.Zone).Unix()
+		return time.Date(local.Year()+n+1, 1, 1, 0, 0, 0, 0, gamedata.Zone()).Unix()
 	case "act":
 		config, open := openActivity(uint32(n), now)
 		switch {

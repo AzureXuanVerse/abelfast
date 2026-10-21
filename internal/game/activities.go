@@ -104,7 +104,7 @@ func activityState(ctx context.Context, queries *db.Queries, commanderID uint32,
 // and data2 are the year and month signed in, data3 the re-signs, data1_list
 // the days signed.
 func monthSignState(state db.CommanderActivity, now time.Time) db.CommanderActivity {
-	local := now.In(gamedata.Zone)
+	local := now.In(gamedata.Zone())
 	if state.Data1 != uint32(local.Year()) || state.Data2 != uint32(local.Month()) {
 		state.Data1, state.Data2, state.Data3, state.Data1List = uint32(local.Year()), uint32(local.Month()), 0, nil
 	}
@@ -280,7 +280,7 @@ func (game *Game) handleActivityOperation(client *connection.Client, req *protob
 			}
 			state = monthSignState(state, now)
 			days := state.Data1List
-			today := uint32(now.In(gamedata.Zone).Day())
+			today := uint32(now.In(gamedata.Zone()).Day())
 			if slices.Contains(days, today) || len(days) >= len(monthSignDrops[0]) {
 				return errRefused
 			}

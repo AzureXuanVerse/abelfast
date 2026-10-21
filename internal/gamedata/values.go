@@ -5,10 +5,14 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ggmolly/belfast/internal/region"
 )
 
-// Zone is the EN servers' clock, the one config times are written in.
-var Zone = time.FixedZone("UTC-7", -7*60*60)
+// Zone is the region's server clock, the one config times are written in.
+func Zone() *time.Location {
+	return region.Zone()
+}
 
 // IDs reads an id field the tables write several ways: a number, a list
 // (nested lists flattened), or either as a Lua string. 0 is no id.
@@ -91,8 +95,8 @@ func (newUser NewUser) Span(registered, timerEnd time.Time) (start, end time.Tim
 	if registered.Before(newUser.Since) {
 		return time.Time{}, time.Time{}, false
 	}
-	local := registered.In(Zone)
-	start = time.Date(local.Year(), local.Month(), local.Day()+newUser.Offset, 0, 0, 0, 0, Zone)
+	local := registered.In(Zone())
+	start = time.Date(local.Year(), local.Month(), local.Day()+newUser.Offset, 0, 0, 0, 0, Zone())
 	end = timerEnd
 	if newUser.Days > 0 {
 		end = start.AddDate(0, 0, newUser.Days)
@@ -141,7 +145,7 @@ func clock(raw json.RawMessage) (time.Time, bool) {
 	if json.Unmarshal(raw, &parts) != nil {
 		return time.Time{}, false
 	}
-	return time.Date(parts[0][0], time.Month(parts[0][1]), parts[0][2], parts[1][0], parts[1][1], parts[1][2], 0, Zone), true
+	return time.Date(parts[0][0], time.Month(parts[0][1]), parts[0][2], parts[1][0], parts[1][1], parts[1][2], 0, Zone()), true
 }
 
 // Open is whether the window contains now.
