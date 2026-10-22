@@ -14,4 +14,5 @@ func (server *Server) registerAreas(api apiFunc) {
 	server.registerLife(api)
 	server.registerSocial(api)
 	server.registerWorld(api)
+	server.registerContent(api)
 }
