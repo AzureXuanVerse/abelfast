@@ -7,6 +7,7 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
+	"github.com/ggmolly/belfast/internal/live"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
@@ -36,33 +37,12 @@ type Tx struct {
 	ownIsland *islandState // the commander's island once Tx.island loaded it
 }
 
-// tx runs fn in a transaction. Once fn succeeds the task events it recorded
-// are applied in the same transaction, then its afterEvents functions run.
-// When it commits, the task progress pushes (SC_20002, SC_20102, SC_20103,
-// SC_20202) are queued on the client, then the other pushes, then the new
-// ships (SC_12042), all ahead of the reply. Nothing is queued when it fails.
+// tx runs fn in a transaction (see commit). When it commits, the task
+// progress pushes (SC_20002, SC_20102, SC_20103, SC_20202) are queued on the
+// client, then the other pushes, then the new ships (SC_12042), all ahead of
+// the reply. Nothing is queued when it fails.
 func (game *Game) tx(ctx context.Context, client *connection.Client, fn func(tx *Tx) error) error {
-	var tx *Tx
-	var progress []proto.Message
-	err := game.DB.InTx(ctx, func(queries *db.Queries) error {
-		tx = newTx(ctx, queries, client.CommanderID)
-		if err := fn(tx); err != nil {
-			return err
-		}
-		if err := tx.recordTechPoints(); err != nil {
-			return err
-		}
-		var err error
-		if progress, err = game.applyTaskEvents(ctx, queries, client.CommanderID, tx.events); err != nil {
-			return err
-		}
-		for _, fn := range tx.after {
-			if err := fn(); err != nil {
-				return err
-			}
-		}
-		return tx.saveOwnIsland()
-	})
+	tx, progress, err := game.commit(ctx, client.CommanderID, fn)
 	if err != nil {
 		return err
 	}
@@ -82,8 +62,56 @@ func (game *Game) tx(ctx context.Context, client *connection.Client, fn func(tx 
 	return client.Push(newShips)
 }
 
+// commit runs fn on the commander's state in a transaction, without a
+// client to push to. Once fn succeeds the Fleet Technology points and the
+// task events it recorded are applied in the same transaction, then its
+// afterEvents functions run and the island it loaded is saved. When it
+// commits, the back-office is told the commander changed. It returns the
+// unit of work and the task progress pushes, for the caller to send.
+func (game *Game) commit(ctx context.Context, commanderID uint32, fn func(tx *Tx) error) (*Tx, []proto.Message, error) {
+	var tx *Tx
+	var progress []proto.Message
+	err := game.DB.InTx(ctx, func(queries *db.Queries) error {
+		tx = newTx(ctx, queries, commanderID)
+		if err := fn(tx); err != nil {
+			return err
+		}
+		if err := tx.recordTechPoints(); err != nil {
+			return err
+		}
+		var err error
+		if progress, err = game.applyTaskEvents(ctx, queries, commanderID, tx.events); err != nil {
+			return err
+		}
+		for _, fn := range tx.after {
+			if err := fn(); err != nil {
+				return err
+			}
+		}
+		return tx.saveOwnIsland()
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	game.Live.Publish(live.Event{Kind: live.Commander, ID: commanderID})
+	return tx, progress, nil
+}
+
+// AdminWrite runs fn on a commander's state for the back-office: the
+// client keeps its own copy of what fn changes, so a commander playing is
+// kicked first (it sees the change at its next login), then fn runs as a
+// request's would (see commit). It tells whether the commander was kicked.
+func (game *Game) AdminWrite(ctx context.Context, commanderID uint32, fn func(tx *Tx) error) (bool, error) {
+	kicked, err := game.Kick(commanderID)
+	if err != nil {
+		return kicked, err
+	}
+	_, _, err = game.commit(ctx, commanderID, fn)
+	return kicked, err
+}
+
 // newTx is a unit of work on queries for commanderID; what it records is only
-// sent when it runs through Game.tx.
+// applied when it runs through Game.commit.
 func newTx(ctx context.Context, queries *db.Queries, commanderID uint32) *Tx {
 	return &Tx{Queries: queries, ctx: ctx, commanderID: commanderID}
 }

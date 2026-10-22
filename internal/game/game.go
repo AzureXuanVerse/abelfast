@@ -11,12 +11,16 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
+	"github.com/ggmolly/belfast/internal/live"
 	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
 
 type Game struct {
 	DB *db.Store
+	// Live gets an event for each save written and each login or logout,
+	// for the back-office's open pages (nil: none)
+	Live *live.Broker
 
 	online online // the commanders playing, see connect
 	// who entered their secondary password since logging in

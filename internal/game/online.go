@@ -9,6 +9,7 @@ import (
 
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/db"
+	"github.com/ggmolly/belfast/internal/live"
 	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/protobuf"
 )
@@ -38,6 +39,7 @@ func (game *Game) connect(ctx context.Context, client *connection.Client) error 
 	if known {
 		return nil
 	}
+	game.Live.Publish(live.Event{Kind: live.Online})
 	client.OnClose(func() { game.disconnect(client, id) })
 	if err := game.DB.SetLastOnline(ctx, db.SetLastOnlineParams{LastOnline: time.Now().Unix(), ID: id}); err != nil {
 		return err
@@ -55,6 +57,7 @@ func (game *Game) disconnect(client *connection.Client, id uint32) {
 	}
 	delete(game.online.clients, id)
 	game.online.mu.Unlock()
+	game.Live.Publish(live.Event{Kind: live.Online})
 	ctx := context.Background()
 	if err := game.DB.SetLastOnline(ctx, db.SetLastOnlineParams{LastOnline: time.Now().Unix(), ID: id}); err != nil {
 		logger.WithFields("Friend", logger.FieldValue("commander", id), logger.FieldValue("error", err)).Warn("last online not saved")
