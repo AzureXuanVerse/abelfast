@@ -22,4 +22,5 @@ func (server *Server) registerAreas(api apiFunc) {
 	server.registerActivities(api)
 	server.registerModeration(api)
 	server.registerContent(api)
+	server.registerServer(api)
 }
