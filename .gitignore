@@ -30,3 +30,8 @@ web/src/node_modules
 web/src/package-lock.json
 AzurLane*
 .cache/
+
+# The back-office build, embedded at go build time (make admin)
+admin/node_modules
+internal/admin/dist/*
+!internal/admin/dist/.gitkeep
