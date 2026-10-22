@@ -10,11 +10,13 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/ggmolly/belfast/internal/admin"
 	"github.com/ggmolly/belfast/internal/connection"
 	"github.com/ggmolly/belfast/internal/consts"
 	"github.com/ggmolly/belfast/internal/db"
 	"github.com/ggmolly/belfast/internal/game"
 	"github.com/ggmolly/belfast/internal/gateway"
+	"github.com/ggmolly/belfast/internal/live"
 	"github.com/ggmolly/belfast/internal/logger"
 	"github.com/ggmolly/belfast/internal/packets"
 	"github.com/ggmolly/belfast/internal/region"
@@ -22,10 +24,12 @@ import (
 
 // serveOptions are the server's flags (belfast without a subcommand).
 type serveOptions struct {
-	listen     string
-	serverHost string
-	serverPort uint
-	upstream   string
+	listen        string
+	serverHost    string
+	serverPort    uint
+	upstream      string
+	admin         string
+	adminPassword string
 }
 
 func Run() {
@@ -61,6 +65,8 @@ func rootCommand() *cobra.Command {
 	flags.StringVar(&opts.serverHost, "server-host", "127.0.0.1", "game server host handed to clients in the server list")
 	flags.UintVar(&opts.serverPort, "server-port", 80, "game server port handed to clients in the server list")
 	flags.StringVar(&opts.upstream, "upstream-gateway", "", "official gateway, CS_10800 is relayed there for the asset hashes (default: the region's official gateway)")
+	flags.StringVar(&opts.admin, "admin", "127.0.0.1:8081", "back-office listen address, empty to disable")
+	flags.StringVar(&opts.adminPassword, "admin-password", os.Getenv("BELFAST_ADMIN_PASSWORD"), "back-office password (default $BELFAST_ADMIN_PASSWORD)")
 
 	root.AddCommand(mailCommand(&dbPath), noticeCommand(&dbPath))
 	return root
@@ -90,8 +96,25 @@ func serve(dbPath string, opts serveOptions) {
 		Servers:   []gateway.Server{{ID: 1, Name: "Belfast", Host: opts.serverHost, Port: uint32(opts.serverPort)}},
 	}
 	gw.Register()
-	gameServer := &game.Game{DB: store}
+	gameServer := &game.Game{DB: store, Live: &live.Broker{}}
 	gameServer.Register()
+	if opts.admin != "" {
+		backOffice := &admin.Server{
+			Addr:       opts.admin,
+			Password:   opts.adminPassword,
+			Store:      store,
+			Game:       gameServer,
+			Gateway:    gw,
+			AssetDir:   filepath.Join(filepath.Dir(dbPath), "assets"),
+			ListenAddr: opts.listen,
+			DBPath:     dbPath,
+		}
+		go func() {
+			if err := backOffice.Run(); err != nil {
+				logger.LogEvent("Admin", "Run", err.Error(), logger.LOG_LEVEL_ERROR)
+			}
+		}()
+	}
 
 	server := connection.NewServer(opts.listen, packets.Dispatch)
 	server.HTTPResponse = gateway.ProbeResponse
