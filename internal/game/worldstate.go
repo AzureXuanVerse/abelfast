@@ -125,7 +125,6 @@ type worldStamina struct {
 	Power       uint32 `json:"power"`        // action_power, recovers to the max
 	Extra       uint32 `json:"extra"`        // action_power_extra, above the max
 	LastRecover uint32 `json:"last_recover"` // last_recover_timestamp
-	FetchCount  uint32 `json:"fetch_count"`  // action_power_fetch_count
 	// Exchanges are the oil exchanges of the week starting at
 	// ExchangeWeek (staminaExchangeTimes, reset every Monday).
 	Exchanges    uint32 `json:"exchanges"`
@@ -513,16 +512,17 @@ func (fleet *worldFleet) groupInfo() *protobuf.GROUPINCHAPTER_P33 {
 // state the client starts the fleet selection from.
 func (state *worldState) worldInfo() *protobuf.WORLDINFO {
 	info := &protobuf.WORLDINFO{
-		MapId:                    proto.Uint32(state.MapID),
-		Time:                     proto.Uint32(state.ActivateTime),
-		Round:                    proto.Uint32(state.Round),
-		TaskFinishCount:          proto.Uint32(state.TaskFinishCount),
-		SubmarineState:           proto.Uint32(0),
-		GoodsList:                worldGoodsInfos(state.Goods),
-		ActionPower:              proto.Uint32(state.Stamina.Power),
-		ActionPowerExtra:         proto.Uint32(state.Stamina.Extra),
-		LastRecoverTimestamp:     proto.Uint32(state.Stamina.LastRecover),
-		ActionPowerFetchCount:    proto.Uint32(state.Stamina.FetchCount),
+		MapId:                proto.Uint32(state.MapID),
+		Time:                 proto.Uint32(state.ActivateTime),
+		Round:                proto.Uint32(state.Round),
+		TaskFinishCount:      proto.Uint32(state.TaskFinishCount),
+		SubmarineState:       proto.Uint32(0),
+		GoodsList:            worldGoodsInfos(state.Goods),
+		ActionPower:          proto.Uint32(state.Stamina.Power),
+		ActionPowerExtra:     proto.Uint32(state.Stamina.Extra),
+		LastRecoverTimestamp: proto.Uint32(state.Stamina.LastRecover),
+		// WorldStaminaManager:Setup reads it as staminaExchangeTimes
+		ActionPowerFetchCount:    proto.Uint32(state.Stamina.Exchanges),
 		LastChangeGroupTimestamp: proto.Uint32(state.ExpiredTime),
 		EnterMapId:               proto.Uint32(state.EnterMapID),
 		BuffList:                 worldBuffInfos(state.Buffs),
