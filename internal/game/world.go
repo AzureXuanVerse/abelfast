@@ -82,6 +82,71 @@ func (tx *Tx) updateWorldPeriods(state *worldState, now time.Time) (bool, error)
 	return changed, nil
 }
 
+// activateWorld activates the commander's world as req asks (the map and
+// entrance, the fleets, the camp), WorldActivateCommand's checks and all:
+// the packet handler and the back-office both use it.
+func (tx *Tx) activateWorld(req *protobuf.CS_33101, now time.Time) (*worldState, error) {
+	state, err := tx.worldState(now)
+	if err != nil {
+		return nil, err
+	}
+	if state.activated() {
+		return nil, errRefused
+	}
+	if _, ok := worldRandomMaps[req.GetId()]; !ok {
+		return nil, errRefused
+	}
+	if _, ok := worldColormasks[req.GetEnterMapId()]; !ok {
+		return nil, errRefused
+	}
+	fleets, err := tx.worldFleets(req.GetEliteFleetList(), state.Count.Progress)
+	if err != nil {
+		return nil, err
+	}
+	first := state.ActivateTime == 0 && state.Count.Activations == 0
+	state.Camp = req.GetCamp()
+	state.ActivateTime = uint32(now.Unix())
+	state.ExpiredTime = uint32(nextMonth(now).Unix())
+	state.Round = 0
+	state.Count.Activations++
+	state.MapID = req.GetId()
+	state.EnterMapID = req.GetEnterMapId()
+	state.Fleets = fleets
+	state.DefaultFleets = nil
+	for _, fleet := range fleets {
+		base := worldBaseFleet{ID: fleet.ID, Commanders: fleet.Commanders}
+		for _, ship := range fleet.Ships {
+			base.Ships = append(base.Ships, ship.ID)
+		}
+		state.DefaultFleets = append(state.DefaultFleets, base)
+	}
+	if first {
+		state.Stamina.Power = worldSettings.maxStamina
+		state.Stamina.LastRecover = uint32(now.Unix())
+	}
+	m, err := tx.worldMap(state, state.MapID)
+	if err != nil {
+		return nil, err
+	}
+	if m == nil || worldTemplates[m.TemplateID] == nil {
+		return nil, errRefused
+	}
+	state.enterMap(m)
+	tx.placeWorldFleets(state, m)
+	assignPressingAwards(state, tx.commanderID)
+	tx.respawnTaskEvents(state, now)
+	if _, err := tx.updateWorldPeriods(state, now); err != nil {
+		return nil, err
+	}
+	if err := tx.saveWorldMap(m); err != nil {
+		return nil, err
+	}
+	if err := tx.saveWorldState(state); err != nil {
+		return nil, err
+	}
+	return state, nil
+}
+
 // handleWorldActivate answers WorldActivateCommand (CS_33101, sent by
 // WorldFleetSelectMediator's OnGO when the world isn't activated): deploy
 // the fleets chosen (elite_fleet_list, normal fleets then the submarine
@@ -96,62 +161,8 @@ func (game *Game) handleWorldActivate(client *connection.Client, req *protobuf.C
 	now := serverNow()
 	var reply *protobuf.SC_33102
 	err := game.tx(ctx, client, func(tx *Tx) error {
-		state, err := tx.worldState(now)
+		state, err := tx.activateWorld(req, now)
 		if err != nil {
-			return err
-		}
-		if state.activated() {
-			return errRefused
-		}
-		if _, ok := worldRandomMaps[req.GetId()]; !ok {
-			return errRefused
-		}
-		if _, ok := worldColormasks[req.GetEnterMapId()]; !ok {
-			return errRefused
-		}
-		fleets, err := tx.worldFleets(req.GetEliteFleetList(), state.Count.Progress)
-		if err != nil {
-			return err
-		}
-		first := state.ActivateTime == 0 && state.Count.Activations == 0
-		state.Camp = req.GetCamp()
-		state.ActivateTime = uint32(now.Unix())
-		state.ExpiredTime = uint32(nextMonth(now).Unix())
-		state.Round = 0
-		state.Count.Activations++
-		state.MapID = req.GetId()
-		state.EnterMapID = req.GetEnterMapId()
-		state.Fleets = fleets
-		state.DefaultFleets = nil
-		for _, fleet := range fleets {
-			base := worldBaseFleet{ID: fleet.ID, Commanders: fleet.Commanders}
-			for _, ship := range fleet.Ships {
-				base.Ships = append(base.Ships, ship.ID)
-			}
-			state.DefaultFleets = append(state.DefaultFleets, base)
-		}
-		if first {
-			state.Stamina.Power = worldSettings.maxStamina
-			state.Stamina.LastRecover = uint32(now.Unix())
-		}
-		m, err := tx.worldMap(state, state.MapID)
-		if err != nil {
-			return err
-		}
-		if m == nil || worldTemplates[m.TemplateID] == nil {
-			return errRefused
-		}
-		state.enterMap(m)
-		tx.placeWorldFleets(state, m)
-		assignPressingAwards(state, tx.commanderID)
-		tx.respawnTaskEvents(state, now)
-		if _, err := tx.updateWorldPeriods(state, now); err != nil {
-			return err
-		}
-		if err := tx.saveWorldMap(m); err != nil {
-			return err
-		}
-		if err := tx.saveWorldState(state); err != nil {
 			return err
 		}
 		reply = &protobuf.SC_33102{
