@@ -1,0 +1,205 @@
+@import 'tailwindcss';
+
+/* Drawn from the client's Island Planner screens: a white back button over a
+   navy title pill, a charcoal sidebar with a cyan selection, dark panels with
+   a light title strip, light cards for forms, flat cyan / grey / red buttons.
+   The game's fonts come from its own bundles (/api/assets), so they only load
+   once logged in; the login page uses the system's. */
+@font-face {
+  font-family: 'ZhunYuan';
+  src: url('/api/assets/font/zhunyuan_bold.ttf') format('truetype');
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'ALNumber';
+  src: url('/api/assets/font/number.ttf') format('truetype');
+  font-display: swap;
+}
+
+@theme {
+  --font-game: 'ZhunYuan', system-ui, sans-serif;
+  --font-num: 'ALNumber', ui-monospace, monospace;
+  --color-cyan: #2fb9f2;
+  --color-cyan-hi: #4cc5f6;
+  --color-sel: #27b3ef;
+  --color-grey: #b1b5bd;
+  --color-grey-hi: #c0c4cb;
+  --color-red: #e4524a;
+  --color-red-hi: #ec6a62;
+  --color-navy: #23415c;
+  --color-charcoal: #22252c;
+  --color-pill: #1e2026;
+  --color-strip: #3a3e47;
+  --color-card: #f4f5f7;
+  --color-ink: #2a2e36;
+  --color-ink-soft: #4a5163;
+  --color-soft: #c9d2e3;
+  --color-dim: #9aa6bd;
+  --color-gold: #ffe18a;
+  --color-link: #7fd6ff;
+  --color-warn: #ff9f2e;
+  --color-bad: #ff9c94;
+  --color-ok: #7fe0a4;
+  --color-tier-1: #9aa3ad;
+  --color-tier-2: #4f9be8;
+  --color-tier-3: #a46be0;
+  --color-tier-4: #f0b43a;
+  --color-tier-5: #ff7ab8;
+  /* the dotted fills: the title pill and the selected sidebar entry */
+  --image-pill:
+    radial-gradient(circle, rgb(255 255 255 / 0.07) 1px, transparent 1.5px) 0 0 / 5px 5px,
+    linear-gradient(90deg, #1b1e26, #2b2f39);
+  --image-sel:
+    linear-gradient(90deg, #27b3ef 45%, rgb(39 179 239 / 0.72)),
+    radial-gradient(circle, #a6e4ff 1.1px, transparent 1.6px) 0 0 / 6px 6px, #27b3ef;
+  --image-scene:
+    radial-gradient(ellipse at 20% 0%, rgb(90 110 160 / 0.45), transparent 55%),
+    radial-gradient(ellipse at 100% 100%, rgb(40 60 110 / 0.5), transparent 50%),
+    linear-gradient(180deg, #2c3550, #171c2b);
+}
+
+@layer base {
+  body {
+    @apply m-0 min-h-screen bg-fixed font-game font-bold text-white;
+    background: var(--image-scene);
+  }
+  a {
+    @apply text-link hover:text-[#c2ecff];
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-cyan;
+  }
+}
+
+@layer components {
+  .num {
+    @apply font-num font-normal tabular-nums;
+  }
+  .ip-sub {
+    @apply text-[11px] tracking-[0.2em] text-dim uppercase;
+  }
+
+  /* header */
+  .ip-back {
+    @apply absolute top-2 left-4 z-1 grid h-[66px] w-[146px] place-items-center rounded-md bg-white shadow-[0_3px_10px_rgb(0_0_0/0.35)] hover:bg-[#eef6fb];
+  }
+  .ip-pill {
+    @apply flex h-[52px] items-center gap-3 rounded-r-[26px] pr-14 pl-[196px];
+    background: var(--image-pill);
+  }
+  .ip-home {
+    @apply grid size-[52px] place-items-center rounded-full bg-charcoal/90 text-white shadow-[0_2px_8px_rgb(0_0_0/0.3)] hover:text-white;
+  }
+
+  /* sidebars: entries in a list, or icon tabs */
+  .ip-side {
+    @apply sticky top-4 box-border flex flex-none flex-col self-start bg-charcoal/95 shadow-[4px_0_16px_rgb(0_0_0/0.25)];
+  }
+  .ip-side-link {
+    @apply ml-3.5 flex items-center gap-2.5 border-b border-white/10 px-4 py-[9px] text-[19px] leading-snug text-white no-underline hover:bg-white/6 hover:text-white;
+  }
+  .ip-tab {
+    @apply relative flex flex-col items-center gap-1.5 border-b border-white/10 px-2 py-[18px] text-center text-lg leading-tight text-white no-underline hover:bg-white/6 hover:text-white;
+  }
+  .ip-side-link[aria-current='page'],
+  .ip-tab[aria-current='page'] {
+    @apply border-transparent;
+    background: var(--image-sel);
+  }
+
+  /* choices: a charcoal bar with a white pill on dark, white boxes with a
+     navy selection on light cards, section tabs */
+  .ip-seg {
+    @apply flex flex-wrap gap-1 rounded-3xl bg-[rgb(30_33_40/0.88)] p-1;
+  }
+  .ip-seg > button,
+  .ip-seg > a {
+    @apply flex h-10 cursor-pointer items-center gap-2 rounded-[20px] border-0 bg-transparent px-4 text-base whitespace-nowrap text-white no-underline;
+  }
+  .ip-tabs {
+    @apply flex flex-wrap justify-around gap-1 bg-[rgb(52_56_66/0.92)] px-4 py-2;
+  }
+  .ip-tabs > a,
+  .ip-tabs > button {
+    @apply flex h-10 cursor-pointer items-center gap-2 rounded-[20px] border-0 bg-transparent px-[22px] text-[19px] whitespace-nowrap text-white no-underline;
+  }
+  .ip-seg > [aria-pressed='true'],
+  .ip-seg > [aria-current='page'],
+  .ip-tabs > [aria-pressed='true'],
+  .ip-tabs > [aria-current='page'] {
+    @apply bg-white text-ink;
+  }
+  .ip-opt {
+    @apply min-h-11 cursor-pointer rounded border-0 bg-white px-4 text-[17px] whitespace-nowrap text-ink shadow-[0_1px_4px_rgb(0_0_0/0.12),inset_0_0_0_1px_#dfe3ea];
+  }
+  .ip-opt[aria-pressed='true'] {
+    @apply bg-navy text-white shadow-none;
+  }
+
+  /* surfaces */
+  .ip-panel {
+    @apply rounded bg-[rgb(20_24_34/0.88)] shadow-[0_8px_24px_rgb(0_0_0/0.35)];
+  }
+  .ip-head {
+    @apply flex items-baseline gap-2.5 border-b-2 border-white/8 bg-white/6 px-5 py-3;
+  }
+  .ip-head > h2 {
+    @apply m-0 text-2xl;
+  }
+  .ip-row {
+    @apply rounded-[3px] bg-white/6;
+  }
+  .ip-sel {
+    @apply shadow-[inset_0_0_0_2px_var(--color-cyan)];
+  }
+  .ip-card {
+    @apply overflow-hidden rounded shadow-[0_8px_24px_rgb(0_0_0/0.35)];
+  }
+  .ip-card-head {
+    @apply flex justify-center border-b-4 border-cyan bg-[#2b2e35] px-[18px] py-3;
+  }
+  .ip-card-head > h2 {
+    @apply m-0 rounded-[18px] bg-pill px-7 py-1 text-xl;
+  }
+  .ip-card-body {
+    @apply flex flex-col gap-3.5 bg-card px-[22px] pt-5 pb-[22px] text-ink;
+  }
+  .ip-strip {
+    @apply bg-strip px-2 py-[3px] text-[11px] tracking-[0.16em] text-white uppercase;
+  }
+  .ip-lab {
+    @apply flex flex-col gap-1.5 text-[15px] text-ink-soft;
+  }
+  .ip-danger-zone {
+    @apply border-t-[3px] border-red;
+  }
+  .ip-tag {
+    @apply rounded-[3px] px-[7px] py-0.5 text-[11px] tracking-[0.06em] whitespace-nowrap;
+  }
+
+  /* buttons and fields */
+  .ip-btn,
+  .ip-btn2,
+  .ip-danger {
+    @apply inline-flex h-[52px] cursor-pointer items-center justify-center gap-2 rounded border-0 px-6 text-[22px] whitespace-nowrap text-white no-underline shadow-[0_2px_6px_rgb(0_0_0/0.2)] hover:text-white disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .ip-btn {
+    @apply bg-cyan hover:bg-cyan-hi;
+  }
+  .ip-btn2 {
+    @apply bg-grey hover:bg-grey-hi;
+  }
+  .ip-danger {
+    @apply bg-red hover:bg-red-hi;
+  }
+  .ip-sm {
+    @apply h-[38px] px-3.5 text-base;
+  }
+  .ip-field {
+    @apply box-border h-[46px] rounded border-0 bg-white px-3.5 text-[17px] text-ink shadow-[inset_0_0_0_1px_#d6dae1] focus:shadow-[inset_0_0_0_2px_var(--color-cyan)] focus:outline-none;
+  }
+  textarea.ip-field {
+    @apply h-auto resize-y py-2.5 leading-[1.45];
+  }
+}
