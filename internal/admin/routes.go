@@ -11,4 +11,5 @@ func (server *Server) registerAreas(api apiFunc) {
 	server.registerPlayers(api)
 	server.registerDock(api)
 	server.registerProgress(api)
+	server.registerLife(api)
 }
