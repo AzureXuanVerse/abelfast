@@ -46,6 +46,7 @@ type meowfficerSkillLevel struct {
 	ID     uint32 `json:"id"`
 	Exp    uint32 `json:"exp"`
 	NextID uint32 `json:"next_id"`
+	PrevID uint32 `json:"prev_id"`
 }
 
 // talentDestroyExp is what a learned talent adds to the EXP its cat gives
@@ -178,6 +179,19 @@ func addMeowfficerSkillExp(id, exp, gained uint32) (uint32, uint32) {
 		exp -= skill.Exp
 		id = skill.NextID
 	}
+}
+
+// meowfficerSkillChain is the levels of id's skill, from Lv.1: its
+// prev_id links back to the first, next_id on to the last.
+func meowfficerSkillChain(id uint32) []uint32 {
+	for seen := 0; meowfficerSkillLevels[id].PrevID != 0 && seen < 100; seen++ {
+		id = meowfficerSkillLevels[id].PrevID
+	}
+	chain := []uint32{id}
+	for next := meowfficerSkillLevels[id].NextID; next != 0 && len(chain) < 100; next = meowfficerSkillLevels[next].NextID {
+		chain = append(chain, next)
+	}
+	return chain
 }
 
 // meowfficerSkillMaxed is CommanderSkill:isMaxLevel.
