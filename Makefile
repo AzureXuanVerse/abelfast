@@ -3,7 +3,7 @@ PROTO_GO_DIR := internal/protobuf
 PROTO_LUA_SCRIPT := internal/tools/proto_from_lua.py
 PROTOC_GEN_GO := $(shell go env GOPATH)/bin/protoc-gen-go
 
-.PHONY: lua-proto proto go all install-protoc-gen-go build clean fclean re sqlc
+.PHONY: lua-proto proto go all install-protoc-gen-go build clean fclean re sqlc admin
 
 LDFLAGS := -s -w
 BINARY_DIR ?= bin
@@ -25,6 +25,10 @@ go: proto
 
 sqlc:
 	cd internal/db && sqlc generate
+
+# the back-office web app, embedded by internal/admin
+admin:
+	cd admin && npm ci && npm run build
 
 all: lua-proto proto
 
