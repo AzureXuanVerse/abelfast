@@ -7,5 +7,6 @@ type apiFunc func(pattern string, handler func(*http.Request) (any, error))
 
 // registerAreas registers each back-office area's API.
 func (server *Server) registerAreas(api apiFunc) {
+	server.registerOverview(api)
 	server.registerDock(api)
 }
