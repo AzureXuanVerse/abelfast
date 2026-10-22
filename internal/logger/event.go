@@ -56,6 +56,7 @@ func Log(scope, message string, level int, fields ...Field) {
 	if !shouldLog(level) {
 		return
 	}
+	remember(scope, message, level, fields)
 	line := formatLine(scope, message, level, fields...)
 	fmt.Fprintln(os.Stdout, line)
 }
@@ -164,11 +165,12 @@ func getShortDateTime() string {
 		time.Now().Second())
 }
 
-func LogEvent(category, subcategory, description string, level int) {
+func LogEvent(category, subcategory, description string, level int, extra ...Field) {
 	fields := []Field{}
 	if subcategory != "" {
 		fields = append(fields, Field{Key: "event", Value: subcategory})
 	}
+	fields = append(fields, extra...)
 	scope := category
 	if subcategory != "" {
 		scope = fmt.Sprintf("%s/%s", category, subcategory)
