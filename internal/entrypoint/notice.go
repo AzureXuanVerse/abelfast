@@ -127,10 +127,10 @@ func runNotice(command, dbPath string, cmd *cobra.Command, opts noticeOptions) {
 		if notice.BtnTitle == "" {
 			notice.BtnTitle = notice.Title
 		}
-		if err := checkNotice(notice); err != nil {
+		if err := game.CheckNotice(notice); err != nil {
 			fatal(err)
 		}
-		id, err := store.CreateNotice(ctx, createNoticeParams(notice))
+		id, err := store.CreateNotice(ctx, game.NoticeParams(notice))
 		if err != nil {
 			fatal(err)
 		}
@@ -153,13 +153,13 @@ func runNotice(command, dbPath string, cmd *cobra.Command, opts noticeOptions) {
 		}
 		apply(&notice)
 		notice.Version++
-		if err := checkNotice(notice); err != nil {
+		if err := game.CheckNotice(notice); err != nil {
 			fatal(err)
 		}
 		newID := notice.ID
 		err = store.InTx(ctx, func(queries *db.Queries) error {
 			if !opts.unread {
-				params := createNoticeParams(notice)
+				params := game.NoticeParams(notice)
 				return queries.UpdateNotice(ctx, db.UpdateNoticeParams{
 					Kind: params.Kind, Version: params.Version, BtnTitle: params.BtnTitle, Title: params.Title,
 					TitleImage: params.TitleImage, TimeDesc: params.TimeDesc, Content: params.Content,
@@ -170,7 +170,7 @@ func runNotice(command, dbPath string, cmd *cobra.Command, opts noticeOptions) {
 			if _, err := queries.DeleteNotice(ctx, notice.ID); err != nil {
 				return err
 			}
-			newID, err = queries.CreateNotice(ctx, createNoticeParams(notice))
+			newID, err = queries.CreateNotice(ctx, game.NoticeParams(notice))
 			return err
 		})
 		if err != nil {
@@ -190,47 +190,5 @@ func runNotice(command, dbPath string, cmd *cobra.Command, opts noticeOptions) {
 			fatal(fmt.Errorf("no notice %d", opts.id))
 		}
 		fmt.Printf("notice %d deleted\n", opts.id)
-	}
-}
-
-// checkNotice refuses what the client would skip (NewBulletinBoardLayer:
-// checkNotice) or show without a label.
-func checkNotice(notice db.Notice) error {
-	if notice.Title == "" {
-		return fmt.Errorf("notice without a title")
-	}
-	switch notice.Kind {
-	case game.NoticeGateway:
-		return nil
-	case game.NoticeBoard:
-	default:
-		return fmt.Errorf("kind %q: want %q or %q", notice.Kind, game.NoticeBoard, game.NoticeGateway)
-	}
-	if notice.TagType < 1 || notice.TagType > 3 {
-		return fmt.Errorf("tag %d: want 1 (event), 2 (system) or 3 (news)", notice.TagType)
-	}
-	if notice.Icon < 1 || notice.Icon > 9 {
-		return fmt.Errorf("icon %d: want 1 to 9", notice.Icon)
-	}
-	if strings.HasPrefix(notice.TitleImage, "<config") && !strings.Contains(notice.TitleImage, "/>") {
-		return fmt.Errorf("image %q: <config ... /> isn't closed", notice.TitleImage)
-	}
-	return nil
-}
-
-func createNoticeParams(notice db.Notice) db.CreateNoticeParams {
-	return db.CreateNoticeParams{
-		Kind:       notice.Kind,
-		Version:    notice.Version,
-		BtnTitle:   notice.BtnTitle,
-		Title:      notice.Title,
-		TitleImage: notice.TitleImage,
-		TimeDesc:   notice.TimeDesc,
-		Content:    notice.Content,
-		TagType:    notice.TagType,
-		Icon:       notice.Icon,
-		Track:      notice.Track,
-		Priority:   notice.Priority,
-		NeedLevel:  notice.NeedLevel,
 	}
 }
