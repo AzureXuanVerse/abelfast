@@ -3,6 +3,7 @@ package gateway
 import (
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -19,9 +20,49 @@ const upstreamTimeout = 10 * time.Second
 // it the oldest reply is dropped.
 const maxCachedVersions = 16
 
+// androidPlatform is CS_10800.platform of the Android clients, the ones the
+// asset CDN's /android/ bundles are for.
+const androidPlatform = "0"
+
+// capturedState is CS_10800.state of the EN Android client in the official
+// captures (2026-10-17 and 18), what AssetHash asks with until an Android
+// client sent its own.
+const capturedState = 72
+
+// The bundle lists SC_10801.version names, by kind: the client keeps its
+// main bundles, the full paintings, the Live2D models... in separate lists.
+const (
+	AssetsMain     = "azhash"
+	AssetsPainting = "paintinghash"
+	AssetsLive2D   = "l2dhash"
+)
+
+// AssetHash returns the Android clients' current version string of a bundle
+// list (SC_10801.version, "$<kind>$..."), which names that list on AssetCDN.
+// It shares the clients' upstream SC_10801 cache.
+func (gateway *Gateway) AssetHash(kind string) (string, error) {
+	gateway.mu.Lock()
+	state := gateway.androidState
+	gateway.mu.Unlock()
+	if state == 0 {
+		state = capturedState
+	}
+	msg, err := gateway.version(&protobuf.CS_10800{State: proto.Uint32(state), Platform: proto.String(androidPlatform)})
+	if err != nil {
+		return "", err
+	}
+	for _, version := range msg.GetVersion() {
+		if strings.HasPrefix(version, "$"+kind+"$") {
+			return version, nil
+		}
+	}
+	return "", fmt.Errorf("SC_10801 has no $%s$ version: %q", kind, msg.GetVersion())
+}
+
 // version returns the upstream SC_10801 for this request, cached per
 // (state, platform). Concurrent requests for the same key share one upstream
-// fetch. A stale copy is served when the upstream is unreachable.
+// fetch. A stale copy is served when the upstream is unreachable, and for
+// versionRetry after it failed, without asking it again.
 func (gateway *Gateway) version(req *protobuf.CS_10800) (*protobuf.SC_10801, error) {
 	key := fmt.Sprintf("%d/%s", req.GetState(), req.GetPlatform())
 	gateway.mu.Lock()
@@ -29,6 +70,13 @@ func (gateway *Gateway) version(req *protobuf.CS_10800) (*protobuf.SC_10801, err
 	if ok && time.Since(cached.at) < versionTTL {
 		gateway.mu.Unlock()
 		return cached.msg, nil
+	}
+	if failed, recent := gateway.failures[key]; recent && time.Since(failed.at) < versionRetry {
+		gateway.mu.Unlock()
+		if ok {
+			return cached.msg, nil
+		}
+		return nil, failed.err
 	}
 	fetch, inFlight := gateway.fetching[key]
 	if !inFlight {
@@ -44,20 +92,37 @@ func (gateway *Gateway) version(req *protobuf.CS_10800) (*protobuf.SC_10801, err
 		<-fetch.done
 	} else {
 		fetch.msg, fetch.err = fetchVersion(gateway.Upstream, req)
+		if fetch.err != nil {
+			fetch.err = fmt.Errorf("upstream %s: %w", gateway.Upstream, fetch.err)
+		}
 		gateway.mu.Lock()
 		delete(gateway.fetching, key)
 		if fetch.err == nil {
 			gateway.cacheVersion(key, fetch.msg)
+			delete(gateway.failures, key)
+		} else {
+			if gateway.failures == nil {
+				gateway.failures = make(map[string]versionFailure)
+			}
+			// the made-up keys' failures don't pile up
+			for other, failed := range gateway.failures {
+				if time.Since(failed.at) >= versionRetry {
+					delete(gateway.failures, other)
+				}
+			}
+			gateway.failures[key] = versionFailure{err: fetch.err, at: time.Now()}
 		}
 		gateway.mu.Unlock()
 		close(fetch.done)
+		if fetch.err != nil && ok {
+			logger.LogEvent("Gateway", "Version", fmt.Sprintf("%v, serving cached reply from %s", fetch.err, cached.at.Format(time.RFC3339)), logger.LOG_LEVEL_WARN)
+		}
 	}
 	if fetch.err != nil {
 		if ok {
-			logger.LogEvent("Gateway", "Version", fmt.Sprintf("upstream %s: %v, serving cached reply from %s", gateway.Upstream, fetch.err, cached.at.Format(time.RFC3339)), logger.LOG_LEVEL_WARN)
 			return cached.msg, nil
 		}
-		return nil, fmt.Errorf("upstream %s: %w", gateway.Upstream, fetch.err)
+		return nil, fetch.err
 	}
 	return fetch.msg, nil
 }

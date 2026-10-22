@@ -70,8 +70,25 @@ var Official = map[string]string{
 	"TW": "prod-all-login.azurlane.tw:10080",
 }
 
+// AssetCDN is each region's asset CDN: an Android client downloads the
+// bundle list of its $azhash$ version from <cdn>/android/hash/<version> and
+// the bundles from <cdn>/android/resource/<md5>. From
+// nobbyfix/AzurLane-AssetDownloader's client_config.json, whose gateways are
+// the ones in Official.
+var AssetCDN = map[string]string{
+	"EN": "https://blhxusstatic.yo-star.com",
+	"JP": "https://blhxstatic.yo-star.com",
+	"CN": "https://line3-patch-blhx.bilibiligame.net",
+	"KR": "http://blcdn.imtxwy.com",
+	"TW": "http://blhxstatic.azurlane.tw",
+}
+
 // versionTTL is how long an upstream SC_10801 is reused.
 const versionTTL = 10 * time.Minute
+
+// versionRetry is how long after a failed upstream fetch the upstream isn't
+// asked again (the stale copy, or the error, is served meanwhile).
+const versionRetry = 30 * time.Second
 
 type Gateway struct {
 	Servers []Server
@@ -87,10 +104,20 @@ type Gateway struct {
 	mu       sync.Mutex
 	versions map[string]cachedVersion
 	fetching map[string]*versionFetch
+	failures map[string]versionFailure
+	// androidState is the CS_10800.state the latest Android client sent,
+	// see AssetHash
+	androidState uint32
 }
 
 type cachedVersion struct {
 	msg *protobuf.SC_10801
+	at  time.Time
+}
+
+// versionFailure is the last failed upstream fetch of a key.
+type versionFailure struct {
+	err error
 	at  time.Time
 }
 
@@ -126,6 +153,11 @@ func (gateway *Gateway) serverList() []*protobuf.SERVERINFO {
 
 //belfast:static
 func (gateway *Gateway) handleVersionCheck(client *connection.Client, req *protobuf.CS_10800) error {
+	if req.GetPlatform() == androidPlatform {
+		gateway.mu.Lock()
+		gateway.androidState = req.GetState()
+		gateway.mu.Unlock()
+	}
 	msg, err := gateway.version(req)
 	if err != nil {
 		return err
