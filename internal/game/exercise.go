@@ -37,6 +37,7 @@ const exerciseTaskWin = 1
 // reaching it pays, k_value how much a win moves the score.
 type arenaRank struct {
 	ID          uint32      `json:"id"`
+	Name        string      `json:"name"`
 	Point       uint32      `json:"point"`
 	Order       uint32      `json:"order"`
 	BattleAward uint32      `json:"battle_award"`
@@ -447,26 +448,8 @@ func (game *Game) handleExerciseFleet(client *connection.Client, req *protobuf.C
 	ctx, now := context.Background(), time.Now()
 	vanguard, main := req.GetVanguardShipIdList(), req.GetMainShipIdList()
 	err := game.DB.InTx(ctx, func(queries *db.Queries) error {
-		if len(vanguard) == 0 || len(main) == 0 || len(vanguard) > teamShipMax || len(main) > teamShipMax {
-			return errRefused
-		}
-		ids := append(slices.Clone(vanguard), main...)
-		byID, err := shipsByID(ctx, queries, client.CommanderID, ids)
-		if err != nil {
+		if err := checkDefenseFleet(ctx, queries, client.CommanderID, vanguard, main); err != nil {
 			return err
-		}
-		if len(byID) != len(ids) {
-			return errRefused
-		}
-		for _, id := range vanguard {
-			if shipTeam(byID[id]) != teamVanguard {
-				return errRefused
-			}
-		}
-		for _, id := range main {
-			if shipTeam(byID[id]) != teamMain {
-				return errRefused
-			}
 		}
 		state, err := loadExercise(ctx, queries, client.CommanderID, now)
 		if err != nil {
@@ -479,6 +462,33 @@ func (game *Game) handleExerciseFleet(client *connection.Client, req *protobuf.C
 		return err
 	}
 	return client.Send(&protobuf.SC_18009{Result: result(err)})
+}
+
+// checkDefenseFleet is UpdateExerciseFleetCommand's fleet: one to three of
+// the commander's ships on each side, each of the side's team, none twice.
+func checkDefenseFleet(ctx context.Context, queries *db.Queries, commanderID uint32, vanguard, main []uint32) error {
+	if len(vanguard) == 0 || len(main) == 0 || len(vanguard) > teamShipMax || len(main) > teamShipMax {
+		return errRefused
+	}
+	ids := append(slices.Clone(vanguard), main...)
+	byID, err := shipsByID(ctx, queries, commanderID, ids)
+	if err != nil {
+		return err
+	}
+	if len(byID) != len(ids) {
+		return errRefused
+	}
+	for _, id := range vanguard {
+		if shipTeam(byID[id]) != teamVanguard {
+			return errRefused
+		}
+	}
+	for _, id := range main {
+		if shipTeam(byID[id]) != teamMain {
+			return errRefused
+		}
+	}
+	return nil
 }
 
 // handleRivalInfo answers a commander's exercise card (GetRivalInfoCommand):
