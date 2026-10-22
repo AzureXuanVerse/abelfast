@@ -75,6 +75,10 @@ func (template shipTemplate) slotTypes(pos uint32) []uint32 {
 
 // ship_data_statistics row: attrs by Ship.PROPERTIES (model/vo/ship.lua),
 // their growths per level in 1/1000
+// shipStatistics are the ship_data_statistics rows of each template (the
+// back-office's shipStats).
+var shipStatistics map[uint32]shipStatisticsConfig
+
 type shipStatisticsConfig struct {
 	Type             uint32    `json:"type"`
 	Rarity           uint32    `json:"rarity"`
@@ -464,6 +468,7 @@ func loadShipData() error {
 	}
 	extraAttrLevelLimit = limit
 
+	shipStatistics = stats
 	shipDodges = make(map[uint32]shipDodgeGrowth, len(stats))
 	for id, stat := range stats {
 		if len(stat.Attrs) <= propertyDodge || len(stat.AttrsGrowth) <= propertyDodge {

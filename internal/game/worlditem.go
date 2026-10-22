@@ -43,6 +43,8 @@ const (
 
 // worldItemConfig is a world_item_data_template row.
 type worldItemConfig struct {
+	Name     string          `json:"name"`
+	Rarity   uint32          `json:"rarity"`
 	Icon     string          `json:"icon"`
 	Display  string          `json:"display"`
 	Usage    string          `json:"usage"`

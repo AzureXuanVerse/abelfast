@@ -35,6 +35,7 @@ type meowfficerTemplate struct {
 	SkillID            uint32 `json:"skill_id"`
 	GroupType          uint32 `json:"group_type"`
 	AbilityRefreshType uint32 `json:"ability_refresh_type"`
+	Nationality        uint32 `json:"nationality"`
 }
 
 // meowfficerBoxPool is a commander_data_create_material row: training a box

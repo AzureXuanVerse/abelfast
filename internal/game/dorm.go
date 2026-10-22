@@ -72,6 +72,7 @@ type dormConfig struct {
 type furnitureConfig struct {
 	Type        uint32 `json:"type"`
 	Comfortable uint32 `json:"comfortable"`
+	Count       uint32 `json:"count"`
 }
 
 // furniture_shop_template row, what BuyFurnitureCommand prices
