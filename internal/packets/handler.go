@@ -81,7 +81,10 @@ func Dispatch(client *connection.Client, packetID int, payload []byte) error {
 		logger.FieldValue("has_handler", ok),
 	).Debug("received packet")
 	if !ok {
-		logger.LogEvent("Handler", "Missing", fmt.Sprintf("CS_%d", packetID), logger.LOG_LEVEL_ERROR)
+		logger.LogEvent("Handler", "Missing", fmt.Sprintf("CS_%d", packetID), logger.LOG_LEVEL_ERROR,
+			logger.FieldValue("packet", packetID),
+			logger.FieldValue("commander", client.CommanderID),
+		)
 		return client.Send(&protobuf.SC_10998{
 			Cmd:    proto.Uint32(uint32(packetID)),
 			Result: proto.Uint32(missingPacketResultUnsupportedCommand),
