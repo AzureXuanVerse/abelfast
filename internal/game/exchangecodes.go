@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ggmolly/belfast/internal/connection"
@@ -36,8 +37,21 @@ type exchangeCode struct {
 	Window *gamedata.Window
 }
 
-// exchangeCodes are the redeem codes by their upper case spelling.
-var exchangeCodes map[string]exchangeCode
+// exchangeCodes are the redeem codes by their upper case spelling; the
+// back-office rewrites the file and reloads them while the server runs
+// (admin_content.go), hence the lock.
+var (
+	exchangeCodes   map[string]exchangeCode
+	exchangeCodesMu sync.RWMutex
+)
+
+// lookupExchangeCode is the code spelled key (upper case).
+func lookupExchangeCode(key string) (exchangeCode, bool) {
+	exchangeCodesMu.RLock()
+	defer exchangeCodesMu.RUnlock()
+	code, ok := exchangeCodes[key]
+	return code, ok
+}
 
 // loadExchangeCodes reads server/exchange_codes.json, the codes the server
 // accepts (they are made up by whoever runs it; the client's gift_group
@@ -52,10 +66,25 @@ var exchangeCodes map[string]exchangeCode
 // what the mail attaches; title defaults to the code, sender to
 // Headquarters, time to always. Without the file no code works.
 func loadExchangeCodes() error {
-	exchangeCodes = map[string]exchangeCode{}
 	raw, err := gamedata.ServerFile("exchange_codes.json")
-	if err != nil || raw == nil {
+	if err != nil {
 		return err
+	}
+	codes, err := parseExchangeCodes(raw)
+	if err != nil {
+		return err
+	}
+	exchangeCodesMu.Lock()
+	exchangeCodes = codes
+	exchangeCodesMu.Unlock()
+	return nil
+}
+
+// parseExchangeCodes reads exchange_codes.json's codes, none for no file.
+func parseExchangeCodes(raw []byte) (map[string]exchangeCode, error) {
+	codes := map[string]exchangeCode{}
+	if raw == nil {
+		return codes, nil
 	}
 	var file map[string]struct {
 		Title   string          `json:"title"`
@@ -65,7 +94,7 @@ func loadExchangeCodes() error {
 		Time    json.RawMessage `json:"time"`
 	}
 	if err := json.Unmarshal(raw, &file); err != nil {
-		return fmt.Errorf("exchange_codes.json: %w", err)
+		return nil, fmt.Errorf("exchange_codes.json: %w", err)
 	}
 	for key, row := range file {
 		key = strings.ToUpper(strings.TrimSpace(key))
@@ -80,13 +109,13 @@ func loadExchangeCodes() error {
 		if len(row.Time) > 0 {
 			var window gamedata.Window
 			if err := json.Unmarshal(row.Time, &window); err != nil {
-				return fmt.Errorf("exchange_codes.json %s: %w", key, err)
+				return nil, fmt.Errorf("exchange_codes.json %s: %w", key, err)
 			}
 			code.Window = &window
 		}
-		exchangeCodes[key] = code
+		codes[key] = code
 	}
-	return nil
+	return codes, nil
 }
 
 // mail is what redeeming code sends.
@@ -106,7 +135,7 @@ func (game *Game) handleExchangeCode(client *connection.Client, req *protobuf.CS
 	ctx, now := context.Background(), time.Now()
 	key := strings.ToUpper(strings.TrimSpace(req.GetKey()))
 	err := game.tx(ctx, client, func(tx *Tx) error {
-		code, ok := exchangeCodes[key]
+		code, ok := lookupExchangeCode(key)
 		if !ok {
 			return errCodeUnknown
 		}
