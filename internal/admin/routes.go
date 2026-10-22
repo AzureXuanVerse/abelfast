@@ -12,4 +12,5 @@ func (server *Server) registerAreas(api apiFunc) {
 	server.registerDock(api)
 	server.registerProgress(api)
 	server.registerLife(api)
+	server.registerSocial(api)
 }
