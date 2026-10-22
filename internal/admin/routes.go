@@ -17,5 +17,6 @@ func (server *Server) registerAreas(api apiFunc) {
 	server.registerMeta(api)
 	server.registerMetaShips(api)
 	server.registerBackyard(api)
+	server.registerShops(api)
 	server.registerContent(api)
 }
